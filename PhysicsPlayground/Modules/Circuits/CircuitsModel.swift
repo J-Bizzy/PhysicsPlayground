@@ -9,6 +9,7 @@
 import Foundation
 import Observation
 import PhysicsCore
+import QuartzCore
 import simd
 
 @MainActor
@@ -129,8 +130,6 @@ final class CircuitsModel {
     /// release. One part's two leads are 0.17 m apart, so this cannot reach
     /// past the end it belongs to.
     nonisolated static let leadReach = 0.06
-
-    /// Carry a part until a snapped connection stretches past this and it pops off.
 
     struct Terminal: Equatable, Hashable, Codable {
         var componentID: UUID
@@ -421,9 +420,8 @@ final class CircuitsModel {
     }
 
     /// The one place a carried part lands: align first, then wire from the
-    /// pairs the aligned part sees. `breakOverstretchedWires` does not run
-    /// here: after the alignment's translation it could yank a neighbour's
-    /// contact off.
+    /// pairs the aligned part sees. The target never moves, which is also
+    /// what stops a cascade.
     @discardableResult
     func release(id: UUID) -> ReleaseOutcome {
         guard scrubTime == nil else { return .nothingNear }
@@ -896,6 +894,27 @@ final class CircuitsModel {
     /// VoiceOver's wire removal: the pinch path deletes a wire by pulling
     /// an end into open air, a gesture VoiceOver cannot make. Physical taps
     /// never call this.
+    /// VoiceOver's way to take a wire off, which a pinch does by pulling it:
+    /// the first activation arms it and a second within `wireArmWindow`
+    /// removes it — a destructive verb arms before it fires (2026-10-18; it
+    /// used to delete on the first). Returns whether the wire went.
+    @discardableResult
+    func voiceOverRemoveWire(id: UUID, now: Double = CACurrentMediaTime()) -> Bool {
+        if armedWireID == id, now - armedWireAt <= Self.wireArmWindow {
+            armedWireID = nil
+            deleteWire(id: id)
+            return true
+        }
+        armedWireID = wires.contains { $0.id == id } ? id : nil
+        armedWireAt = now
+        return false
+    }
+
+    /// The wire VoiceOver has armed for removal, and when.
+    private(set) var armedWireID: UUID?
+    @ObservationIgnored private var armedWireAt = -Double.infinity
+    nonisolated static let wireArmWindow = 4.0
+
     func deleteWire(id: UUID) {
         guard scrubTime == nil else { return }
         guard let wire = wires.first(where: { $0.id == id }) else { return }
@@ -1266,31 +1285,48 @@ final class CircuitsModel {
         }
         readouts = newReadouts
         totalSourcePower = sourcePower
-        // Wire currents for the electron flow: each terminal's element current
-        // fans out evenly over its wires. Lookup tables built once.
+        // Wire currents, for the electron flow and the wire's field: each
+        // terminal pushes its component's current into the wiring, the meter
+        // draws its own between its probes in A⎓, and Kirchhoff divides it
+        // among the wires (`WireCurrents`; copper's 1/length settles a loop,
+        // which the wiring rules never build). Until 2026-10-18 each terminal's
+        // current was split evenly over its wires, and the field gave every
+        // wire its part's full current: in a parallel net the two disagreed.
         var componentIndex: [UUID: Int] = [:]
         componentIndex.reserveCapacity(components.count)
         for (index, component) in components.enumerated() {
             componentIndex[component.id] = index
         }
-        var fanOut: [Terminal: Int] = [:]
-        fanOut.reserveCapacity(wires.count * 2)
-        for wire in wires {
-            fanOut[wire.from, default: 0] += 1
-            fanOut[wire.to, default: 0] += 1
+        var injections = [Double](repeating: 0, count: components.count * 2)
+        for index in components.indices {
+            injections[2 * index + 1] += solution.currents[index]
+            injections[2 * index] -= solution.currents[index]
         }
-
+        if let meterElementIndex, let probeA, let probeB,
+           let a = componentIndex[probeA.componentID],
+           let b = componentIndex[probeB.componentID] {
+            let meter = solution.currents[meterElementIndex]
+            injections[2 * a + probeA.end] -= meter
+            injections[2 * b + probeB.end] += meter
+        }
+        var edges: [WireCurrents.Edge] = []
+        var conductances: [Double] = []
+        var edgeWires: [UUID] = []
+        edges.reserveCapacity(wires.count)
+        for wire in wires {
+            guard let a = componentIndex[wire.from.componentID],
+                  let b = componentIndex[wire.to.componentID] else { continue }
+            edges.append(.init(a: 2 * a + wire.from.end, b: 2 * b + wire.to.end))
+            let length = simd_distance(components[a].terminalPosition(wire.from.end),
+                                       components[b].terminalPosition(wire.to.end))
+            conductances.append(1 / max(length, 1e-3))
+            edgeWires.append(wire.id)
+        }
+        let currents = WireCurrents.solve(slotCount: components.count * 2, edges: edges,
+                                          conductances: conductances, injections: injections)
         var flows: [UUID: Double] = [:]
-        flows.reserveCapacity(wires.count)
-        for wire in wires {
-            func outflow(_ terminal: Terminal) -> Double {
-                guard let index = componentIndex[terminal.componentID] else { return 0 }
-                let current = solution.currents[index]
-                let directed = terminal.end == 1 ? current : -current
-                return directed / Double(max(fanOut[terminal] ?? 1, 1))
-            }
-            flows[wire.id] = (outflow(wire.from) - outflow(wire.to)) / 2
-        }
+        flows.reserveCapacity(edgeWires.count)
+        for (id, current) in zip(edgeWires, currents) { flows[id] = current }
         wireFlows = flows
     }
 
@@ -1719,23 +1755,55 @@ final class CircuitsModel {
         }
     }
 
-    /// Installs a decoded bench after sanity checks: budget respected,
-    /// orphaned wires dropped.
+    /// Installs a decoded bench after sanity checks (`sanitized`).
     @discardableResult
     private func apply(_ bench: SavedBench) -> Bool {
         guard !bench.components.isEmpty,
               bench.components.count <= Self.componentBudget else { return false }
+        let bench = Self.sanitized(bench)
         components = bench.components
-        wires = bench.wires.filter { wire in
-            bench.components.contains { $0.id == wire.from.componentID }
-                && bench.components.contains { $0.id == wire.to.componentID }
-        }
+        wires = bench.wires
         selectedID = nil
         cancelLeadPull()
         voiceWireSource = nil
         highlightedSource = nil
         solve(dt: 1.0 / 90.0)
         return true
+    }
+
+    /// A bench as the live rules would have built it (2026-10-18): wires only
+    /// between parts that exist, never a terminal to itself, never a second
+    /// path between points already joined — checked in file order, the order
+    /// they were made — and no more than the budget; parts inside the room's
+    /// safety box. Before this a loaded bench skipped every rule a hand meets,
+    /// so an old or edited file could hold a loop of wires the live rules
+    /// refuse, and `WireCurrents` would have had to guess how it divides.
+    /// Presets and the starter loop pass through unchanged.
+    static func sanitized(_ bench: SavedBench) -> SavedBench {
+        var result = bench
+        result.components = bench.components.map { component in
+            var placed = component
+            placed.position = clampToRoomSafety(component.position)
+            return placed
+        }
+        var index: [UUID: Int] = [:]
+        for (position, component) in result.components.enumerated() {
+            index[component.id] = position
+        }
+        var partition = NetPartition(slotCount: result.components.count * 2)
+        var kept: [Wire] = []
+        for wire in bench.wires {
+            guard kept.count < wireBudget, wire.from != wire.to,
+                  (0...1).contains(wire.from.end), (0...1).contains(wire.to.end),
+                  let a = index[wire.from.componentID],
+                  let b = index[wire.to.componentID] else { continue }
+            let from = 2 * a + wire.from.end, to = 2 * b + wire.to.end
+            guard !partition.areConnected(from, to) else { continue }
+            partition.union(from, to)
+            kept.append(wire)
+        }
+        result.wires = kept
+        return result
     }
 
     /// Restores the auto-saved bench if one exists.
@@ -1903,16 +1971,15 @@ final class CircuitsModel {
                                   current: amps))
         }
         for wire in wires {
-            guard let amps = readouts[wire.from.componentID]?.amps,
-                  amps != 0 else { continue }
+            // The wire's own current, from its from end to its to end — the
+            // same number the electron dots ride.
+            guard let amps = wireFlows[wire.id], amps != 0 else { continue }
             guard let from = components.first(where: { $0.id == wire.from.componentID }),
                   let to = components.first(where: { $0.id == wire.to.componentID })
             else { continue }
-            // Leaving terminal 1 carries the branch current in the component's
-            // sense; leaving terminal 0 the sign flips.
             segments.append(.init(a: from.terminalPosition(wire.from.end),
                                   b: to.terminalPosition(wire.to.end),
-                                  current: wire.from.end == 1 ? amps : -amps))
+                                  current: amps))
         }
         return segments
     }
@@ -1956,6 +2023,7 @@ final class CircuitsModel {
     func clearBench() {
         components = []
         wires = []
+        armedWireID = nil
         selectedID = nil
         cancelLeadPull()
         voiceWireSource = nil

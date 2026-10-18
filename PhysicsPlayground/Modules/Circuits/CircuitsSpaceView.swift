@@ -73,7 +73,7 @@ struct CircuitsSpaceView: View {
             renderer.onTap = { handleTap(on: $0) }
             renderer.onTerminalAction = { model.voiceOverWire($0) }
             renderer.onLeverAction = { model.toggleSwitch(id: $0) }
-            renderer.onWireAction = { model.deleteWire(id: $0) }
+            renderer.onWireAction = { model.voiceOverRemoveWire(id: $0) }
             content.add(renderer.root)
             // Disabled here and raised by `Fade.tick`, so the apparatus arrives
             // rather than appears.

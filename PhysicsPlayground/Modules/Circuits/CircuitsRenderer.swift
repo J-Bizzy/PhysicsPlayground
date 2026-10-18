@@ -1284,10 +1284,11 @@ final class CircuitsRenderer {
                 accessibility.label = "Wire. Pinch an end and pull to move it."
                 entity.components.set(accessibility)
                 // The activation removes the wire (a gesture VoiceOver cannot make by
-                // pulling); physical taps never fire this.
+                // pulling) — arming on the first, as every destructive verb does;
+                // physical taps never fire this.
                 let key = wire.id
                 SpatialActions.attach(
-                    to: entity, label: "Wire. Activate to remove it.",
+                    to: entity, label: "Wire. Activate twice to remove it.",
                     activate: { [weak self] in
                         self?.onWireAction?(key)
                     })

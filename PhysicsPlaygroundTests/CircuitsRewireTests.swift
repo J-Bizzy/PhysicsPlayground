@@ -291,7 +291,7 @@ final class CircuitsRewireTests: XCTestCase {
         XCTAssertNil(model.leadPull)
     }
 
-    /// `deleteWire` is VoiceOver's wire removal (`onWireAction`); the pinch
+    /// `deleteWire` is what VoiceOver's removal calls once armed; the pinch
     /// path deletes by pulling an end into open air.
     func testDeleteWireStillWorksForTheCallersThatRemain() {
         let model = CircuitsModel()
@@ -299,5 +299,34 @@ final class CircuitsRewireTests: XCTestCase {
         let before = model.wires.count
         model.deleteWire(id: wire)
         XCTAssertEqual(model.wires.count, before - 1)
+    }
+
+    /// VoiceOver removes a wire the way every destructive verb works: the
+    /// first activation arms it, a second within four seconds removes it
+    /// (2026-10-18; it used to go on the first).
+    func testVoiceOverArmsAWireBeforeRemovingIt() {
+        let model = CircuitsModel()
+        let (_, _, _, wire) = loop(model)
+        let before = model.wires.count
+        XCTAssertFalse(model.voiceOverRemoveWire(id: wire, now: 10))
+        XCTAssertEqual(model.wires.count, before, "the first activation removed it")
+        XCTAssertEqual(model.armedWireID, wire)
+        XCTAssertTrue(model.voiceOverRemoveWire(id: wire, now: 12))
+        XCTAssertEqual(model.wires.count, before - 1)
+        XCTAssertNil(model.armedWireID)
+    }
+
+    func testAnArmedWireDisarmsAfterItsWindowAndAnotherWireReArms() {
+        let model = CircuitsModel()
+        let (_, _, _, wire) = loop(model)
+        let other = model.wires.first { $0.id != wire }!.id
+        let before = model.wires.count
+        model.voiceOverRemoveWire(id: wire, now: 10)
+        XCTAssertFalse(model.voiceOverRemoveWire(id: wire, now: 10 + CircuitsModel.wireArmWindow + 0.1),
+                       "an arm outlived its window")
+        XCTAssertEqual(model.wires.count, before)
+        XCTAssertFalse(model.voiceOverRemoveWire(id: other, now: 20))
+        XCTAssertEqual(model.armedWireID, other, "a different wire arms itself instead")
+        XCTAssertEqual(model.wires.count, before)
     }
 }

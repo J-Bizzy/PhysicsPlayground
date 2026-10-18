@@ -16,6 +16,30 @@ A running log of consequential decisions — architectural, physical, or product
 
 (The template sat stranded at line 309, mid-log between two 2026-07-29 entries, until 2026-08-01.)
 
+## 2026-10-18 — Circuit Workshop's wires carry their own currents, and a loaded bench meets the live rules
+
+**Decision:** This is the first, invisible step of the Circuits pass the owner asked for (lab-kit parts, a turntable, wiring that "works smoothly"). It has four parts:
+- **Each wire's current is solved.** `PhysicsCore.WireCurrents` divides each terminal's current among its wires by Kirchhoff's current law. Both the electron dots (`wireFlows`) and the wire's field (`currentSegments`) read it.
+- **A loaded bench is held to the live wiring rules** (`sanitized`).
+- **Removing a wire through VoiceOver arms first.**
+- **Two stale comments** about the retired `breakDistance` are gone.
+
+**Context:**
+- **The nodal solve never says how a node's current divides among its wires.** To it, a wire is an ideal short, so everything one wire joins is one node.
+- **The electron dots used a guess.** They split each terminal's current evenly over its wires.
+- **The field used a different guess.** It gave every wire its part's full branch current.
+- **In a parallel net the two disagreed.** Take a second bulb wired off the first bulb's leads. The wire from the battery carries both bulbs' current, and the link between them carries only the far bulb's. Neither guess got that right.
+- **The ammeter's own current never reached the wires** in A⎓ mode.
+
+**Consequences:**
+- **Kirchhoff alone fixes every wire's current on a tree,** whatever the wires are made of. The wiring rules only ever build trees: a wire between points already joined is refused.
+- **A loop could only come from a loaded file,** which skipped every rule a hand meets. So loading now drops self-wires, repeated pairs, second paths and wires past the budget, and clamps parts into the room's safety box. The presets and the starter loop pass through unchanged.
+- **If a loop ever appears anyway,** each wire's copper conductance, 1/length (floored at 1 mm for a snapped joint), divides it the way real wires would.
+- **Tests:**
+  - `WireCurrentsTests`: a chain, a star, two bulbs chained off one terminal, KCL on a tree of unequal wires, a loop, a zero-length joint, and an unbalanced group.
+  - `CircuitsWireFlowTests`: the chained-bulbs bench, current balance at every terminal, and the field matching the electrons. Plus the bench-validation cases.
+  - `CircuitsRewireTests`: VoiceOver arms first, the arm expires after 4 s, and a different wire re-arms.
+
 ## 2026-10-17 — Throwing is Projectiles' main act
 
 **Decision:** This answers the owner's "it just seems uninspired" from 2026-08-03. Of three directions offered, the owner chose making throwing the main act. They also chose to open quiet and to show the release in the room. Four changes:
