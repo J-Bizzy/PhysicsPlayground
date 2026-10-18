@@ -40,6 +40,28 @@ A running log of consequential decisions — architectural, physical, or product
   - `CircuitsWireFlowTests`: the chained-bulbs bench, current balance at every terminal, and the field matching the electrons. Plus the bench-validation cases.
   - `CircuitsRewireTests`: VoiceOver arms first, the arm expires after 4 s, and a different wire re-arms.
 
+## 2026-10-17 — Projectiles made minimal: the Trajectory and the Numbers wait in More
+
+**Decision:** The owner said the lab "still looks a little clunky", asked for the trajectory to become a toggle, and left the rest to us. The room is now the launcher, a smaller aim bead on its thin shaft, the waiting ball, the hoop well, and the balls with their shadows and strobe dots. Two More toggles hold the rest, both off by default:
+- **Trajectory** is the drawn geometry: the predicted arc, its apex dot and drop line, the landing ring, and the vacuum ghost.
+- **Numbers** is every piece of text.
+
+The protractor's eleven ticks and the needle hidden inside the barrel are deleted. The angle and speed labels become one bead reading, "45° · 6.0 m/s", in the same form as a throw.
+
+**Context:**
+- **Nothing had a layer toggle.** The arc had no `isEnabled` path at all.
+- **The arc's change gate also placed the protractor and the speed label.** So a naive toggle would have frozen them, which is why the bead reading now has its own per-frame placement.
+- **Why the split is by kind.** It lets the arc show with no numbers, which is the cleanest picture of a parabola.
+
+**Consequences:**
+- **Two exceptions show without being asked for.**
+  - The bead shows its reading while a hand holds it (`beadHeld`), because a handle should show its value while you handle it.
+  - A hoop being aimed at shows the arcs that reach it, because selecting it is the request.
+- **The strobe forgets by event, not by clock.** It keeps every ball in the air plus the newest landed launch (`Flight.launchSerial`), and shrinks older dots when the next ball leaves. A timer would have erased the picture during a pause or a scrub. The dots are also smaller and quieter: 8 mm (was 13), glow 0.35 (was 0.7). The bead is 26 mm (was 35).
+- **Yesterday's release callout is now behind Numbers.** It shows only with Numbers on. More's Values keep every number either way.
+- **The ghost arcs get their own casing,** at the ghost's strength; they had borrowed the arc's full-strength casing.
+- **`KinematicsLayerTests` holds the layers, the exceptions and the strobe rule. `-kinArc 1` and `-kinNumbers 1` show them.**
+
 ## 2026-10-17 — Throwing is Projectiles' main act
 
 **Decision:** This answers the owner's "it just seems uninspired" from 2026-08-03. Of three directions offered, the owner chose making throwing the main act. They also chose to open quiet and to show the release in the room. Four changes:

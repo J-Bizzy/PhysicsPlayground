@@ -3,10 +3,13 @@
 //  Physics Playground — Kinematics module
 //
 //  Renders room-scale projectile motion at 1:1 — physics space is the
-//  room: the free-floating launcher, the predicted arc, pooled balls
-//  with strobe-dot trails and floor shadows, and hoops that light when a ball passes. Pools
-//  are built once and the per-frame work is transform writes; the arc
-//  tube rebuilds only when an aim input changes, on a GeometryPipeline
+//  room: the free-floating launcher and its aim bead, pooled balls with
+//  strobe-dot trails and floor shadows, and hoops that light when a ball
+//  passes. Two layers wait in More, off by default (2026-10-17): the
+//  Trajectory (the predicted arc, its apex and landing marks, the vacuum
+//  ghost) and the Numbers (every label and callout). Pools are built once
+//  and the per-frame work is transform writes; the arc tube rebuilds only
+//  when an aim input changes while it is shown, on a GeometryPipeline
 //  worker. Pooled slots are renamed to the flight or ring they show;
 //  while a hand owns an entity the render loop leaves its transform.
 //
@@ -103,6 +106,10 @@ final class KinematicsRenderer {
     /// while the air is on. One mesh, rebuilt only when their inputs change.
     private let ghostEntity = ModelEntity()
     private let ghostCasingEntity = ModelEntity()
+    /// A ghost's casing at the ghost's own strength: the full arc casing
+    /// under a 0.22 core read darker than the arc it is a ghost of.
+    private let ghostCasingMaterial = Materials.contrastLine(
+        DesignTokens.Palette.predictedArcUI, casingOpacity: 0.22).casing
     private let ghostMaterial: UnlitMaterial = {
         let material = Materials.unlit(DesignTokens.Palette.predictedArcUI, opacity: 0.22)
         return material
@@ -158,21 +165,32 @@ final class KinematicsRenderer {
     /// paused, so the recorded window only changes when a restore does.
     private var lastPathNonce: Int?
 
-    // Spatial flight numbers: peak height at the apex with a drop line,
-    // range and flight time on the landing ring, a protractor at the
-    // launcher. Change-gated with the arc.
+    // The trajectory's marks: peak height at the apex with a drop line,
+    // range and flight time on the landing ring. Placed with the arc; shown
+    // by the layers (`applyLayers`).
     private let apexMarker = Entity()
     private var apexLabel: BackedLabel!
     private var apexDropLine: ModelEntity!
     private let landingMarker = Entity()
     private var landingLabel: BackedLabel!
-    private let protractorRoot = Entity()
-    private var protractorNeedleHolder: Entity!
-    private var protractorTextPivot: Entity!
-    private var protractorLabel: BackedLabel!
-    /// The speed, beside the bead that sets it.
-    private let speedTextPivot = Entity()
-    private var speedLabel: BackedLabel!
+    /// Whether the current prediction has an apex worth marking and a
+    /// landing to mark — the arc's facts, kept apart from whether they show.
+    private var apexAvailable = false
+    private var landingAvailable = false
+    /// The launch velocity in words, "45° · 6.0 m/s", beside the bead that
+    /// sets it: one reading where a protractor, its needle and two labels
+    /// were (2026-10-17). Shown with the Numbers, or while the bead is held.
+    private let beadReadingPivot = Entity()
+    private var beadReading: BackedLabel!
+    private var beadReadingText = ""
+    /// Whether a hand holds the aim bead — set by the SpaceView's drag, so a
+    /// handle shows its value while you handle it, whatever the Numbers say.
+    var beadHeld = false
+    /// The layers last applied, so a frame that changes nothing writes nothing.
+    private var appliedLayers: (trajectory: Bool, numbers: Bool, apex: Bool, landing: Bool)?
+    /// How large each flight's strobe dots are drawn, easing to 0 when they
+    /// are no longer kept (`flightsKeepingDots`).
+    private var dotScales: [UUID: Float] = [:]
     /// The flight numbers' white — passed to each BackedLabel, whose
     /// plate now carries the contrast the 0.92 alpha used to gesture at.
     private static let annotationWhite = UIColor(white: 1, alpha: 1)
@@ -193,6 +211,7 @@ final class KinematicsRenderer {
         var arc: ArcInputs
         var target: UUID?
         var hoop: SIMD3<Double>?
+        var trajectory: Bool
     }
     private var lastGhostInputs: GhostInputs?
 
@@ -234,12 +253,12 @@ final class KinematicsRenderer {
         root.addChild(barrel)
 
         bead = ModelEntity(
-            mesh: Primitives.sphere(radius: 0.035),
-            materials: [Materials.energized(DesignTokens.Palette.projectileUI, glow: 0.4)]
+            mesh: Primitives.sphere(radius: 0.026),
+            materials: [Materials.energized(DesignTokens.Palette.projectileUI, glow: 0.25)]
         )
         bead.name = Self.aimBeadName
         Grabbable.configureTouchTarget(
-            bead, collisionRadius: 0.048,
+            bead, collisionRadius: 0.040,
             activate: { [weak bead] in
                 guard let bead else { return }
                 router.route?(bead)
@@ -253,8 +272,13 @@ final class KinematicsRenderer {
         // Predicted arc. Casing first, core second: darkness under light.
         let arcMaterial = Materials.unlit(DesignTokens.Palette.predictedArcUI, opacity: 0.5)
         self.arcMaterial = arcMaterial
+        arcEntity.name = "predicted-arc"
+        arcCasingEntity.name = "predicted-arc-casing"
+        arcEntity.isEnabled = false
+        arcCasingEntity.isEnabled = false
         root.addChild(arcCasingEntity)
         root.addChild(arcEntity)
+        ghostEntity.name = "ghost-arcs"
         ghostEntity.isEnabled = false
         ghostCasingEntity.isEnabled = false
         root.addChild(ghostCasingEntity)
@@ -295,11 +319,12 @@ final class KinematicsRenderer {
 
         // Strobe dots: equal time intervals are the whole of projectile motion
         // in one picture — constant horizontal spacing, vertical spacing
-        // shrinking to nothing at the apex. Bright and opaque, so they read as
-        // the strobe photograph they imitate.
+        // shrinking to nothing at the apex. Opaque, so they read as the strobe
+        // photograph they imitate; since 2026-10-17 smaller and quieter, and
+        // only the newest flight keeps them once it has landed.
         let dotMaterial = Materials.energized(
-            DesignTokens.Palette.projectileUI, roughness: 0.3, glow: 0.7)
-        let dotMesh = Primitives.sphere(radius: 0.013)
+            DesignTokens.Palette.projectileUI, roughness: 0.3, glow: 0.35)
+        let dotMesh = Primitives.sphere(radius: Self.dotRadius)
         dotPool = EntityPool(
             budget: KinematicsModel.flightBudget * KinematicsModel.dotsPerFlight
         ) { container in
@@ -455,40 +480,43 @@ final class KinematicsRenderer {
         landingMarker.addChild(landingPivot)
         landingMarker.isEnabled = false
         root.addChild(landingMarker)
+        apexMarker.name = "apex-marker"
+        landingMarker.name = "landing-marker"
 
-        // Protractor: ticks every 15 degrees in the aim's vertical
-        // plane, an orange needle at the live elevation, the degree
-        // count at its tip. Reads like a real instrument at the muzzle.
-        let tickMaterial = Materials.unlit(.white, opacity: 0.38)
-        let tickMesh = Primitives.box(size: [0.016, 0.003, 0.003], cornerRadius: 0.001)
-        for degrees in stride(from: -75, through: 75, by: 15) {
-            let holder = Entity()
-            holder.orientation = simd_quatf(
-                angle: Float(degrees) * .pi / 180, axis: [0, 0, 1])
-            let tick = ModelEntity(mesh: tickMesh, materials: [tickMaterial])
-            tick.position = [0.165, 0, 0]
-            holder.addChild(tick)
-            protractorRoot.addChild(holder)
-        }
-        protractorNeedleHolder = Entity()
-        let needle = ModelEntity(
-            mesh: Primitives.box(size: [0.055, 0.0045, 0.0045], cornerRadius: 0.002),
-            materials: [UnlitMaterial(color: DesignTokens.Palette.projectileUI)])
-        needle.position = [0.155, 0, 0]
-        protractorNeedleHolder.addChild(needle)
-        protractorRoot.addChild(protractorNeedleHolder)
-        protractorTextPivot = Entity()
-        protractorTextPivot.components.set(BillboardComponent())
-        protractorLabel = BackedLabel(size: 0.042)
-        protractorTextPivot.addChild(protractorLabel.root)
-        protractorRoot.addChild(protractorTextPivot)
-        root.addChild(protractorRoot)
-        speedTextPivot.components.set(BillboardComponent())
-        speedLabel = BackedLabel(size: 0.036)
-        speedTextPivot.addChild(speedLabel.root)
-        root.addChild(speedTextPivot)
+        // The bead's reading, billboarded beside it.
+        beadReadingPivot.name = "bead-reading"
+        beadReadingPivot.components.set(BillboardComponent())
+        beadReading = BackedLabel(size: 0.036)
+        beadReadingPivot.addChild(beadReading.root)
+        beadReadingPivot.isEnabled = false
+        root.addChild(beadReadingPivot)
     }
 
+    /// A launch velocity as the room writes it, "45° · 6.0 m/s" — the
+    /// launcher's bead and a hand's throw read the same way.
+    nonisolated static func launchText(elevationDegrees: Double, speed: Double) -> String {
+        PhysicsFormat.angle(elevationDegrees, decimals: 0) + " · "
+            + PhysicsFormat.measurement(speed, "m/s", decimals: 1)
+    }
+
+    /// The strobe dot's radius: 8 mm since 2026-10-17 (it was 13).
+    nonisolated static let dotRadius: Float = 0.008
+
+    /// Which flights keep their strobe dots: every ball still flying or
+    /// rolling, and the newest launch that has any once it has landed. The
+    /// older ones shrink away as the next ball leaves — by what has
+    /// happened, not by a clock, so a pause or a scrub keeps the picture.
+    nonisolated static func flightsKeepingDots(_ flights: [KinematicsModel.Flight]) -> Set<UUID> {
+        var kept = Set(flights.filter { $0.status == .flying || $0.status == .rolling }.map(\.id))
+        if let newest = flights.filter({ !$0.dots.isEmpty }).max(by: { $0.launchSerial < $1.launchSerial }) {
+            kept.insert(newest.id)
+        }
+        return kept
+    }
+
+    /// Places the trajectory's apex and landing marks and writes their
+    /// labels. Whether they show is `applyLayers`' business: this records
+    /// only whether the prediction has an apex and a landing to mark.
     /// Returns whether every label took its text; false means the rate limit
     /// held one back, and the caller offers the annotations again next frame.
     @discardableResult
@@ -499,22 +527,20 @@ final class KinematicsRenderer {
         var shown = true
         // Peak height, where the peak actually is.
         if let apex = trajectory.points.max(by: { $0.y < $1.y }), apex.y > 0.3 {
-            apexMarker.isEnabled = true
+            apexAvailable = true
             apexMarker.position = SIMD3<Float>(apex)
             shown = apexLabel.setText(
                 PhysicsFormat.measurement(trajectory.apexHeight, "m", decimals: 1),
                 color: Self.annotationWhite) && shown
-            apexDropLine.isEnabled = true
             apexDropLine.position = SIMD3(Float(apex.x), Float(apex.y) / 2, Float(apex.z))
             apexDropLine.scale = SIMD3(1, Float(apex.y), 1)
         } else {
-            apexMarker.isEnabled = false
-            apexDropLine.isEnabled = false
+            apexAvailable = false
         }
 
         // Range and flight time, at the landing spot.
         if trajectory.landed, let landing = trajectory.landingPoint {
-            landingMarker.isEnabled = true
+            landingAvailable = true
             landingMarker.position = SIMD3(Float(landing.x), 0.004, Float(landing.z))
             // With the air on, the vacuum range stands beside the real
             // one: the gap between the two numbers is drag.
@@ -525,36 +551,43 @@ final class KinematicsRenderer {
             }
             shown = landingLabel.setText(text, color: Self.annotationWhite) && shown
         } else {
-            landingMarker.isEnabled = false
+            landingAvailable = false
         }
-
-        // The protractor rides the launcher, yawed into the aim plane.
-        let aim = model.aimDirection
-        protractorRoot.position = SIMD3<Float>(model.launcherPosition)
-        let azimuth = atan2(aim.z, aim.x)
-        protractorRoot.orientation = simd_quatf(angle: -Float(azimuth), axis: [0, 1, 0])
-        let elevation = asin(max(-1, min(1, aim.y)))
-        protractorNeedleHolder.orientation = simd_quatf(
-            angle: Float(elevation), axis: [0, 0, 1])
-        // On the aim line the barrel hid it; lifted off it on the side the
-        // arc never bends toward, it reads from where you stand.
-        protractorTextPivot.position = [
-            Float(cos(elevation)) * 0.235 - Float(sin(elevation)) * 0.055,
-            Float(sin(elevation)) * 0.235 + Float(cos(elevation)) * 0.055, 0]
-        shown = protractorLabel.setText(
-            PhysicsFormat.angle(elevation * 180 / .pi, decimals: 0),
-            color: Self.annotationWhite) && shown
-
-        // The speed, beside the bead that sets it, on the side of the aim
-        // line the arc never bends toward (gravity takes it below).
-        let aimF = SIMD3<Float>(aim)
-        let lift = simd_normalize(SIMD3<Float>(0, 1, 0) - aimF * aimF.y)
-        speedTextPivot.position = SIMD3<Float>(model.launcherPosition)
-            + Self.beadDistance(forSpeed: model.launchSpeed) * aimF + 0.09 * lift
-        shown = speedLabel.setText(
-            PhysicsFormat.measurement(model.launchSpeed, "m/s", decimals: 1),
-            color: Self.annotationWhite) && shown
         return shown
+    }
+
+    /// The two layers, written only when what they show changes.
+    private func applyLayers(_ model: KinematicsModel) {
+        let layers = (trajectory: model.showsTrajectory, numbers: model.showsNumbers,
+                      apex: apexAvailable, landing: landingAvailable)
+        if let applied = appliedLayers, applied == layers { return }
+        appliedLayers = layers
+        arcEntity.isEnabled = layers.trajectory
+        arcCasingEntity.isEnabled = layers.trajectory
+        apexMarker.isEnabled = layers.trajectory && layers.apex
+        apexDropLine.isEnabled = layers.trajectory && layers.apex
+        landingMarker.isEnabled = layers.trajectory && layers.landing
+        apexLabel.root.isEnabled = layers.numbers
+        landingLabel.root.isEnabled = layers.numbers
+    }
+
+    /// The bead's reading: placed every frame (a transform) beside the bead,
+    /// on the side of the aim line the arc never bends toward; its text
+    /// regenerated only when a displayed digit moves.
+    private func syncBeadReading(_ model: KinematicsModel) {
+        let visible = model.showsNumbers || beadHeld
+        if beadReadingPivot.isEnabled != visible { beadReadingPivot.isEnabled = visible }
+        guard visible else { return }
+        let aim = SIMD3<Float>(model.aimDirection)
+        let lift = simd_normalize(SIMD3<Float>(0, 1, 0) - aim * aim.y)
+        beadReadingPivot.position = SIMD3<Float>(model.launcherPosition)
+            + Self.beadDistance(forSpeed: model.launchSpeed) * aim + 0.08 * lift
+        let text = Self.launchText(elevationDegrees: model.elevationDegrees,
+                                   speed: model.launchSpeed)
+        if text != beadReadingText,
+           beadReading.setText(text, color: Self.annotationWhite) {
+            beadReadingText = text
+        }
     }
 
     /// Both passes of the arc, built off-thread together so the casing
@@ -586,7 +619,7 @@ final class KinematicsRenderer {
         }
         if let casingMesh = TubeMesh.mesh(from: tube.casing) {
             ghostCasingEntity.model = ModelComponent(mesh: casingMesh,
-                                                     materials: [arcCasingMaterial])
+                                                     materials: [ghostCasingMaterial])
         } else {
             ghostCasingEntity.model = nil
         }
@@ -656,8 +689,9 @@ final class KinematicsRenderer {
                 catchShownAt = CACurrentMediaTime()
             }
         }
-        // The readout lingers a few seconds, then bows out.
-        catchCallout?.isEnabled = CACurrentMediaTime() - catchShownAt < 4.5
+        // The readout lingers a few seconds, then bows out — and is one of
+        // the Numbers.
+        catchCallout?.isEnabled = model.showsNumbers && CACurrentMediaTime() - catchShownAt < 4.5
     }
 
     func tick(_ model: KinematicsModel) {
@@ -726,14 +760,18 @@ final class KinematicsRenderer {
         velocityShaft.orientation = VectorFieldArrows.rotationFromYAxis(to: aim)
         velocityShaft.scale = SIMD3(1, max(reach - muzzle, 0.001), 1)
 
-        // Predicted arc — rebuild only when an input actually changed.
+        // Predicted arc — rebuilt only when an input changed, and only while
+        // the Trajectory is shown. Hidden, the last inputs stay, so showing it
+        // again rebuilds only if the aim moved meanwhile.
         let arcInputs = ArcInputs(
             aim: model.aimDirection, speed: model.launchSpeed,
             launcher: model.launcherPosition, gravity: model.gravity,
             air: model.airResistance, windSpeed: model.windSpeed,
             windDirection: model.windDirectionDegrees, projectile: model.projectile
         )
-        if arcInputs != lastArcInputs {
+        if !model.showsTrajectory {
+            // Nothing to place.
+        } else if arcInputs != lastArcInputs {
             lastArcInputs = arcInputs
             // The RK4 trace is microseconds (see the model); the tube's
             // vertex math is what moves to the worker.
@@ -748,15 +786,20 @@ final class KinematicsRenderer {
                 model, trajectory: model.prediction, vacuum: model.vacuumPrediction)
         }
 
-        // Ghost arcs: the aim solutions for the hoop being aimed at, and
-        // the vacuum arc while the air is on. Rebuilt on a change of
-        // inputs only — the solve is memoised in the model, the tubes
-        // are not free.
+        applyLayers(model)
+        syncBeadReading(model)
+
+        // Ghost arcs: the aim solutions for the hoop being aimed at (an
+        // explicit request, so whatever the layers say), and the vacuum arc
+        // while the air is on and the Trajectory shown. Rebuilt on a change
+        // of inputs only — the solve is memoised in the model, the tubes are
+        // not free.
         let ghostInputs = GhostInputs(
             arc: arcInputs, target: model.aimTargetID,
             hoop: model.aimTargetID.flatMap { id in
                 model.rings.first { $0.id == id }?.position
-            })
+            },
+            trajectory: model.showsTrajectory)
         if ghostInputs != lastGhostInputs {
             lastGhostInputs = ghostInputs
             var lines: [[SIMD3<Float>]] = []
@@ -767,7 +810,7 @@ final class KinematicsRenderer {
                     }
                 }
             }
-            if let vacuum = model.vacuumPrediction {
+            if model.showsTrajectory, let vacuum = model.vacuumPrediction {
                 lines.append(vacuum.points.map { SIMD3<Float>($0) })
             }
             ghostEntity.isEnabled = !lines.isEmpty
@@ -795,7 +838,7 @@ final class KinematicsRenderer {
 
     private func tickFlightCallout(_ model: KinematicsModel) {
         let flight = model.flights.last { $0.status == .flying || $0.status == .rolling }
-        let target: Float = flight == nil ? 0 : 1
+        let target: Float = flight != nil && model.showsNumbers ? 1 : 0
         flightCalloutReveal += (target - flightCalloutReveal) * 0.12
         guard let flight, flightCalloutReveal > 0.02 else {
             lookCallout?.isEnabled = false
@@ -846,13 +889,13 @@ final class KinematicsRenderer {
     private var releaseCalloutText = ""
 
     nonisolated static func releaseText(_ release: KinematicsModel.Flight.Release) -> String {
-        PhysicsFormat.angle(release.elevationDegrees, decimals: 0) + " · "
-            + PhysicsFormat.measurement(release.speed, "m/s", decimals: 1)
+        launchText(elevationDegrees: release.elevationDegrees, speed: release.speed)
     }
 
     private func tickReleaseCallout(_ model: KinematicsModel) {
         let thrown = model.latestThrow
-        let live = thrown.map { $0.status == .flying || $0.status == .rolling } ?? false
+        let live = model.showsNumbers
+            && (thrown.map { $0.status == .flying || $0.status == .rolling } ?? false)
         releaseCalloutReveal += ((live ? 1 : 0) - releaseCalloutReveal) * 0.12
         guard let release = thrown?.release, releaseCalloutReveal > 0.02 else {
             releaseCallout?.isEnabled = false
@@ -965,15 +1008,28 @@ final class KinematicsRenderer {
             shadowPool.slots[index].entity.isEnabled = false
         }
 
+        // Each flight's dots ease to full size while it keeps them and away
+        // when it does not — a scale, so the per-frame work stays transforms.
+        let kept = Self.flightsKeepingDots(flights)
+        var live = Set<UUID>()
         var dotIndex = 0
-        for flight in flights {
+        for flight in flights where !flight.dots.isEmpty {
+            live.insert(flight.id)
+            let target: Float = kept.contains(flight.id) ? 1 : 0
+            var scale = dotScales[flight.id] ?? target
+            scale += (target - scale) * 0.12
+            if abs(scale - target) < 0.01 { scale = target }
+            dotScales[flight.id] = scale
+            guard scale > 0.02 else { continue }
             for dot in flight.dots where dotIndex < dotPool.budget {
                 let slot = dotPool.slots[dotIndex]
                 slot.entity.isEnabled = true
                 slot.entity.position = SIMD3<Float>(dot)
+                slot.entity.scale = SIMD3(repeating: scale)
                 dotIndex += 1
             }
         }
+        dotScales = dotScales.filter { live.contains($0.key) }
         for index in dotIndex..<dotPool.budget {
             dotPool.slots[index].entity.isEnabled = false
         }

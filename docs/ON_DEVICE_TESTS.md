@@ -731,6 +731,21 @@ can be tested at all.**
 
 ## Projectiles — the one that is 1:1 with your room
 
+### ⟳ 2026-10-17 — minimal: the Trajectory and the Numbers wait in More
+
+- [ ] **The quiet room.** Launcher, a smaller bead on its thin shaft, the
+      waiting ball, the hoop well. No arc, no labels. Does it still say
+      "launcher" without the arc? Is the bead's shaft enough to read the
+      speed by?
+- [ ] **Hold the bead.** Its reading, "45° · 6.0 m/s", appears beside it
+      while you hold it and goes when you let go, with Numbers off.
+- [ ] **More › Trajectory** draws the arc with its apex and landing marks;
+      **More › Numbers** adds every label and callout. Each alone is a clean
+      picture.
+- [ ] **The strobe.** Throw twice: the first throw's dots stay until the
+      second ball leaves your hand, then shrink away. Pause: nothing shrinks.
+- [ ] **A hoop.** Tap a hoop with Trajectory off: its two arcs still show.
+
 ### ⟳ 2026-10-17 — throwing is the main act
 
 - [ ] **The room opens quiet.** No welcome shot: the launcher stands still,

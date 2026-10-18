@@ -32,11 +32,21 @@ enum KinematicsModule {
         )
     }
 
-    /// What More holds for the throw: the world it happens on, its air,
-    /// and the room's walls. Angle and speed are the aim bead; the ball is
-    /// the fan over the launcher.
+    /// What More holds for the throw: the two layers the room keeps until
+    /// asked (2026-10-17), the world it happens on, its air, and the room's
+    /// walls. Angle and speed are the aim bead; the ball is the fan over the
+    /// launcher.
     static func more(_ model: KinematicsModel) -> [MoreItem] {
         [
+            // The prediction: the arc, its apex and landing, the vacuum ghost.
+            .toggle(id: "trajectory", title: "Trajectory",
+                    symbol: "point.topleft.down.to.point.bottomright.curvepath",
+                    isOn: { model.showsTrajectory },
+                    set: { model.showsTrajectory = $0 }),
+            // Every number in the room; the bead shows its own while held.
+            .toggle(id: "numbers", title: "Numbers", symbol: "number",
+                    isOn: { model.showsNumbers },
+                    set: { model.showsNumbers = $0 }),
             // g was a world fan, a rail in the room and a rail in the box;
             // it is this one slider, which names the world it stands on.
             .slider(.init(id: "gravity", label: "Gravity", unit: "m/s²",

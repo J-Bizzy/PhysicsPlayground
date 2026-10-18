@@ -194,6 +194,8 @@ final class ResetCoverageTests: XCTestCase {
                 case "catchingEnabled": model.catchingEnabled.toggle()
                 case "hoopsOrbit": model.hoopsOrbit.toggle()
                 case "isPaused": model.isPaused.toggle()
+                case "showsTrajectory": model.showsTrajectory.toggle()
+                case "showsNumbers": model.showsNumbers.toggle()
                 default:
                     XCTFail("KinematicsModel gained a flag this test cannot "
                             + "flip: `\(name)`. Add a case — do not delete "

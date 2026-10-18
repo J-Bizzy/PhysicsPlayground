@@ -86,6 +86,17 @@ final class KinematicsModel {
     var gravity = 9.81
     var airResistance = false
 
+    // MARK: Display layers (More), off until asked for
+
+    /// The predicted arc and its apex and landing marks, and the vacuum
+    /// ghost while the air is on. Off by default since 2026-10-17: the room
+    /// is the launcher and the balls, and the prediction is a request.
+    var showsTrajectory = false
+    /// Every number in the room: the bead's angle and speed, the apex and
+    /// landing labels, and the callouts on a flying, thrown or caught ball.
+    /// Off by default; More's Values keep the full record either way.
+    var showsNumbers = false
+
     /// Whether flights bounce off walls and ceiling. Defaults on; the unscanned box stands in until the shared room model supplies detected walls.
     var respectRoomWalls = true
     var roomWalls: [RoomWalls.Wall] = RoomWalls.box(of: .unscanned)
@@ -255,6 +266,10 @@ final class KinematicsModel {
         /// Where and how a hand let this ball go; nil for a launcher's shot,
         /// and cleared while the ball is held again.
         var release: Release?
+        /// Which launch this was, counting up across the session: the order
+        /// flights left, which their place in `flights` is not (a rethrown
+        /// ball keeps its slot). The strobe keeps the newest one's dots.
+        var launchSerial = 0
 
         /// A throw's initial conditions: the ones your arm set.
         nonisolated struct Release: Equatable {
@@ -341,6 +356,12 @@ final class KinematicsModel {
     /// follow-through.
     private var throwSampler = ThrowSampler(window: 0.16)
     private var heldFlightID: UUID?
+    /// The last `launchSerial` handed out.
+    private var launchCounter = 0
+    private func nextLaunchSerial() -> Int {
+        launchCounter += 1
+        return launchCounter
+    }
     /// The ball most recently thrown by hand — what the release callout and
     /// More's release readings read. A pointer into `flights`, so out of
     /// the snapshot: a restore that loses the ball loses the readout.
@@ -384,6 +405,7 @@ final class KinematicsModel {
         flight.status = .flying
         flight.maxHeight = muzzlePoint.y
         flight.launchPoint = muzzlePoint
+        flight.launchSerial = nextLaunchSerial()
         insertFlight(flight)
         emitSound(.launch, at: muzzlePoint, volume: 0.8)
     }
@@ -424,6 +446,7 @@ final class KinematicsModel {
         flights[index].maxHeight = point.y
         flights[index].launchPoint = point
         flights[index].wasThrown = true
+        flights[index].launchSerial = nextLaunchSerial()
         flights[index].release = Flight.Release(position: point, velocity: velocity)
         latestThrowID = id
         return id
@@ -483,6 +506,7 @@ final class KinematicsModel {
         flights[index].maxHeight = flights[index].state.position.y
         flights[index].launchPoint = flights[index].state.position
         flights[index].wasThrown = true
+        flights[index].launchSerial = nextLaunchSerial()
         flights[index].release = Flight.Release(position: flights[index].state.position,
                                                 velocity: velocity)
         latestThrowID = id
@@ -997,6 +1021,8 @@ final class KinematicsModel {
         launchSpeed = Self.roomFittingSpeed
         gravity = 9.81
         airResistance = false
+        showsTrajectory = false
+        showsNumbers = false
         // Plate-backed flag — reset must restore it (ResetCoverageTests reflects over every Bool).
         respectRoomWalls = true
         windSpeed = 0

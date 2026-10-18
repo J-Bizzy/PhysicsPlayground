@@ -193,6 +193,15 @@ struct KinematicsSpaceView: View {
             if UserDefaults.standard.bool(forKey: "kinAir") {
                 model.airResistance = true
             }
+            // `-kinArc 1` and `-kinNumbers 1` show the two layers More keeps
+            // off by default: the predicted arc with its marks (and the
+            // vacuum ghost, with `-kinAir`), and every number in the room.
+            if UserDefaults.standard.bool(forKey: "kinArc") {
+                model.showsTrajectory = true
+            }
+            if UserDefaults.standard.bool(forKey: "kinNumbers") {
+                model.showsNumbers = true
+            }
             // `-kinGravity 1.62` sets g as More's slider would — a value,
             // not a flag, because a slider at its default proves nothing
             // about the mapping behind it.
@@ -333,6 +342,8 @@ struct KinematicsSpaceView: View {
                             pressedBall.press(press, at: hand)
                         } else {
                             drag = beginDrag(entity: value.entity, hand: hand)
+                            // The bead shows its reading while it is held.
+                            renderer?.beadHeld = drag?.name == KinematicsRenderer.aimBeadName
                         }
                     }
 
@@ -358,6 +369,7 @@ struct KinematicsSpaceView: View {
                     // and a tap on a ball does nothing to the ball.
                     pressedBall.cancel()
                     bloom.endGrip()
+                    renderer?.beadHeld = false
                     defer { drag = nil }
                     guard let drag else { return }
                     let hand = SIMD3<Double>(SIMD3<Float>(value.convert(
