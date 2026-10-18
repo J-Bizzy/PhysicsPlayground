@@ -24,6 +24,19 @@ Outputs, all under PhysicsPlayground/Models/Circuits/:
                              bands are a LIVE texture painted from the
                              value, and the UV layout of a RealityKit
                              cylinder is the one that texture knows.
+    CircuitStageDeck.usdz    the turntable the floating circuit stands over
+                             (2026-10-18): a graphite disc with a champagne
+                             keyline let into its top
+    CircuitStageRim.usdz     its knurled champagne edge — the handle that
+                             turns the whole circuit — and a set-back foot
+
+THE TURNTABLE. The owner's choice for the workshop's container: the circuit
+still floats, and a slim disc hovers under it, the circuit's shadow on it,
+in the proportions of the home's portal stage (`hubdioramas.py`). Deck and
+rim are two files because each becomes its own grab target — the rim
+turns, the deck's outer band carries — and the collider test measures
+each collider against its own entity. Top face at y = 0, centred on the
+axis; STAGE_RADIUS is `CircuitsModel.stageRadius`.
 
 WHY A SCRIPT. Four of these parts (battery, bulb, capacitor, switch)
 shipped as hand-built assets on 2026-07-17 with no generator, before the
@@ -289,6 +302,57 @@ def build_switch(s):
     return join("CircuitSwitch", parts)
 
 
+# ----------------------------------------------------------- the turntable
+
+STAGE_RADIUS = 0.45      # the rim's outer edge; `CircuitsModel.stageRadius`
+STAGE_THICKNESS = 0.012
+RIM_DEPTH = 0.016        # the band's own radial width
+KNURLS = 180
+
+
+def build_stage_deck(s):
+    parts = []
+    deck_radius = STAGE_RADIUS - RIM_DEPTH
+    disc = cylinder("StageDeck", deck_radius, STAGE_THICKNESS,
+                    location=(0, 0, -STAGE_THICKNESS / 2), vertices=192)
+    bevel(disc, 0.0015, segments=3)
+    # Flat-shaded: smoothing blends the bevel's side normals across the cap
+    # and the top breaks into wedges. And satin, not the parts' clear coat:
+    # 0.9 m of glossy graphite seen at a grazing angle mirrors the room and
+    # reads as a pale slab (the first still).
+    satin = coat(material("StageSatinGraphite", (0.070, 0.072, 0.078),
+                          roughness=0.55, metallic=0.05), 0.15, 0.45)
+    parts.append(shade(disc, satin, smooth=False))
+    # The keyline, two centimetres in: the milled edge every stage wears.
+    key = band("StageKeyline", deck_radius - 0.020, deck_radius - 0.022, 0.0007,
+               location=(0, 0, 0.00025), vertices=192)
+    parts.append(shade(key, s["champagne"]))
+    return join("CircuitStageDeck", parts)
+
+
+def build_stage_rim(s):
+    parts = []
+    inner = STAGE_RADIUS - RIM_DEPTH
+    ring = band("StageRim", STAGE_RADIUS - 0.002, inner, STAGE_THICKNESS + 0.002,
+                location=(0, 0, -STAGE_THICKNESS / 2), vertices=192)
+    bevel(ring, 0.0010, segments=2)
+    parts.append(shade(ring, s["champagne"]))
+    # Knurling: the shelf crown's "this turns", in a ring of fine ridges.
+    for index in range(KNURLS):
+        angle = 2 * math.pi * index / KNURLS
+        ridge = box("StageKnurl", (0.0042, 0.0022, STAGE_THICKNESS - 0.003),
+                    location=((STAGE_RADIUS - 0.0011) * math.cos(angle),
+                              (STAGE_RADIUS - 0.0011) * math.sin(angle),
+                              -STAGE_THICKNESS / 2))
+        ridge.rotation_euler = (0, 0, angle + math.pi / 2)
+        parts.append(shade(ridge, s["champagne"], smooth=False))
+    # The foot, set back under the deck so its edge floats over a shadow line.
+    foot = band("StageFoot", STAGE_RADIUS - 0.050, STAGE_RADIUS - 0.064, 0.004,
+                location=(0, 0, -STAGE_THICKNESS - 0.002), vertices=192)
+    parts.append(shade(foot, s["champagne"]))
+    return join("CircuitStageRim", parts)
+
+
 def build_resistor_caps(s):
     parts = []
     for x in (-0.0355, 0.0355):
@@ -310,11 +374,17 @@ BUILDERS = {
     "CircuitFuse": build_fuse,
     "CircuitSwitch": build_switch,
     "CircuitResistorCaps": build_resistor_caps,
+    "CircuitStageDeck": build_stage_deck,
+    "CircuitStageRim": build_stage_rim,
 }
 
 
 def main():
+    # `-- CircuitStageDeck CircuitStageRim` mills only those; none, all of them.
+    wanted = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else []
     for name, builder in BUILDERS.items():
+        if wanted and name not in wanted:
+            continue
         reset_scene()
         s = stocks()
         part = builder(s)

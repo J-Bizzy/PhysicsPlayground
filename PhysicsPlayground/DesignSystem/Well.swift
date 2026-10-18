@@ -553,12 +553,6 @@ final class Well {
         return nil
     }
 
-    private static func applyGroundingShadow(_ entity: Entity) {
-        if entity is ModelEntity {
-            entity.components.set(GroundingShadowComponent(castsShadow: true))
-        }
-        for child in entity.children { applyGroundingShadow(child) }
-    }
 
     private static func makeSource(_ spec: Spec) -> (source: Entity, preview: Entity) {
         let source = Entity()
@@ -568,7 +562,7 @@ final class Well {
         // the model without touching the label.
         let preview = Entity()
         let model = spec.preview()
-        applyGroundingShadow(model)
+        GroundingShadows.cast(on: model)
         preview.addChild(model)
         source.addChild(preview)
 

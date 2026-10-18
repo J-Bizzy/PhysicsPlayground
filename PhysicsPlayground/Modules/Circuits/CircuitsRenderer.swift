@@ -126,8 +126,28 @@ final class CircuitsRenderer {
     /// `viewRoot` to the zoom — one transform each, so they cannot fight.
     let viewRoot = Entity()
 
+    /// The turntable under the floating circuit (2026-10-18): deck and rim,
+    /// inside the zoom with the bench, taking the parts' shadows. Its height
+    /// eases to the model's (`CircuitsModel.settleStage`), and it fades out as
+    /// a two-hand zoom passes 1.25×, so a dive into the copper never stands a
+    /// metres-wide disc below the floor.
+    private let stageRoot = Entity()
+    private var stageTop: Float?
+    private var appliedStageOpacity: Float = -1
+
     init() {
         root.addChild(viewRoot)
+        stageRoot.name = "circuit-stage"
+        if let deck = PropCache.instance(named: "CircuitStageDeck") {
+            deck.name = "circuit-stage-deck"
+            stageRoot.addChild(deck)
+        }
+        if let rim = PropCache.instance(named: "CircuitStageRim") {
+            rim.name = "circuit-stage-rim"
+            stageRoot.addChild(rim)
+        }
+        GroundingShadows.receive(on: stageRoot)
+        viewRoot.addChild(stageRoot)
         root.addChild(Lighting.keyLight())
         // Bulb glow brightness buckets (materials made once).
         glowMaterials = (0..<6).map { step in
@@ -485,7 +505,34 @@ final class CircuitsRenderer {
         pulsedGrabEntity = nil
     }
 
+    /// How opaque the stage is at a zoom: whole to 1.25×, gone by 2×.
+    nonisolated static func stageOpacity(atZoom zoom: Float) -> Float {
+        min(max((2 - zoom) / 0.75, 0), 1)
+    }
+
+    private func syncStage(_ model: CircuitsModel, dt: Double) {
+        let stage = model.stage
+        let target = Float(stage.top)
+        var top = stageTop ?? target
+        top += (target - top) * Float(min(dt * 6, 1))
+        if abs(target - top) < 0.0005 { top = target }
+        stageTop = top
+        stageRoot.position = SIMD3(Float(stage.center.x), top, Float(stage.center.y))
+        stageRoot.orientation = simd_quatf(angle: Float(stage.yaw), axis: [0, 1, 0])
+        let opacity = Self.stageOpacity(atZoom: benchScale)
+        if abs(opacity - appliedStageOpacity) > 0.002 {
+            appliedStageOpacity = opacity
+            stageRoot.isEnabled = opacity > 0.002
+            if opacity < 0.998 {
+                stageRoot.components.set(OpacityComponent(opacity: opacity))
+            } else {
+                stageRoot.components.remove(OpacityComponent.self)
+            }
+        }
+    }
+
     private func render(_ model: CircuitsModel, dt: Double) {
+        syncStage(model, dt: dt)
         if appliedResistorTextureVersion != CircuitTextures.version {
             appliedResistorTextureVersion = CircuitTextures.version
             for id in visuals.keys { visuals[id]?.resistorCodeKey = "" }
@@ -845,8 +892,9 @@ final class CircuitsRenderer {
         holder.components.set(accessibility)
         viewRoot.addChild(holder)
 
-        // The visible body, shaped per kind.
+        // The visible body, shaped per kind, shadowing the stage below.
         let body = Self.makeBody(for: component)
+        GroundingShadows.cast(on: body)
         holder.addChild(body)
 
         // The carry target is the body, measured from `body` (the holder

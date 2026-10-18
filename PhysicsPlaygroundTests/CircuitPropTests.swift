@@ -84,4 +84,23 @@ final class CircuitPropTests: XCTestCase {
         XCTAssertGreaterThan(-box.min.x, box.max.x + 0.002,
                              "the nipple should make −X the longer end")
     }
+
+    /// The turntable under the floating circuit (2026-10-18): a deck and a
+    /// rim, each centred on the axis with its top at y = 0, the rim's outer
+    /// edge at `CircuitsModel.stageRadius`.
+    func testTheTurntableIsMilledToTheStagesNumbers() throws {
+        let deck = try bounds(of: "CircuitStageDeck")
+        let rim = try bounds(of: "CircuitStageRim")
+        let radius = Float(CircuitsModel.stageRadius)
+        XCTAssertEqual(rim.extents.x, 2 * radius, accuracy: 0.003)
+        XCTAssertEqual(rim.extents.z, 2 * radius, accuracy: 0.003)
+        XCTAssertLessThan(deck.extents.x, rim.extents.x, "the deck runs past its rim")
+        XCTAssertEqual(deck.max.y, 0, accuracy: 0.002, "the deck's top is not at y = 0")
+        XCTAssertEqual(rim.max.y, 0, accuracy: 0.003)
+        XCTAssertLessThan(deck.extents.y, 0.02, "a slim disc, not a drum")
+        for box in [deck, rim] {
+            XCTAssertEqual(box.center.x, 0, accuracy: 0.002)
+            XCTAssertEqual(box.center.z, 0, accuracy: 0.002)
+        }
+    }
 }

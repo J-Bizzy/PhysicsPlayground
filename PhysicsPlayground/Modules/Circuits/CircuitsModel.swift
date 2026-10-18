@@ -131,6 +131,62 @@ final class CircuitsModel {
     /// past the end it belongs to.
     nonisolated static let leadReach = 0.06
 
+    // MARK: The turntable (2026-10-18)
+
+    /// The disc the floating circuit stands over — the owner's choice of a
+    /// designed container: the parts still float, and a slim milled disc
+    /// hovers under them with their shadows on it. Its centre in the room's
+    /// x and z, its top's height, and how far it has been turned. Nothing
+    /// rests on it; it follows the circuit (`settleStage`).
+    nonisolated struct Stage: Equatable, Codable {
+        var center: SIMD2<Double>
+        var top: Double
+        var yaw: Double
+    }
+    /// The rim's outer radius, as `Tools/circuitparts.py` mills it.
+    nonisolated static let stageRadius = 0.45
+    /// How far under the circuit's lowest point the stage sits, and the
+    /// lowest it may go.
+    nonisolated static let stageClearance = 0.30
+    nonisolated static let stageFloor = 0.30
+    private(set) var stage = Stage(center: SIMD2(buildCenter.x, buildCenter.z),
+                                   top: 0.82, yaw: 0)
+
+    /// Carries the whole circuit and its stage by `offset`: every part, so
+    /// every wire, rigidly. Each part stays inside the room's safety box, and
+    /// a move the box would bend is refused whole rather than shearing the
+    /// circuit. Returns whether it moved.
+    @discardableResult
+    func moveCircuit(by offset: SIMD3<Double>) -> Bool {
+        guard scrubTime == nil, leadPull == nil, !components.isEmpty else { return false }
+        for component in components {
+            let moved = component.position + offset
+            for point in [moved, moved - component.axis * Self.terminalOffset,
+                          moved + component.axis * Self.terminalOffset]
+            where simd_distance(Self.clampToRoomSafety(point), point) > 1e-9 {
+                return false
+            }
+        }
+        for index in components.indices { components[index].position += offset }
+        stage.center += SIMD2(offset.x, offset.z)
+        settleStage()
+        persistSoon()
+        return true
+    }
+
+    /// Sets the stage `stageClearance` under the circuit's lowest point — a
+    /// terminal or a part's centre — and never below `stageFloor`. An empty
+    /// bench leaves it where it was.
+    func settleStage() {
+        var lowest = Double.infinity
+        for component in components {
+            lowest = min(lowest, component.position.y,
+                         component.terminalPosition(0).y, component.terminalPosition(1).y)
+        }
+        guard lowest.isFinite else { return }
+        stage.top = max(Self.stageFloor, lowest - Self.stageClearance)
+    }
+
     struct Terminal: Equatable, Hashable, Codable {
         var componentID: UUID
         var end: Int  // 0 = left (battery +), 1 = right
@@ -426,6 +482,8 @@ final class CircuitsModel {
     func release(id: UUID) -> ReleaseOutcome {
         guard scrubTime == nil else { return .nothingNear }
         guard components.contains(where: { $0.id == id }) else { return .nothingNear }
+        // Wherever it lands, the stage keeps its clearance under the circuit.
+        defer { settleStage() }
         if let alignment = alignment(for: id),
            let index = components.firstIndex(where: { $0.id == id }) {
             components[index].position = alignment.position
@@ -1763,6 +1821,7 @@ final class CircuitsModel {
         let bench = Self.sanitized(bench)
         components = bench.components
         wires = bench.wires
+        settleStage()
         selectedID = nil
         cancelLeadPull()
         voiceWireSource = nil
@@ -1949,6 +2008,7 @@ final class CircuitsModel {
             connect((battery, 1), (battery, 0))
         }
         selectedID = components.first?.id
+        settleStage()
         solve(dt: 1.0 / 90.0)
         // A preset replaces the whole bench; never reached from `init`.
         persistSoon()
@@ -2077,6 +2137,7 @@ final class CircuitsModel {
                  from: Terminal(componentID: bulb.id, end: 0),
                  to: Terminal(componentID: battery.id, end: 0)),
         ]
+        settleStage()
         // Solve once immediately so the bulb opens lit, not one frame dark.
         solve(dt: 1.0 / 90.0)
     }
@@ -2149,6 +2210,7 @@ extension CircuitsModel: TimeCapsuleRecording {
         components = snapshot.components
         wires = snapshot.wires
         simTime = snapshot.simTime
+        settleStage()
         // A restore replaces the whole bench, so all in-flight observer state
         // clears unconditionally.
         cancelLeadPull()

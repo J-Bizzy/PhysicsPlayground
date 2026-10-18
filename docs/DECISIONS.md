@@ -16,6 +16,25 @@ A running log of consequential decisions — architectural, physical, or product
 
 (The template sat stranded at line 309, mid-log between two 2026-07-29 entries, until 2026-08-01.)
 
+## 2026-10-18 — The floating circuit gets a turntable
+
+**Decision:** The owner asked for Circuit Workshop's parts to have a better presence and a "designed container", while keeping them floating in 3-D. Of three containers offered (a turntable stage, an open frame, an orbit ring), they chose the turntable.
+
+It is a slim milled disc, 0.90 m across and 12 mm thick: satin graphite, a champagne keyline, a knurled champagne rim (the shelf crown's "this turns"), and a foot set back underneath.
+- **Placement.** It hovers 0.30 m under the circuit's lowest point, settled after every reset, preset, load, restore and release, and never lower than 0.30 m.
+- **Shadows and zoom.** It takes the parts' grounding shadows, sits inside the zoom with the bench, and fades away between 1.25× and 2×.
+- **Moving the circuit.** `moveCircuit(by:)` carries everything rigidly.
+- **Order.** Spinning it and carrying it by hand come later (B1b). Its look comes first, for the owner's sign-off, because they have twice removed surfaces from this lab.
+
+**Context:**
+- **The parts had no shadows at all.** `Grabbable.apply` put `GroundingShadowComponent` on each part's holder, a plain `Entity`, and RealityKit reads it only on meshes. The wells already did it right, privately; `RenderKit.GroundingShadows` now does it for both.
+- **The first still showed a pale, faceted slab.** Clear-coated graphite at a grazing angle mirrors the room, and smooth shading spread the bevel's normals across the cap. The deck is now flat-shaded satin.
+
+**Consequences:**
+- **A written rule now has one exception.** ARCHITECTURE.md's "no tables, planes, or miniature dioramas" names this as the owner's one exception: a container and a handle, never a surface for parts to rest on. The design review's "refine, not add" is overridden by the owner's explicit choice.
+- **The simulator's camera sits too low to see the stage** under a circuit at home. `-circStageShift 0,-0.2,-1.7` sets the circuit back where the camera can look down onto it.
+- **Tests:** `CircuitsStageTests` (clearance, floor, the renderer's placement, the fade, clear of the shelf and within reach) and `CircuitPropTests.testTheTurntableIsMilledToTheStagesNumbers`.
+
 ## 2026-10-18 — Circuit Workshop's wires carry their own currents, and a loaded bench meets the live rules
 
 **Decision:** This is the first, invisible step of the Circuits pass the owner asked for (lab-kit parts, a turntable, wiring that "works smoothly"). It has four parts:

@@ -245,6 +245,14 @@ struct CircuitsSpaceView: View {
                let preset = CircuitsModel.Preset(rawValue: name) {
                 model.loadPreset(preset)
             }
+            // `-circStageShift <dx>,<dy>,<dz>` carries the whole circuit and its
+            // turntable — set back, the simulator's camera can see down onto it.
+            if let spec = UserDefaults.standard.string(forKey: "circStageShift") {
+                let values = spec.split(separator: ",").compactMap { Double($0) }
+                if values.count == 3 {
+                    model.moveCircuit(by: SIMD3(values[0], values[1], values[2]))
+                }
+            }
 
             // The index-naming arguments below must run after the bench-shaping
             // ones: `-circPreset` starts with `clearBench`.

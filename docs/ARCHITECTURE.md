@@ -26,7 +26,7 @@ Model-level bounds are split by WHO they bind (2026-08-03, superseding the merge
 
 ## Conventions
 
-- **Room-scale only, always.** No tables, planes, or miniature dioramas. This has regressed multiple times — don't reintroduce it.
+- **Room-scale only, always.** No tables, planes, or miniature dioramas. This has regressed multiple times — don't reintroduce it. **One owner-chosen exception (2026-10-18):** Circuit Workshop's turntable — a slim disc that hovers under the still-floating circuit as its container and its handle (spin it, carry it), never a surface parts rest on. It does not license a table anywhere else.
 - **Vector/color language is fixed and owned by `VectorPalette`:** red = positive/N-pole, blue = negative, green/purple = ± test probe, arrow length + brightness = field strength. Colors come from `DesignTokens`, never ad hoc.
 - **The per-frame path touches only entity transforms.** Mesh regeneration, field-line tracing, and isosurfaces go through `RenderKit.GeometryPipeline`'s background worker, never inline in the render tick. The one stated exception (2026-09-06): a bounded ring-buffer mesh rewritten in place through RealityKit's `LowLevelMesh` — `RenderKit.TrailRibbons`, Orbital Mechanics' trails, every body a part of one mesh so a frame is one write per buffer (2026-10-17) — is a buffer write, not regeneration, and belongs on the tick.
 - **`RealityView`'s `update:` closure is unreliable** for continuous animation. Tick from `SceneEvents.Update` for anything that must animate while idle.

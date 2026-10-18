@@ -338,6 +338,21 @@ working session:
 
 ## Circuit Workshop
 
+### ⟳ 2026-10-18 — the floating circuit gets a turntable
+
+- [ ] **Look down.** A slim dark disc, 0.9 m across with a knurled champagne
+      rim, hovers about 30 cm under the circuit's lowest part. Does it read
+      as a container for the circuit, or as a grey slab in the room (the
+      objection that removed the shelf pane on 2026-09-05)?
+- [ ] **Shadows.** Each part casts a soft shadow onto the disc — the parts
+      had no grounding shadows at all before. Are they visible from where you
+      stand?
+- [ ] **It follows.** Carry a part well below the others and let go: the
+      disc settles down under it (never below 30 cm off the floor).
+- [ ] **Zoom in with two hands.** The disc fades away by 2×, so the copper
+      dive never stands a giant disc under the floor.
+
+
 **The whole-module improvement pass is deferred** (see the top of this
 file). What follows is the standing script.
 
