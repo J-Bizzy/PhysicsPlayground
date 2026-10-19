@@ -20,6 +20,12 @@ public enum Constants {
     /// Elementary charge, C. Exact — the ampere is defined from it.
     public static let elementaryCharge = 1.602176634e-19
 
+    /// Planck's constant, J·s. Exact — the kilogram is defined from it.
+    public static let planck = 6.62607015e-34
+
+    /// Boltzmann's constant, J/K. Exact — the kelvin is defined from it.
+    public static let boltzmann = 1.380649e-23
+
     // MARK: Measured
 
     /// Vacuum permeability, T·m/A. Measured since 2019, but 4π × 10⁻⁷
