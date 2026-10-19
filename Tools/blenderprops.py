@@ -167,6 +167,27 @@ def letter(name, character, size, extrude, location=(0, 0, 0),
     return bpy.context.active_object
 
 
+def tube(name, points, radius, mat, resolution=8):
+    """A round tube along a polyline, ends capped: a frame member, a lead,
+    a stroke of an inlaid schematic symbol."""
+    data = bpy.data.curves.new(name, type="CURVE")
+    data.dimensions = "3D"
+    data.bevel_depth = radius
+    data.bevel_resolution = resolution
+    data.use_fill_caps = True
+    spline = data.splines.new("POLY")
+    spline.points.add(len(points) - 1)
+    for point, co in zip(spline.points, points):
+        point.co = (*co, 1.0)
+    obj = bpy.data.objects.new(name, data)
+    bpy.context.collection.objects.link(obj)
+    bpy.ops.object.select_all(action="DESELECT")
+    obj.select_set(True)
+    bpy.context.view_layer.objects.active = obj
+    bpy.ops.object.convert(target="MESH")
+    return shade(bpy.context.active_object, mat)
+
+
 def join(name, objects):
     bpy.ops.object.select_all(action="DESELECT")
     for obj in objects:

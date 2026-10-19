@@ -2,10 +2,11 @@
 //  CircuitPropTests.swift
 //  Physics Playground — app tests
 //
-//  The ten circuit parts milled by `Tools/circuitparts.py`: every asset
-//  the bench asks for exists, lies along X, and stays inside the carry
-//  box's clamp at the leads' inner edge. Blender (x, y, z) → RealityKit
-//  (x, z, −y).
+//  The ten circuit parts milled by `Tools/circuitparts.py` as lab-kit
+//  modules (2026-10-18): every asset the bench asks for exists, sits on
+//  the shared carrier, lies along X, and stays inside the carry box's
+//  clamp at the contacts' inner edge; the carrier runs to the contacts.
+//  Blender (x, y, z) → RealityKit (x, z, −y).
 //
 
 import XCTest
@@ -30,12 +31,57 @@ final class CircuitPropTests: XCTestCase {
     }
 
     /// Every kind the renderer maps to an asset has one, plus the
-    /// resistor's caps. A missing file falls back to a procedural body,
-    /// which is the right behaviour and completely silent.
+    /// resistor's caps and the carrier. A missing file falls back to a
+    /// procedural body, which is the right behaviour and completely silent.
     func testEveryPartTheBenchAsksForExists() throws {
         for name in CircuitsRenderer.bodyAssetNames.values.sorted()
-            + [CircuitsRenderer.resistorCapsAssetName] {
+            + [CircuitsRenderer.resistorCapsAssetName, CircuitsRenderer.carrierAssetName] {
             _ = try bounds(of: name)
+        }
+    }
+
+    /// The carrier every part is mounted on runs from contact to contact —
+    /// so two parts snapped nose-to-tail butt their carriers at the joint —
+    /// with its top where every body sits and its underside where the
+    /// home's diorama stands it.
+    func testTheCarrierRunsToTheContactsUnderEveryPart() throws {
+        let carrier = try bounds(of: CircuitsRenderer.carrierAssetName)
+        let contact = Float(CircuitsModel.terminalOffset)
+        XCTAssertEqual(carrier.max.x, contact, accuracy: 0.0015)
+        XCTAssertEqual(carrier.min.x, -contact, accuracy: 0.0015)
+        XCTAssertEqual(carrier.min.y, CircuitsRenderer.carrierBottom, accuracy: 0.001)
+        // The traces and rivets stand a hair proud of the top face.
+        XCTAssertGreaterThan(carrier.max.y, CircuitsRenderer.carrierTop)
+        XCTAssertLessThan(carrier.max.y, CircuitsRenderer.carrierTop + 0.004)
+        // A contact sits on its trace: the ball's underside is the top face.
+        XCTAssertEqual(-CircuitsRenderer.contactRadius, CircuitsRenderer.carrierTop, accuracy: 1e-6)
+        for name in CircuitsRenderer.bodyAssetNames.values.sorted()
+            + [CircuitsRenderer.resistorCapsAssetName] {
+            let box = try bounds(of: name)
+            XCTAssertGreaterThanOrEqual(box.min.y, CircuitsRenderer.carrierBottom - 0.001,
+                                        "\(name) hangs below its carrier")
+            XCTAssertLessThanOrEqual(abs(box.center.z), 0.004, "\(name) is off the carrier's centre line")
+        }
+    }
+
+    /// Glass is see-through. Blender's USD exporter drops the Alpha socket
+    /// and writes opacity as 1 − Transmission, so every glass part shipped
+    /// opaque until 2026-10-18 and hid the filament a fuse exists to show.
+    func testTheGlassPartsAreSeeThrough() throws {
+        for name in ["CircuitBulb", "CircuitFuse", "CircuitLED"] {
+            let loaded = try XCTUnwrap(try? Entity.load(named: name))
+            var transparent = 0
+            func walk(_ entity: Entity) {
+                for material in entity.components[ModelComponent.self]?.materials ?? [] {
+                    if let pbr = material as? PhysicallyBasedMaterial,
+                       case .transparent = pbr.blending {
+                        transparent += 1
+                    }
+                }
+                entity.children.forEach(walk)
+            }
+            walk(loaded)
+            XCTAssertGreaterThan(transparent, 0, "\(name)'s glass came out opaque")
         }
     }
 
@@ -49,7 +95,7 @@ final class CircuitPropTests: XCTestCase {
             XCTAssertLessThan(box.max.x, Self.leadClamp, "\(name) reaches its +X lead")
             XCTAssertGreaterThan(box.min.x, -Self.leadClamp, "\(name) reaches its −X lead")
         }
-        for name in ["CircuitBattery", "CircuitCapacitor", "CircuitInductor",
+        for name in ["CircuitBattery", "CircuitInductor",
                      "CircuitMotor", "CircuitFuse", "CircuitSwitch",
                      "CircuitResistorCaps"] {
             let box = try bounds(of: name)
@@ -58,15 +104,19 @@ final class CircuitPropTests: XCTestCase {
         }
     }
 
-    /// The bulb's envelope rises above its base, where the renderer hangs
-    /// the filament (+y 0.012); the LED's dome likewise.
-    func testTheBulbAndTheLEDStandUp() throws {
-        for name in ["CircuitBulb", "CircuitLED"] {
-            let box = try bounds(of: name)
-            XCTAssertGreaterThan(box.max.y, 0.02, "\(name)'s glass should rise above its base")
-            XCTAssertGreaterThan(box.extents.y, box.extents.x,
-                                 "\(name) stands up rather than lying along X")
-        }
+    /// The bulb's envelope stands round the place the renderer hangs its
+    /// filament, and the LED's lens over the place it lights its die, and
+    /// the capacitor's can stands up off the carrier.
+    func testTheBulbTheLEDAndTheCapacitorStandUp() throws {
+        let bulb = try bounds(of: "CircuitBulb")
+        XCTAssertGreaterThan(bulb.max.y, CircuitsRenderer.bulbCentre + 0.015,
+                             "the bulb's glass should close over its filament")
+        let led = try bounds(of: "CircuitLED")
+        XCTAssertGreaterThan(led.max.y, CircuitsRenderer.ledGlowHeight + 0.004,
+                             "the LED's lens should rise over its die")
+        let capacitor = try bounds(of: "CircuitCapacitor")
+        XCTAssertGreaterThan(capacitor.max.y, CircuitsRenderer.carrierTop + 0.035,
+                             "the capacitor's can should stand on end")
     }
 
     /// The motor's shaft end is +X, where the renderer mounts the rotor
@@ -78,11 +128,32 @@ final class CircuitPropTests: XCTestCase {
     }
 
     /// The battery's positive nipple is on the −X end — terminal 0, the
-    /// nodeA convention the solver and the renderer share.
+    /// nodeA convention the solver and the renderer share. Measured over
+    /// what stands above the carrier: the symbols on the chamfers below it
+    /// are wider than the cell and symmetric.
     func testTheBatterysNippleIsOnTheMinusXEnd() throws {
-        let box = try bounds(of: "CircuitBattery")
-        XCTAssertGreaterThan(-box.min.x, box.max.x + 0.002,
-                             "the nipple should make −X the longer end")
+        let loaded = try XCTUnwrap(try? Entity.load(named: "CircuitBattery"))
+        var lowest = Float.infinity, highest = -Float.infinity
+        func walk(_ entity: Entity) {
+            if let mesh = entity.components[ModelComponent.self]?.mesh {
+                let toRoot = entity.transformMatrix(relativeTo: loaded)
+                for instance in mesh.contents.instances {
+                    guard let model = mesh.contents.models[instance.model] else { continue }
+                    let transform = toRoot * instance.transform
+                    for part in model.parts {
+                        for local in part.positions.elements {
+                            let point = transform * SIMD4(local, 1)
+                            guard point.y > CircuitsRenderer.carrierTop + 0.004 else { continue }
+                            lowest = min(lowest, point.x)
+                            highest = max(highest, point.x)
+                        }
+                    }
+                }
+            }
+            entity.children.forEach(walk)
+        }
+        walk(loaded)
+        XCTAssertGreaterThan(-lowest, highest + 0.001, "the nipple should make −X the longer end")
     }
 
     /// The turntable under the floating circuit (2026-10-18): a deck and a

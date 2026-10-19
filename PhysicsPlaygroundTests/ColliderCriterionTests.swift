@@ -222,6 +222,20 @@ final class ColliderCriterionTests: XCTestCase {
         assertCollidersFit(renderer.root, "Circuits")
     }
 
+    /// Every kind of part, not just the starter loop's three: each module's
+    /// contacts, carry box and (on the switch) blade are measured.
+    func testCircuitsCollidersFitEveryKind() {
+        let model = CircuitsModel()
+        model.clearBench()
+        for (index, kind) in CircuitsModel.ComponentKind.allCases.enumerated() {
+            model.add(kind, at: SIMD3(-0.48 + Double(index % 5) * 0.24,
+                                      1.42 - Double(index / 5) * 0.24, -0.85))
+        }
+        let renderer = CircuitsRenderer()
+        for _ in 0..<3 { renderer.tick(dt: 1 / 90, model: model) }
+        assertCollidersFit(renderer.root, "Circuits, every kind")
+    }
+
     // MARK: The home and the shell
 
     /// The first surface every user sees. Measured after the opening: its

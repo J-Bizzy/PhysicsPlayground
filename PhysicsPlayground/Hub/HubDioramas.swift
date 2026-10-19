@@ -746,59 +746,33 @@ extension HubVignettes {
     static func circuitsDiorama() -> Built {
         let diorama = Diorama()
         let bench = diorama.bench(yaw: 0.35)
-        let lift: Float = 0.026
+        // The carrier's underside, so a module stands on the board.
+        let lift = -CircuitsRenderer.carrierBottom
         let lead = Float(CircuitsModel.terminalOffset)
         let copper = Materials.machined(DesignTokens.Palette.copperUI, roughness: 0.35)
 
+        // The lab's own lab-kit modules, live pieces and all.
         func part(_ kind: CircuitsModel.ComponentKind, at centre: SIMD3<Float>,
-                  along axis: SIMD3<Float>) -> (body: ModelEntity, ends: [SIMD3<Float>]) {
-            let holder = Entity()
-            holder.position = centre
-            holder.orientation = simd_quatf(from: [1, 0, 0], to: axis)
-            let body = CircuitsRenderer.partPreview(for: kind)
-            holder.addChild(body)
-            for x in [-lead, lead] {
-                let terminal = ModelEntity(mesh: Primitives.sphere(radius: 0.013), materials: [copper])
-                terminal.position = [x, 0, 0]
-                holder.addChild(terminal)
-            }
-            bench.addChild(holder)
-            return (body, [centre - axis * lead, centre + axis * lead])
+                  along axis: SIMD3<Float>) -> (module: CircuitsRenderer.Module, ends: [SIMD3<Float>]) {
+            let module = CircuitsRenderer.makeModule(kind: kind)
+            module.root.position = centre
+            module.root.orientation = CircuitsRenderer.moduleOrientation(axis: axis, front: [0, 0, 1])
+            bench.addChild(module.root)
+            return (module, [centre - axis * lead, centre + axis * lead])
         }
 
         let battery = part(.battery, at: [0, lift, 0.10], along: [1, 0, 0])
         // The bulb in its holder on a pedestal, as a kit stands one, so the
         // circuit rises off the board and its light stands over it.
         let raised: Float = 0.06
-        let pedestal = ModelEntity(mesh: Primitives.box(size: [0.05, raised, 0.05], cornerRadius: 0.006),
+        let pedestal = ModelEntity(mesh: Primitives.box(size: [0.09, raised, 0.05], cornerRadius: 0.006),
                                    materials: [Materials.graphite()])
         pedestal.position = [0, raised / 2, -0.10]
         bench.addChild(pedestal)
         let bulb = part(.bulb, at: [0, lift + raised, -0.10], along: [1, 0, 0])
         let switcher = part(.switcher, at: [-0.17, lift, 0], along: [0, 0, -1])
-
-        // The switch's lever, as the lab hangs it: pivoting at one contact.
-        let lever = Entity()
-        lever.position = [-0.028, 0.008, 0]
-        let blade = ModelEntity(mesh: Primitives.box(size: [0.06, 0.008, 0.014], cornerRadius: 0.003),
-                                materials: [Materials.machined(UIColor(white: 0.75, alpha: 1), roughness: 0.3)])
-        blade.position = [0.028, 0.006, 0]
-        lever.addChild(blade)
-        switcher.body.addChild(lever)
-
-        // The bulb's filament and the light round it.
-        let filament = ModelEntity(mesh: Primitives.box(size: [0.016, 0.004, 0.004]),
-                                   materials: [Materials.unlit(UIColor(white: 0.35, alpha: 1))])
-        filament.position = [0, 0.012, 0]
-        bulb.body.addChild(filament)
-        let halo = ModelEntity(mesh: Primitives.sphere(radius: 0.055),
-                               materials: [Materials.unlit(UIColor(red: 1, green: 0.85, blue: 0.4, alpha: 1),
-                                                           opacity: 0.5)])
-        halo.position = [0, 0.012, 0]
-        bulb.body.addChild(halo)
-        let warm = Entity()
-        warm.position = [0, 0.03 + raised, -0.10]
-        bench.addChild(warm)
+        let lever = switcher.module.lever
+        let glow = bulb.module.glow
 
         // Straight wires, terminal to terminal: battery + to the switch, the
         // switch to the bulb, the bulb back to battery −.
@@ -837,8 +811,6 @@ extension HubVignettes {
 
         let closedFor = 3.2, openFor = 1.6, throwTime = 0.25
         let period = closedFor + openFor
-        let litFilament = Materials.unlit(UIColor(red: 1, green: 0.75, blue: 0.3, alpha: 1))
-        let darkFilament = Materials.unlit(UIColor(white: 0.35, alpha: 1))
         var wasLit: Bool?
         return fitStage(diorama, bench: bench, cycle: period) { time in
             let t = time.truncatingRemainder(dividingBy: period)
@@ -850,21 +822,14 @@ extension HubVignettes {
             case ..<(period - throwTime): openness = 1
             default: openness = (period - t) / throwTime
             }
-            lever.orientation = simd_quatf(angle: Float(0.6 * openness), axis: [0, 0, 1])
+            lever?.orientation = simd_quatf(angle: Float(0.6 * openness), axis: [0, 0, 1])
             let lit = openness < 0.05
-            filament.model?.materials = [lit ? litFilament : darkFilament]
-            halo.isEnabled = lit
-            halo.scale = SIMD3(repeating: 0.92 + 0.08 * Float(sin(time * 2.1)))
             if lit != wasLit {
                 wasLit = lit
-                if lit {
-                    warm.components.set(PointLightComponent(
-                        color: UIColor(red: 1, green: 0.82, blue: 0.5, alpha: 1),
-                        intensity: 600, attenuationRadius: 0.2))
-                } else {
-                    warm.components.remove(PointLightComponent.self)
-                }
+                CircuitsRenderer.paintBulb(filament: bulb.module.filament, glow: glow,
+                                           light: bulb.module.light, level: lit ? 4 : 0)
             }
+            glow?.scale = SIMD3(repeating: 0.92 + 0.08 * Float(sin(time * 2.1)))
             // The carriers move only while the loop is closed.
             let drift = Float(min(t, closedFor)) * 0.12
             for (index, electron) in electrons.enumerated() {

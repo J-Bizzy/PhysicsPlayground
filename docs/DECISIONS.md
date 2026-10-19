@@ -16,6 +16,42 @@ A running log of consequential decisions — architectural, physical, or product
 
 (The template sat stranded at line 309, mid-log between two 2026-07-29 entries, until 2026-08-01.)
 
+## 2026-10-18 — Circuit Workshop's parts become lab-kit modules
+
+**Decision:** The owner asked to "improve the design of every part" and chose lab-kit modules. Every part is now the real component mounted on one shared carrier:
+- **The carrier** (`CircuitCarrier.usdz`) is a graphite plate running from contact to contact, with 45° chamfers. The part's ANSI symbol is inlaid in champagne on both chamfers, mirrored on the back so it reads from behind. Brass traces run from the part out to the contacts.
+- **The contacts are the terminals.** They are brass balls (`contactBrassUI`) sitting on the carrier's ends, and they keep their `t0-`/`t1-` names and 0.026 colliders. The copper lead rods and the white carry knob are gone.
+- **The ten bodies:**
+  - a D-cell in clips, + at −X;
+  - an AC dial puck, "~" on its face;
+  - a banded resistor on bent legs (the ceramic is still procedural, for its live bands);
+  - a standing radial capacitor;
+  - a wound bobbin;
+  - a bulb in a socket, with filament supports;
+  - an LED on legs;
+  - a ribbed motor can;
+  - a glass fuse in clips;
+  - a knife switch.
+- **States show on the part.** Labels are numbers only, so each state now appears on the object itself:
+  - the bulb's filament, glow and a point light;
+  - the LED lights red at 625 nm, and a burned-out LED shows a dark die;
+  - a blown fuse loses the middle of its filament;
+  - the capacitor's brass gauge fills by |V|/24 V;
+  - the AC dial's needle swings ±60° with the EMF;
+  - the switch's brass blade lifts.
+- **Orientation (`moduleOrientation`).** A part sits upright whenever its axis is more than 15° off vertical. A part laid end-for-end shows its back chamfer instead of hanging upside down, which the old shortest-arc rotation did to any part swung near −X. Nearer vertical, a part carries its previous roll onto the new axis, so a hand's wobble never wheels it about its own axis. A part made standing faces its top to the stage's front. A frame change over 10° eases, and snaps under Reduce Motion.
+- **The value label** hangs below a lying part, and beside a standing one.
+
+**Context:**
+- **Opaque glass.** Blender's USD exporter never writes the Alpha socket; it writes `opacity` as 1 − Transmission Weight. Every glass part had shipped opaque, which hid the filament a fuse exists to show. `glass()` now sets transmission, and `CircuitPropTests.testTheGlassPartsAreSeeThrough` holds it.
+- **The carrier first stopped at |x| < 0.056.** That left the traces floating in air out to the balls. It now runs to the contacts' centres exactly, so two snapped parts butt their carriers at the joint instead of overlapping coplanar faces. The carry box is still clamped at 0.057.
+- **The LED glowed in the bulb's yellow** until now.
+
+**Consequences:**
+- **One builder for every view.** `CircuitsRenderer.makeModule` builds the bench part, the shelf preview (the whole module at 0.60, which fits `CircuitsPartsLayout.mouthHalfExtents`) and the home diorama, so all three are one object.
+- **Tests:** `CircuitsModuleTests` (orientation, labels, the red LED and dark die, the fuse, the gauge, previews), `CircuitPropTests` (the carrier contract, glass), and `ColliderCriterionTests.testCircuitsCollidersFitEveryKind` over all ten parts.
+- **New arguments:** `-circKit 1`, `-circLED 1`, `-circFault fuse|led|resistor`.
+
 ## 2026-10-18 — The floating circuit gets a turntable
 
 **Decision:** The owner asked for Circuit Workshop's parts to have a better presence and a "designed container", while keeping them floating in 3-D. Of three containers offered (a turntable stage, an open frame, an orbit ring), they chose the turntable.

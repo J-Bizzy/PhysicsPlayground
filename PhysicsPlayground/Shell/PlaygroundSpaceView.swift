@@ -82,9 +82,11 @@ struct PlaygroundSpaceView: View {
             }
             circuits.showMagneticField = true
         }
-        // `-circHeat 1`: a 9 V battery across a 10 Ω resistor — 8 W into
-        // a 2 W part, which scorches in under a second of overload.
-        if defaults.bool(forKey: "circHeat") {
+        // `-circHeat 1` (or `-circFault resistor`): a 9 V battery across a
+        // 10 Ω resistor — 8 W into a 2 W part, which scorches in under a
+        // second of overload.
+        let fault = defaults.string(forKey: "circFault")
+        if defaults.bool(forKey: "circHeat") || fault == "resistor" {
             let circuits = appModel.circuitsModel
             circuits.clearBench()
             if let battery = circuits.add(.battery, at: SIMD3(-0.35, 1.3, -0.85)),
@@ -111,6 +113,45 @@ struct PlaygroundSpaceView: View {
                                               .init(componentID: source, end: 0))
                 circuits.select(id: source)
             }
+        }
+        // `-circKit 1`: every part on the shelf, unwired, in two rows of five
+        // — the lab kit at a glance.
+        if defaults.bool(forKey: "circKit") {
+            let circuits = appModel.circuitsModel
+            circuits.clearBench()
+            let kinds: [CircuitsModel.ComponentKind] = [
+                .battery, .acSource, .switcher, .fuse, .resistor,
+                .capacitor, .inductor, .bulb, .led, .motor,
+            ]
+            for (index, kind) in kinds.enumerated() {
+                let row = Double(index / 5), column = Double(index % 5)
+                circuits.add(kind, at: SIMD3(-0.48 + column * 0.24, 1.42 - row * 0.24, -0.85))
+            }
+            circuits.settleStage()
+        }
+        // `-circLED 1`: 9 V through 470 Ω into an LED — about 15 mA, lit red.
+        // `-circFault fuse|led` stages the overload that ends that part: a
+        // fuse shorting a battery, an LED straight across one.
+        if defaults.bool(forKey: "circLED") || fault == "led" || fault == "fuse" {
+            let circuits = appModel.circuitsModel
+            circuits.clearBench()
+            let kind: CircuitsModel.ComponentKind = fault == "fuse" ? .fuse : .led
+            if let battery = circuits.add(.battery, at: SIMD3(-0.35, 1.3, -0.85)),
+               let part = circuits.add(kind, at: SIMD3(0.35, 1.3, -0.85)) {
+                // Out of the battery's + (terminal 0) and into the LED's
+                // anode (its terminal 0), so it is forward-biased.
+                var feed = CircuitsModel.Terminal(componentID: battery, end: 0)
+                if fault == nil, let resistor = circuits.add(.resistor, at: SIMD3(0, 1.48, -0.85)) {
+                    circuits.setComponentValue(id: resistor, 470)
+                    _ = circuits.connectTerminals(feed, .init(componentID: resistor, end: 0))
+                    feed = .init(componentID: resistor, end: 1)
+                }
+                _ = circuits.connectTerminals(feed, .init(componentID: part, end: 0))
+                _ = circuits.connectTerminals(.init(componentID: part, end: 1),
+                                              .init(componentID: battery, end: 1))
+                circuits.select(id: part)
+            }
+            circuits.settleStage()
         }
         // `-seedCircuits 1` drops a few parts (one aimed off-axis) for a
         // screenshot.

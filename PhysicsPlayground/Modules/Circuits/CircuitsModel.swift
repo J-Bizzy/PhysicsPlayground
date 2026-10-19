@@ -187,7 +187,7 @@ final class CircuitsModel {
         stage.top = max(Self.stageFloor, lowest - Self.stageClearance)
     }
 
-    struct Terminal: Equatable, Hashable, Codable {
+    nonisolated struct Terminal: Equatable, Hashable, Codable {
         var componentID: UUID
         var end: Int  // 0 = left (battery +), 1 = right
     }
@@ -1615,6 +1615,12 @@ final class CircuitsModel {
 
     /// The AC sources' shared clock.
     private(set) var simTime = 0.0
+
+    /// Where an AC source is in its cycle, rad: the phase its EMF is the
+    /// sine of, for the needle on its dial.
+    func acPhase(of component: Component) -> Double {
+        2 * .pi * component.acFrequency * simTime
+    }
 
     // MARK: Time Capsule
 

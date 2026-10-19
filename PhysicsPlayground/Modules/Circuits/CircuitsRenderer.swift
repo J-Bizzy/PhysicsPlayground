@@ -50,6 +50,8 @@ final class CircuitsRenderer {
     private struct ComponentVisual {
         let holder: Entity
         let body: ModelEntity
+        /// The resistor's procedural ceramic, which wears the live bands.
+        var ceramic: ModelEntity?
         var terminals: [ModelEntity]
         /// Each lead's current accessibility value — unchanged state costs no write.
         var terminalValues: [String] = ["", ""]
@@ -57,9 +59,28 @@ final class CircuitsRenderer {
         let halo: ModelEntity
         var glow: ModelEntity?
         var filament: ModelEntity?
+        /// The bulb's own light on the parts round it.
+        var light: Entity?
         var lever: ModelEntity?
         /// Motors only: the propeller that spins with the shaft.
         var rotor: Entity?
+        /// The fuse's middle filament segment, gone when it blows.
+        var fuseBridge: ModelEntity?
+        /// The capacitor's charge gauge, scaled along x by |V|/24.
+        var gaugeFill: ModelEntity?
+        /// The AC source's needle, swung by the EMF.
+        var needle: Entity?
+        /// The LED's lit die, red when it conducts and dark once burned out.
+        var ledCore: Entity?
+        let labelPivot: Entity
+        /// The axis and stage yaw the orientation was last built for, the
+        /// frame built, and whether the drawn frame is still easing to it.
+        var orientedFor: (axis: SIMD3<Float>, yaw: Double)?
+        var targetOrientation: simd_quatf?
+        var easingOrientation = false
+        var appliedGauge: Float = -1
+        var fuseIntact: Bool?
+        var ledState = Int.min
         var labelText = ""
         var glowBucket = -1
         var resistorCodeKey = ""
@@ -119,7 +140,6 @@ final class CircuitsRenderer {
     /// are built before any renderer exists to own a copper.
     private static let copperMaterial = Materials.machined(
         DesignTokens.Palette.copperUI, roughness: 0.35)
-    private var glowMaterials: [UnlitMaterial] = []
 
 
     /// The bench's view transform: `root` belongs to the lab placement,
@@ -149,14 +169,6 @@ final class CircuitsRenderer {
         GroundingShadows.receive(on: stageRoot)
         viewRoot.addChild(stageRoot)
         root.addChild(Lighting.keyLight())
-        // Bulb glow brightness buckets (materials made once).
-        glowMaterials = (0..<6).map { step in
-            var material = UnlitMaterial(
-                color: UIColor(red: 1.0, green: 0.85, blue: 0.4, alpha: 1))
-            material.blending = .transparent(
-                opacity: .init(floatLiteral: Float(step) / 5 * 0.55))
-            return material
-        }
 
         // Electrons you can't miss: a white-hot core inside a cyan glow.
         let coreMaterial = UnlitMaterial(color: UIColor(red: 0.8, green: 1.0, blue: 1.0, alpha: 1))
@@ -288,13 +300,291 @@ final class CircuitsRenderer {
         return simd_distance(point, segment.a + along * t)
     }
 
+    // MARK: Lab-kit modules (2026-10-18)
+
+    /// Where `Tools/circuitparts.py` stands each part's live pieces — keep in
+    /// step with its constants of the same names.
+    nonisolated static let carrierTop: Float = -0.012
+    nonisolated static let carrierBottom: Float = -0.026
+    nonisolated static let bulbCentre: Float = 0.024
+    nonisolated static let ledGlowHeight: Float = 0.013
+    nonisolated static let motorAxis: Float = 0.008
+    nonisolated static let switchPivot = SIMD3<Float>(-0.028, 0.004, 0)
+    nonisolated static let resistorAxis: Float = 0.006
+    nonisolated static let fuseAxis: Float = 0
+    nonisolated static let acFace: Float = -0.0018
+    /// The brass ball at each end: the terminal, as a lab kit's contact.
+    nonisolated static let contactRadius: Float = 0.012
+    static let carrierAssetName = "CircuitCarrier"
+    /// The shelf shows each module at this fraction of its size, so a whole
+    /// module — carrier, contacts and all — fits a slot.
+    nonisolated static let shelfPreviewScale: Float = 0.60
+    /// The capacitor gauge's full scale, V: the bench's tallest source.
+    nonisolated static let gaugeFullScale = 24.0
+
+    private static let contactMaterial = Materials.machined(
+        DesignTokens.Palette.contactBrassUI, roughness: 0.28)
+
+    /// One lab-kit module as built: its carrier, its body and contacts, and
+    /// the pieces that move or light, for `makeVisual`, the shelf and the
+    /// home's diorama to share.
+    struct Module {
+        let root: Entity
+        var carrier: Entity?
+        let body: ModelEntity
+        var ceramic: ModelEntity?
+        var contacts: [ModelEntity] = []
+        var filament: ModelEntity?
+        var glow: ModelEntity?
+        var light: Entity?
+        var rotor: Entity?
+        var lever: ModelEntity?
+        var fuseBridge: ModelEntity?
+        var gaugeFill: ModelEntity?
+        var needle: Entity?
+        var ledCore: Entity?
+    }
+
+    static func makeModule(kind: CircuitsModel.ComponentKind) -> Module {
+        let root = Entity()
+        var carrier: Entity?
+        if let prototype = PropCache.prototype(named: carrierAssetName) {
+            let mounted = prototype.clone(recursive: true)
+            mounted.name = "carrier"
+            root.addChild(mounted)
+            carrier = mounted
+        }
+        let (body, ceramic) = makeBody(kind: kind)
+        root.addChild(body)
+        var module = Module(root: root, carrier: carrier, body: body, ceramic: ceramic)
+        let contactMesh = Primitives.sphere(radius: contactRadius)
+        for end in 0...1 {
+            let contact = ModelEntity(mesh: contactMesh, materials: [contactMaterial])
+            contact.position = [Float(end == 0 ? -1 : 1) * Float(CircuitsModel.terminalOffset), 0, 0]
+            root.addChild(contact)
+            module.contacts.append(contact)
+        }
+        switch kind {
+        case .bulb:
+            // Between the milled supports' tips at ±0.005.
+            let filament = ModelEntity(
+                mesh: Primitives.cylinder(height: 0.010, radius: 0.0009),
+                materials: [Materials.unlit(UIColor(white: 0.35, alpha: 1))])
+            filament.name = "bulb-filament"
+            filament.orientation = simd_quatf(angle: .pi / 2, axis: [0, 0, 1])
+            filament.position = [0, bulbCentre, 0]
+            root.addChild(filament)
+            module.filament = filament
+            let glow = GlowSprite.make(size: 0.10)
+            glow.position = [0, bulbCentre, 0]
+            glow.isEnabled = false
+            root.addChild(glow)
+            module.glow = glow
+            let light = Entity()
+            light.position = [0, bulbCentre, 0]
+            root.addChild(light)
+            module.light = light
+        case .led:
+            let glow = GlowSprite.make(size: 0.06)
+            glow.position = [0, ledGlowHeight, 0]
+            glow.isEnabled = false
+            root.addChild(glow)
+            module.glow = glow
+            let light = Entity()
+            light.position = [0, ledGlowHeight + 0.006, 0]
+            root.addChild(light)
+            module.light = light
+            // A skin just over the milled lens and its barrel: the lit die
+            // when it conducts, the dark one once it has burned out.
+            let core = Entity()
+            core.name = "led-core"
+            core.isEnabled = false
+            let dome = ModelEntity(mesh: Primitives.sphere(radius: 0.0060), materials: [])
+            dome.position = [0, 0.014, 0]
+            core.addChild(dome)
+            let barrel = ModelEntity(mesh: Primitives.cylinder(height: 0.008, radius: 0.0060),
+                                     materials: [])
+            barrel.position = [0, 0.010, 0]
+            core.addChild(barrel)
+            root.addChild(core)
+            module.ledCore = core
+        case .motor:
+            // A two-blade propeller on the shaft end, spun each frame by the
+            // motor's live speed; its tips clear the carrier's top by 2 mm.
+            let rotor = Entity()
+            rotor.position = [0.050, motorAxis, 0]
+            rotor.addChild(ModelEntity(
+                mesh: Primitives.sphere(radius: 0.006),
+                materials: [Materials.machined(UIColor(white: 0.6, alpha: 1), roughness: 0.3)]))
+            for axis: SIMD3<Float> in [[0, 1, 0], [0, 0, 1]] {
+                let blade = ModelEntity(
+                    mesh: Primitives.box(size: [0.004, 0.036, 0.003], cornerRadius: 0.0015),
+                    materials: [Materials.unlit(DesignTokens.Palette.motorAccentUI)])
+                blade.orientation = rotation(from: [0, 1, 0], to: axis)
+                rotor.addChild(blade)
+            }
+            root.addChild(rotor)
+            module.rotor = rotor
+        case .switcher:
+            // The knife switch's blade, pivoting between the brass cheeks.
+            let pivot = ModelEntity()
+            pivot.position = switchPivot
+            // Long enough to pass through the spring contact at +0.028, so
+            // its grip stands clear of the springs.
+            let blade = ModelEntity(
+                mesh: Primitives.box(size: [0.066, 0.005, 0.0045], cornerRadius: 0.0015),
+                materials: [Materials.machined(DesignTokens.Palette.contactBrassUI, roughness: 0.3)])
+            blade.position = [0.033, 0.0005, 0]
+            pivot.addChild(blade)
+            let grip = ModelEntity(
+                mesh: Primitives.box(size: [0.008, 0.010, 0.008], cornerRadius: 0.003),
+                materials: [Materials.graphite()])
+            grip.position = [0.064, 0.003, 0]
+            pivot.addChild(grip)
+            root.addChild(pivot)
+            module.lever = pivot
+        case .fuse:
+            // The filament in three segments, so a blown fuse loses its middle.
+            for (index, x) in [Float(-0.0105), 0, 0.0105].enumerated() {
+                let segment = ModelEntity(
+                    mesh: Primitives.cylinder(height: index == 1 ? 0.009 : 0.012, radius: 0.0006),
+                    materials: [copperMaterial])
+                segment.orientation = simd_quatf(angle: .pi / 2, axis: [0, 0, 1])
+                segment.position = [x, fuseAxis, 0]
+                root.addChild(segment)
+                if index == 1 {
+                    segment.name = "fuse-bridge"
+                    module.fuseBridge = segment
+                }
+            }
+        case .capacitor:
+            // The charge gauge, a champagne bar on the carrier's top in front
+            // of the can, filling from the left.
+            let track = ModelEntity(
+                mesh: Primitives.box(size: [0.026, 0.0010, 0.0032]),
+                materials: [Materials.unlit(UIColor(white: 0.18, alpha: 1))])
+            track.position = [0, carrierTop + 0.0005, 0.0175]
+            root.addChild(track)
+            let fill = ModelEntity(
+                mesh: Primitives.box(size: [1, 0.0014, 0.0034]),
+                materials: [Materials.machined(DesignTokens.Palette.contactBrassUI, roughness: 0.25)])
+            fill.name = "capacitor-gauge"
+            fill.position = [-0.013, carrierTop + 0.0007, 0.0175]
+            fill.scale = [0.0001, 1, 1]
+            root.addChild(fill)
+            module.gaugeFill = fill
+        case .acSource:
+            // The dial's needle, pointing away at zero, swung ±60° by the EMF.
+            let needle = Entity()
+            needle.name = "ac-needle"
+            needle.position = [0, acFace + 0.0010, 0]
+            let pointer = ModelEntity(
+                mesh: Primitives.box(size: [0.0012, 0.0008, 0.0150], cornerRadius: 0.0003),
+                materials: [Materials.unlit(UIColor(white: 0.10, alpha: 1))])
+            pointer.position = [0, 0, -0.0068]
+            needle.addChild(pointer)
+            let hub = ModelEntity(mesh: Primitives.cylinder(height: 0.0012, radius: 0.0018),
+                                  materials: [Materials.machined(DesignTokens.Palette.contactBrassUI)])
+            needle.addChild(hub)
+            root.addChild(needle)
+            module.needle = needle
+        default:
+            break
+        }
+        return module
+    }
+
+    /// How far from vertical a part's axis must lie (the sine of its angle
+    /// from the vertical) before "its top toward the sky" means anything.
+    nonisolated static let uprightThreshold: Float = 0.26
+
+    /// The angle of a module's frame: x along its axis and, wherever the axis
+    /// lies far enough from vertical, its carrier's top toward the sky — as a
+    /// real part sits on a turning table, so a part laid end-for-end shows its
+    /// back chamfer (whose symbol reads the right way from behind) rather than
+    /// hanging upside down, which the shortest-arc rotation this replaces
+    /// (2026-10-18) did to every part swung near −X.
+    ///
+    /// Within 15° of vertical "up" can no longer be its top — the top would
+    /// wheel round the axis as a hand wobbled it — so there the frame is the
+    /// `previous` one carried onto the new axis by the shortest arc, keeping
+    /// whatever roll it had. With no previous frame (a part made standing),
+    /// its top turns to the stage's `front`. Turns rigidly with the stage.
+    nonisolated static func moduleOrientation(axis: SIMD3<Float>, front: SIMD3<Float>,
+                                              previous: simd_quatf? = nil) -> simd_quatf {
+        let x = simd_normalize(axis)
+        let up = SIMD3<Float>(0, 1, 0)
+        let upPerpendicular = up - simd_dot(up, x) * x
+        if simd_length(upPerpendicular) >= uprightThreshold {
+            return frame(x: x, top: upPerpendicular)
+        }
+        if let previous {
+            let carried = rotation(from: previous.act([1, 0, 0]), to: x) * previous
+            return frame(x: x, top: carried.act([0, 1, 0]))
+        }
+        var top = front - simd_dot(front, x) * x
+        if simd_length(top) < 1e-4 {
+            let fallback = SIMD3<Float>(0, 0, 1)
+            top = fallback - simd_dot(fallback, x) * x
+        }
+        return frame(x: x, top: top)
+    }
+
+    private nonisolated static func frame(x: SIMD3<Float>, top: SIMD3<Float>) -> simd_quatf {
+        let y = simd_normalize(top - simd_dot(top, x) * x)
+        return simd_quatf(simd_float3x3(columns: (x, y, simd_cross(x, y))))
+    }
+
+    /// A frame change bigger than this eases rather than snaps: a swing
+    /// across the upright threshold, a part flipped end-for-end. A hand's
+    /// own motion moves a part a few degrees a frame.
+    nonisolated static let orientationEaseThreshold: Float = 10 * .pi / 180
+
+    /// Where a part's value hangs, in the room, from its centre: below it,
+    /// or beside it once it stands nearly on end and below is its own lower
+    /// contact.
+    nonisolated static func labelOffset(for orientation: simd_quatf) -> SIMD3<Float> {
+        let x = orientation.act([1, 0, 0])
+        let side = orientation.act([0, 0, 1])
+        let t = min(max((abs(x.y) - 0.70) / 0.25, 0), 1)
+        let w = t * t * (3 - 2 * t)
+        return (1 - w) * SIMD3(0, -0.050, 0) + w * side * 0.060
+    }
+
+    /// The direction the stage faces you from, turned with the stage.
+    nonisolated static func stageFront(yaw: Double) -> SIMD3<Float> {
+        SIMD3(Float(sin(yaw)), 0, Float(cos(yaw)))
+    }
+
+    /// A resistor's ceramic in its live bands.
+    static func paintResistor(_ ceramic: ModelEntity, ohms: Double) -> Bool {
+        guard let texture = CircuitTextures.resistorTexture(ohms: ohms) else { return false }
+        var material = PhysicallyBasedMaterial()
+        material.baseColor = .init(tint: .white, texture: .init(texture))
+        material.roughness = 0.6
+        ceramic.model?.materials = [material]
+        return true
+    }
+
     // MARK: The parts palette
 
-    /// One part for a `Well` preview — `makeBody` itself, at final size, so the
-    /// preview and the object it makes are one thing.
-    static func partPreview(for kind: CircuitsModel.ComponentKind) -> ModelEntity {
-        makeBody(for: CircuitsModel.Component(
-            id: UUID(), kind: kind, position: .zero, value: kind.defaultValue))
+    /// One part for a `Well` preview: the whole module, carrier and contacts,
+    /// at `shelfPreviewScale`, so the preview and the object it makes are one
+    /// thing that fits its slot.
+    static func partPreview(for kind: CircuitsModel.ComponentKind,
+                            scale: Float = shelfPreviewScale) -> Entity {
+        let module = makeModule(kind: kind)
+        if let ceramic = module.ceramic {
+            // The bands are drawn off the main thread, so the first shelf
+            // may be built before they exist; it is banded when they land.
+            CircuitTextures.withResistorTexture(ohms: kind.defaultValue) { [weak ceramic] _ in
+                if let ceramic { _ = paintResistor(ceramic, ohms: kind.defaultValue) }
+            }
+        }
+        module.root.scale = SIMD3(repeating: scale)
+        let holder = Entity()
+        holder.addChild(module.root)
+        return holder
     }
 
     // MARK: Render clock
@@ -545,7 +835,7 @@ final class CircuitsRenderer {
             SoundPalette.play(event.kind, on: audioEmitter, volume: event.volume)
         }
 
-        syncComponents(model)
+        syncComponents(model, dt: dt)
         spinMotors(model, dt: dt)
         syncWires(model)
         syncElectrons(model, dt: dt)
@@ -727,7 +1017,7 @@ final class CircuitsRenderer {
     /// once per lead — `highlightedTerminals` walks the topology.
     private var highlightedTerminals: Set<CircuitsModel.Terminal> = []
 
-    private func syncComponents(_ model: CircuitsModel) {
+    private func syncComponents(_ model: CircuitsModel, dt: Double) {
         highlightedTerminals = Set(model.highlightedTerminals)
         // Remove visuals whose components are gone.
         let liveIDs = Set(model.components.map(\.id))
@@ -742,22 +1032,11 @@ final class CircuitsRenderer {
 
             // The model owns motion; the renderer follows it.
             visual.holder.position = SIMD3<Float>(component.position)
-            // Aim the whole part along its model axis — but only when
-            // the axis actually moved.
-            let target = simd_normalize(SIMD3<Float>(component.axis))
-            let current = visual.holder.orientation.act([1, 0, 0])
-            if simd_dot(current, target) < 0.99995 {
-                // A part dragged end-for-end has axis exactly
-                // [-1,0,0]; the flip has to keep it the right way up.
-                visual.holder.orientation = rotation(from: [1, 0, 0], to: target)
-            }
+            orient(&visual, along: SIMD3<Float>(component.axis), yaw: model.stage.yaw, dt: dt)
             Fade.tick(visual.halo, visible: component.id == model.selectedID)
 
-            // One lead at each end, and nothing else to hit there.
-            let half = Float(CircuitsModel.terminalOffset)
+            // One contact at each end, and nothing else to hit there.
             for (end, terminal) in visual.terminals.enumerated() {
-                let sign: Float = end == 0 ? -1 : 1
-                terminal.position = SIMD3(sign * half, 0, 0)
                 let key = CircuitsModel.Terminal(componentID: component.id, end: end)
                 let isSource = model.leadPull?.source == key
                     || model.voiceWireSource == key
@@ -780,50 +1059,66 @@ final class CircuitsRenderer {
             }
 
             // Live label. `BackedLabel` self-gates on unchanged text.
-            let text = labelText(for: component)
+            let text = Self.labelText(for: component)
             if visual.labelText != text,
                visual.label.setText(text, color: UIColor(white: 0.95, alpha: 1)) {
                 visual.labelText = text
             }
+            visual.labelPivot.isEnabled = !text.isEmpty
 
             switch component.kind {
             case .bulb:
                 let watts = model.readouts[component.id]?.watts ?? 0
-                let bucket = min(Int((watts / 3.0) * 5), 5)
+                let bucket = min(max(Int((watts / 3.0) * 5), 0), 5)
                 if visual.glowBucket != bucket {
                     visual.glowBucket = bucket
-                    visual.glow?.model?.materials = [glowMaterials[max(bucket, 0)]]
-                    var filamentMaterial = UnlitMaterial(
-                        color: bucket > 0 ? UIColor(red: 1, green: 0.75, blue: 0.3, alpha: 1)
-                                          : UIColor(white: 0.35, alpha: 1))
-                    filamentMaterial.blending = .transparent(opacity: bucket > 0 ? 1.0 : 0.8)
-                    visual.filament?.model?.materials = [filamentMaterial]
+                    Self.paintBulb(filament: visual.filament, glow: visual.glow,
+                                   light: visual.light, level: bucket)
                 }
             case .led:
                 let amps = abs(model.readouts[component.id]?.amps ?? 0)
-                let bucket = component.failed ? 0 : min(Int(amps / 0.005), 5)
-                if visual.glowBucket != bucket {
-                    visual.glowBucket = bucket
-                    visual.glow?.model?.materials = [glowMaterials[max(bucket, 0)]]
+                let state = component.failed ? -1 : min(Int(amps / 0.004), 5)
+                if visual.ledState != state {
+                    visual.ledState = state
+                    Self.paintLED(core: visual.ledCore, glow: visual.glow,
+                                  light: visual.light, state: state)
                 }
             case .switcher:
                 visual.lever?.orientation = simd_quatf(
                     angle: component.isClosed ? 0 : 0.6, axis: [0, 0, 1])
+            case .fuse:
+                let intact = !component.failed
+                if visual.fuseIntact != intact {
+                    visual.fuseIntact = intact
+                    visual.fuseBridge?.isEnabled = intact
+                }
+            case .capacitor:
+                let charge = Float(Self.gaugeFill(volts: model.readouts[component.id]?.volts ?? 0))
+                if abs(charge - visual.appliedGauge) > 0.004 {
+                    visual.appliedGauge = charge
+                    visual.gaugeFill?.isEnabled = charge > 0.004
+                    visual.gaugeFill?.scale = [max(charge, 0.0001) * Self.gaugeLength, 1, 1]
+                    visual.gaugeFill?.position.x = -Self.gaugeLength / 2 + charge * Self.gaugeLength / 2
+                }
+            case .acSource:
+                visual.needle?.orientation = simd_quatf(
+                    angle: Self.needleAngle(phase: model.acPhase(of: component)), axis: [0, 1, 0])
             case .resistor:
-                // Heat: the body glows by I²R against its
-                // rating, in four steps, and goes black when it scorches.
+                // Heat: the ceramic glows by I²R against its rating, in four
+                // steps, and goes black when it scorches.
                 let key = resistorKey(component.value)
                 let rating = CircuitsModel.powerRating(for: .resistor) ?? 1
                 let load = (model.readouts[component.id]?.watts ?? 0) / rating
                 let bucket = component.failed ? -2 : min(Int(max(0, load) * 4), 4)
-                if visual.resistorCodeKey != key || visual.heatBucket != bucket {
+                if visual.resistorCodeKey != key || visual.heatBucket != bucket,
+                   let ceramic = visual.ceramic {
                     if component.failed {
                         visual.resistorCodeKey = key
                         visual.heatBucket = bucket
                         var scorched = PhysicallyBasedMaterial()
                         scorched.baseColor = .init(tint: UIColor(white: 0.08, alpha: 1))
                         scorched.roughness = 0.9
-                        visual.body.model?.materials = [scorched]
+                        ceramic.model?.materials = [scorched]
                     } else if let texture = CircuitTextures.resistorTexture(ohms: component.value) {
                         visual.resistorCodeKey = key
                         visual.heatBucket = bucket
@@ -835,7 +1130,7 @@ final class CircuitsRenderer {
                                 color: UIColor(red: 1, green: 0.42, blue: 0.08, alpha: 1))
                             material.emissiveIntensity = Float(bucket) * 0.55
                         }
-                        visual.body.model?.materials = [material]
+                        ceramic.model?.materials = [material]
                     }
                 }
             default:
@@ -843,6 +1138,118 @@ final class CircuitsRenderer {
             }
             visuals[component.id] = visual
         }
+    }
+
+    /// Turns a part to `moduleOrientation`, easing a large change, and hangs
+    /// its label below it in the room.
+    private func orient(_ visual: inout ComponentVisual, along axis: SIMD3<Float>,
+                        yaw: Double, dt: Double) {
+        let axis = simd_normalize(axis)
+        let moved = visual.orientedFor.map {
+            simd_dot($0.axis, axis) < 0.99999 || abs($0.yaw - yaw) > 1e-5
+        } ?? true
+        if moved {
+            visual.orientedFor = (axis, yaw)
+            let target = Self.moduleOrientation(axis: axis, front: Self.stageFront(yaw: yaw),
+                                                previous: visual.targetOrientation)
+            let first = visual.targetOrientation == nil
+            visual.targetOrientation = target
+            if first || Motion.isReduced
+                || Self.angle(between: visual.holder.orientation, and: target)
+                    < Self.orientationEaseThreshold {
+                visual.holder.orientation = target
+                visual.easingOrientation = false
+            } else {
+                visual.easingOrientation = true
+            }
+        }
+        if visual.easingOrientation, let target = visual.targetOrientation {
+            let next = simd_slerp(visual.holder.orientation, target, Float(min(dt * 14, 1)))
+            if Self.angle(between: next, and: target) < 0.01 {
+                visual.holder.orientation = target
+                visual.easingOrientation = false
+            } else {
+                visual.holder.orientation = next
+            }
+        }
+        if moved || visual.easingOrientation {
+            let orientation = visual.holder.orientation
+            visual.labelPivot.position = orientation.inverse.act(Self.labelOffset(for: orientation))
+        }
+    }
+
+    nonisolated static func angle(between a: simd_quatf, and b: simd_quatf) -> Float {
+        2 * acos(min(abs(simd_dot(a.vector, b.vector)), 1))
+    }
+
+    // MARK: Live states
+
+    /// The capacitor gauge's bar, m, at full charge.
+    nonisolated static let gaugeLength: Float = 0.026
+
+    /// How full the capacitor's gauge reads, 0…1: |V| against the bench's
+    /// tallest source.
+    nonisolated static func gaugeFill(volts: Double) -> Double {
+        min(abs(volts) / gaugeFullScale, 1)
+    }
+
+    /// The AC dial's needle for a phase of the source's cycle: ±60° at the
+    /// crests, straight up the dial at zero.
+    nonisolated static func needleAngle(phase: Double) -> Float {
+        Float(.pi / 3 * sin(phase))
+    }
+
+    private static let warmLight = UIColor(red: 1, green: 0.82, blue: 0.5, alpha: 1)
+    private static let litFilament = Materials.unlit(UIColor(red: 1, green: 0.78, blue: 0.36, alpha: 1))
+    private static let darkFilament = Materials.unlit(UIColor(white: 0.35, alpha: 1))
+
+    /// A bulb at a brightness, 0…5: its filament, the glow round its glass
+    /// and its light on the parts beside it.
+    static func paintBulb(filament: ModelEntity?, glow: ModelEntity?, light: Entity?, level: Int) {
+        filament?.model?.materials = [level > 0 ? litFilament : darkFilament]
+        guard level > 0 else {
+            glow?.isEnabled = false
+            light?.components.remove(PointLightComponent.self)
+            return
+        }
+        let strength = Float(level) / 5
+        if let glow {
+            glow.isEnabled = true
+            GlowSprite.paint(glow, warmLight, strength: strength)
+        }
+        light?.components.set(PointLightComponent(
+            color: warmLight, intensity: 1100 * strength, attenuationRadius: 0.25))
+    }
+
+    private static let ledOff = Materials.unlit(UIColor(white: 0.06, alpha: 1))
+
+    /// An LED in a state: −1 burned out (a dark die), 0 dark, 1…5 lit red at
+    /// 625 nm, the colour a red LED emits.
+    static func paintLED(core: Entity?, glow: ModelEntity?, light: Entity?, state: Int) {
+        let skins = core?.children.compactMap { $0 as? ModelEntity } ?? []
+        guard state > 0 else {
+            core?.isEnabled = state < 0
+            skins.forEach { $0.model?.materials = [ledOff] }
+            glow?.isEnabled = false
+            light?.components.remove(PointLightComponent.self)
+            return
+        }
+        let strength = Float(state) / 5
+        let red = MagnetismRenderer.ledRed
+        // Brighter is whiter at the core, as a real LED's lens saturates.
+        var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+        red.getRed(&r, green: &g, blue: &b, alpha: &a)
+        let w = CGFloat(0.35 * strength)
+        let lit = Materials.unlit(UIColor(red: r + (1 - r) * w, green: g + (1 - g) * w,
+                                          blue: b + (1 - b) * w, alpha: 1))
+        core?.isEnabled = true
+        skins.forEach { $0.model?.materials = [lit] }
+        if let glow {
+            glow.isEnabled = true
+            GlowSprite.paint(glow, red, strength: strength)
+        }
+        light?.components.set(PointLightComponent(
+            color: red, intensity: 700 * strength, attenuationRadius: 0.18))
     }
 
     private func resistorKey(_ ohms: Double) -> String {
@@ -857,31 +1264,25 @@ final class CircuitsRenderer {
         return PhysicsFormat.measurement(rpm, "rpm", decimals: 0)
     }
 
-    /// The bench label. Value formatting goes through the one authority,
-    /// `CircuitsModel.formatValue`, so label and readout cannot disagree;
-    /// only bench-specific wording stays here (motor rpm, switch
-    /// open/closed, the AC tilde).
-    private func labelText(for component: CircuitsModel.Component) -> String {
+    /// The bench label: the part's number and nothing else (2026-10-18). Its
+    /// state is the part's own to show — a lever up, a dark bulb, a broken
+    /// filament, a scorched ceramic — so no word repeats it, and a part with
+    /// no number (a switch, an LED) carries no label. Value formatting goes
+    /// through the one authority, `CircuitsModel.formatValue`, so label and
+    /// readout cannot disagree.
+    static func labelText(for component: CircuitsModel.Component) -> String {
         switch component.kind {
-        case .battery, .bulb, .capacitor, .inductor:
+        case .battery, .acSource, .bulb, .capacitor, .inductor, .resistor:
             CircuitsModel.formatValue(component.value, for: component.kind)
-        case .resistor: component.failed
-            ? "scorched"
-            : CircuitsModel.formatValue(component.value, for: component.kind)
-        case .switcher: component.isClosed ? "closed" : "open"
-        case .acSource:
-            CircuitsModel.formatValue(component.value, for: component.kind) + "~"
-        case .led: component.failed ? "burned out" : "LED"
-        case .motor: Self.motorRPMLabel(component.motorSpeed)
-        case .fuse: component.failed
-            ? "blown"
-            : PhysicsFormat.measurement(component.value, "A fuse", decimals: 1)
+        case .switcher, .led: ""
+        case .motor: motorRPMLabel(component.motorSpeed)
+        case .fuse: PhysicsFormat.measurement(component.value, "A", decimals: 1)
         }
     }
 
     private func makeVisual(for component: CircuitsModel.Component) -> ComponentVisual {
         // The holder is the manipulation target, so a carried part brings
-        // its terminals, label and halo along.
+        // its contacts, label and halo along.
         let holder = Entity()
         holder.name = component.id.uuidString
         holder.position = SIMD3<Float>(component.position)
@@ -892,37 +1293,37 @@ final class CircuitsRenderer {
         holder.components.set(accessibility)
         viewRoot.addChild(holder)
 
-        // The visible body, shaped per kind, shadowing the stage below.
-        let body = Self.makeBody(for: component)
-        GroundingShadows.cast(on: body)
-        holder.addChild(body)
+        // The module: the part on its carrier, its two brass contacts and its
+        // live pieces. Everything solid shadows the stage below.
+        let module = Self.makeModule(kind: component.kind)
+        holder.addChild(module.root)
+        GroundingShadows.cast(on: module.body)
+        if let carrier = module.carrier { GroundingShadows.cast(on: carrier) }
 
-        // The carry target is the body, measured from `body` (the holder
-        // collects a bulb's glow and a halo), with its x half-extent clamped
-        // inside the terminal target's inner edge so a body pinch cannot
-        // swallow a lead.
-        let bodyExtents = body.visualBounds(relativeTo: holder).extents
+        // The carry target is the body and its carrier, measured from them
+        // (the holder collects a bulb's glow and a halo), with its x
+        // half-extent clamped inside the contact target's inner edge so a
+        // body pinch cannot swallow a lead.
+        var bounds = module.body.visualBounds(relativeTo: holder)
+        if let carrier = module.carrier {
+            bounds = bounds.union(carrier.visualBounds(relativeTo: holder))
+        }
         let clearOfLead = Float(CircuitsModel.terminalOffset) - Self.terminalTargetRadius - 0.002
         let half = SIMD3<Float>(
-            min(bodyExtents.x / 2 + Grabbable.reach, clearOfLead),
-            bodyExtents.y / 2 + Grabbable.reach,
-            bodyExtents.z / 2 + Grabbable.reach)
+            min(bounds.extents.x / 2 + Grabbable.reach, clearOfLead),
+            bounds.extents.y / 2 + Grabbable.reach,
+            bounds.extents.z / 2 + Grabbable.reach)
         Grabbable.configureTouchTarget(
-            holder, box: half * 2,
+            holder, box: half * 2, offset: [0, bounds.center.y, bounds.center.z],
             activate: { [weak self, weak holder] in
                 guard let holder else { return }
                 self?.onTap?(holder)
             })
 
-        // Terminals: copper spheres, tap targets for wiring.
-        var terminals: [ModelEntity] = []
-        let terminalMesh = Primitives.sphere(radius: 0.013)
-        for end in 0...1 {
-            let terminal = ModelEntity(mesh: terminalMesh, materials: [Self.copperMaterial])
+        // The contacts are the terminals: the only thing at each end.
+        for (end, terminal) in module.contacts.enumerated() {
             terminal.name = "t\(end)-\(component.id.uuidString)"
-            terminal.position = SIMD3(
-                Float(end == 0 ? -CircuitsModel.terminalOffset : CircuitsModel.terminalOffset), 0, 0)
-            // The only target at this end; the far lead is 0.17 m away.
+            // The only target at this end; the far contact is 0.17 m away.
             terminal.components.set(InputTargetComponent())
             terminal.components.set(CollisionComponent(
                 shapes: [Primitives.collisionSphere(radius: Self.terminalTargetRadius)]))
@@ -938,99 +1339,48 @@ final class CircuitsRenderer {
             terminalAccessibility.label = LocalizedStringResource(stringLiteral:
                 "\(component.kind.displayName) terminal. Activate this, then another terminal, to wire them.")
             terminal.components.set(terminalAccessibility)
-            holder.addChild(terminal)
-            terminals.append(terminal)
-
-            // A short lead from the body toward the terminal.
-            let lead = ModelEntity(
-                mesh: Primitives.cylinder(height: 0.045, radius: 0.0028),
-                materials: [Self.copperMaterial])
-            lead.orientation = simd_quatf(angle: .pi / 2, axis: [0, 0, 1])
-            lead.position = SIMD3(Float(end == 0 ? -0.062 : 0.062), 0, 0)
-            holder.addChild(lead)
+            GroundingShadows.cast(on: terminal)
         }
 
-        // The white center knob: the part's carry handle.
-        let knobMaterial = Materials.unlit(UIColor(white: 0.95, alpha: 1), opacity: 0.85)
-        let knob = ModelEntity(
-            mesh: Primitives.sphere(radius: 0.009), materials: [knobMaterial])
-        holder.addChild(knob)
-
-        // Selection halo.
-        let halo = SelectionHalo.make(mesh: Primitives.sphere(radius: 0.085))
+        // Selection halo: a rounded slab the module's own shape.
+        let halo = SelectionHalo.make(mesh: Primitives.box(
+            size: [0.215, 0.085, 0.090], cornerRadius: 0.030))
+        halo.position = [0, 0.008, 0]
         holder.addChild(halo)
 
-        // Value label beneath, billboarded over the dark backing.
-        let label = BackedLabel(size: 0.02)
+        // The value beneath, billboarded over the dark backing. Its pivot is
+        // placed in the room each time the part turns, so it hangs below
+        // whatever angle the part takes.
+        let label = BackedLabel(size: 0.018)
         let labelPivot = Entity()
-        labelPivot.position = [0, -0.065, 0]
         labelPivot.components.set(BillboardComponent())
         labelPivot.addChild(label.root)
         holder.addChild(labelPivot)
 
         var visual = ComponentVisual(
-            holder: holder, body: body, terminals: terminals,
-            label: label, halo: halo)
+            holder: holder, body: module.body, ceramic: module.ceramic,
+            terminals: module.contacts, label: label, halo: halo,
+            labelPivot: labelPivot)
+        visual.glow = module.glow
+        visual.filament = module.filament
+        visual.light = module.light
+        visual.rotor = module.rotor
+        visual.fuseBridge = module.fuseBridge
+        visual.gaugeFill = module.gaugeFill
+        visual.needle = module.needle
+        visual.ledCore = module.ledCore
 
-        // Kind-specific extras.
-        switch component.kind {
-        case .bulb:
-            let filament = ModelEntity(
-                mesh: Primitives.box(size: [0.016, 0.004, 0.004]),
-                materials: [UnlitMaterial(color: UIColor(white: 0.35, alpha: 1))])
-            filament.position = [0, 0.012, 0]
-            body.addChild(filament)
-            visual.filament = filament
-
-            let glow = ModelEntity(
-                mesh: Primitives.sphere(radius: 0.055), materials: [glowMaterials[0]])
-            glow.position = [0, 0.012, 0]
-            holder.addChild(glow)
-            visual.glow = glow
-        case .led:
-            let glow = ModelEntity(
-                mesh: Primitives.sphere(radius: 0.03), materials: [glowMaterials[0]])
-            glow.position = [0, 0.012, 0]
-            holder.addChild(glow)
-            visual.glow = glow
-        case .motor:
-            // A two-blade propeller on the shaft end, spun each frame by
-            // the motor's live speed.
-            let rotor = Entity()
-            rotor.position = [0.05, 0, 0]
-            let hub = ModelEntity(
-                mesh: Primitives.sphere(radius: 0.008),
-                materials: [Materials.machined(UIColor(white: 0.6, alpha: 1), roughness: 0.3)])
-            rotor.addChild(hub)
-            // The motor's own accent, from the tokens.
-            let accent = DesignTokens.Palette.motorAccentUI
-            for axis: SIMD3<Float> in [[0, 1, 0], [0, 0, 1]] {
-                let blade = ModelEntity(
-                    mesh: Primitives.box(size: [0.005, 0.05, 0.004], cornerRadius: 0.002),
-                    materials: [UnlitMaterial(color: accent)])
-                blade.orientation = rotation(from: [0, 1, 0], to: axis)
-                rotor.addChild(blade)
-            }
-            holder.addChild(rotor)
-            visual.rotor = rotor
-        case .switcher:
-            // The lever pivots at the left contact; the tap target is the
-            // pivot so the whole arm is pinchable.
-            let pivot = ModelEntity()
+        if component.kind == .switcher, let pivot = module.lever {
+            // The blade pivots between the cheeks; the tap target is the
+            // pivot, so the whole blade is pinchable.
             pivot.name = "k-\(component.id.uuidString)"
-            pivot.position = [-0.028, 0.008, 0]
             var leverAccessibility = AccessibilityComponent()
             leverAccessibility.isAccessibilityElement = true
             leverAccessibility.label = "Switch lever. Pinch to open or close the circuit."
             pivot.components.set(leverAccessibility)
-            let arm = ModelEntity(
-                mesh: Primitives.box(size: [0.06, 0.008, 0.014], cornerRadius: 0.003),
-                materials: [Materials.machined(UIColor(white: 0.75, alpha: 1), roughness: 0.3)])
-            arm.position = [0.028, 0.006, 0]
-            pivot.addChild(arm)
-            // The arm is a blade: the target is measured after the arm exists, so
-            // it does not bulge below the switch and take the pinches meant for
-            // the terminals. Set directly: the pivot is not a carried object.
+            // Measured after the blade exists, so it does not bulge below the
+            // switch and take the pinches meant for the contacts. Set
+            // directly: the pivot is not a carried object.
             let leverBounds = pivot.visualBounds(relativeTo: pivot)
             pivot.components.set(InputTargetComponent())
             pivot.components.set(CollisionComponent(shapes: [
@@ -1045,10 +1395,8 @@ final class CircuitsRenderer {
                 activate: { [weak self] in
                     self?.onLeverAction?(component.id)
                 })
-            body.addChild(pivot)
+            GroundingShadows.cast(on: pivot)
             visual.lever = pivot
-        default:
-            break
         }
 
         visuals[component.id] = visual
@@ -1058,10 +1406,11 @@ final class CircuitsRenderer {
     // MARK: Modeled bodies (Blender-authored USDZ, procedural fallback)
 
     /// Each part clones the shared `PropCache` prototype, milled by
-    /// `Tools/circuitparts.py`. The resistor's ceramic body stays
-    /// procedural: its colour bands are a live texture painted from the
-    /// value; only its steel caps are milled. The procedural bodies below
-    /// are the fallback.
+    /// `Tools/circuitparts.py` to stand on the carrier. The resistor's ceramic
+    /// stays procedural: its colour bands are a live texture painted from the
+    /// value; only its steel caps and legs are milled. The procedural bodies
+    /// below are the fallback for a missing asset, which `CircuitPropTests`
+    /// fails.
     static let bodyAssetNames: [CircuitsModel.ComponentKind: String] = [
         .battery: "CircuitBattery", .acSource: "CircuitACSource",
         .capacitor: "CircuitCapacitor", .inductor: "CircuitInductor",
@@ -1069,6 +1418,9 @@ final class CircuitsRenderer {
         .fuse: "CircuitFuse", .switcher: "CircuitSwitch",
     ]
     static let resistorCapsAssetName = "CircuitResistorCaps"
+    /// The resistor's ceramic, between the milled caps at ±0.0225.
+    nonisolated static let ceramicRadius: Float = 0.012
+    nonisolated static let ceramicLength: Float = 0.050
 
     private static func modeledBody(for kind: CircuitsModel.ComponentKind) -> ModelEntity? {
         guard let name = bodyAssetNames[kind] else { return nil }
@@ -1078,132 +1430,43 @@ final class CircuitsRenderer {
         return shell
     }
 
-    private static func makeBody(for component: CircuitsModel.Component) -> ModelEntity {
-        if let modeled = Self.modeledBody(for: component.kind) {
-            return modeled
-        }
-        switch component.kind {
-        case .battery:
-            let body = ModelEntity(
-                mesh: Primitives.cylinder(height: 0.11, radius: 0.022),
-                materials: [Materials.machined(UIColor(red: 0.35, green: 0.45, blue: 0.35, alpha: 1), roughness: 0.3)])
-            body.orientation = simd_quatf(angle: .pi / 2, axis: [0, 0, 1])
-            // The + cap on terminal 0's side (nodeA convention).
-            let cap = ModelEntity(
-                mesh: Primitives.cylinder(height: 0.008, radius: 0.009),
-                materials: [Self.copperMaterial])
-            cap.position = [0, 0.059, 0]  // local +y = world −x after rotation
-            body.addChild(cap)
-            return body
-        case .resistor:
-            let body = ModelEntity(
-                mesh: Primitives.cylinder(height: 0.075, radius: 0.016),
+    /// The part's body, and for a resistor the ceramic that wears its bands.
+    private static func makeBody(kind: CircuitsModel.ComponentKind) -> (ModelEntity, ModelEntity?) {
+        if kind == .resistor {
+            let shell = ModelEntity()
+            let ceramic = ModelEntity(
+                mesh: Primitives.cylinder(height: ceramicLength, radius: ceramicRadius),
                 materials: [Materials.machined(UIColor(red: 0.85, green: 0.72, blue: 0.55, alpha: 1),
                                                roughness: 0.6)])
-            body.orientation = simd_quatf(angle: .pi / 2, axis: [0, 0, 1])
-            // The milled steel caps ride the procedural ceramic. Added
-            // under the body, counter-rotated, so the body's own material
-            // swap (the live bands, the heat) never touches them.
-            if let caps = PropCache.prototype(named: Self.resistorCapsAssetName) {
-                let mounted = caps.clone(recursive: true)
-                mounted.orientation = simd_quatf(angle: -.pi / 2, axis: [0, 0, 1])
-                body.addChild(mounted)
+            ceramic.name = "ceramic"
+            ceramic.orientation = simd_quatf(angle: .pi / 2, axis: [0, 0, 1])
+            ceramic.position = [0, resistorAxis, 0]
+            shell.addChild(ceramic)
+            if let caps = PropCache.prototype(named: resistorCapsAssetName) {
+                shell.addChild(caps.clone(recursive: true))
             }
-            return body
-        case .bulb:
-            var glass = PhysicallyBasedMaterial()
-            glass.baseColor = .init(tint: .white)
-            glass.roughness = 0.1
-            glass.blending = .transparent(opacity: .init(floatLiteral: 0.35))
-            let body = ModelEntity(
-                mesh: Primitives.sphere(radius: 0.034), materials: [glass])
-            body.position = [0, 0.012, 0]
-            return body
-        case .capacitor:
-            let body = ModelEntity(
-                mesh: Primitives.cylinder(height: 0.06, radius: 0.02),
-                materials: [Materials.machined(UIColor(red: 0.12, green: 0.2, blue: 0.45, alpha: 1),
-                                               roughness: 0.4)])
-            let stripe = ModelEntity(
-                mesh: Primitives.box(size: [0.006, 0.06, 0.041]),
-                materials: [UnlitMaterial(color: UIColor(white: 0.9, alpha: 1))])
-            stripe.position = [0.017, 0, 0]  // the − stripe, terminal-1 side
-            body.addChild(stripe)
-            return body
-        case .switcher:
-            return ModelEntity(
-                mesh: Primitives.box(size: [0.075, 0.016, 0.032], cornerRadius: 0.004),
-                materials: [Materials.graphite(UIColor(white: 0.25, alpha: 1))])
-        case .acSource:
-            let body = ModelEntity(
-                mesh: Primitives.cylinder(height: 0.02, radius: 0.032),
-                materials: [Materials.machined(UIColor(red: 0.1, green: 0.5, blue: 0.6, alpha: 1), roughness: 0.35)])
-            body.orientation = simd_quatf(angle: .pi / 2, axis: [0, 0, 1])
-            let band = ModelEntity(
-                mesh: Primitives.cylinder(height: 0.021, radius: 0.012),
-                materials: [UnlitMaterial(color: UIColor(white: 0.95, alpha: 1))])
-            body.addChild(band)
-            return body
-        case .inductor:
-            let body = ModelEntity(
-                mesh: Primitives.cylinder(height: 0.07, radius: 0.014),
-                materials: [Materials.machined(UIColor(white: 0.35, alpha: 1),
-                                               roughness: 0.6)])
-            body.orientation = simd_quatf(angle: .pi / 2, axis: [0, 0, 1])
-            for offset in stride(from: -0.024, through: 0.024, by: 0.012) {
-                let coil = ModelEntity(
-                    mesh: Primitives.cylinder(height: 0.006, radius: 0.019),
-                    materials: [Self.copperMaterial])
-                coil.position = [0, Float(offset), 0]
-                body.addChild(coil)
-            }
-            return body
-        case .led:
-            let base = ModelEntity(
-                mesh: Primitives.cylinder(height: 0.016, radius: 0.012),
-                materials: [Materials.machined(UIColor(white: 0.75, alpha: 1), roughness: 0.3)])
-            var dome = PhysicallyBasedMaterial()
-            dome.baseColor = .init(tint: UIColor(red: 0.9, green: 0.2, blue: 0.15, alpha: 1))
-            dome.roughness = 0.15
-            dome.blending = .transparent(opacity: .init(floatLiteral: 0.75))
-            let cap = ModelEntity(mesh: Primitives.sphere(radius: 0.013), materials: [dome])
-            cap.position = [0, 0.012, 0]
-            base.addChild(cap)
-            return base
-        case .motor:
-            // A dark can with a bright faceplate; the rotor is added in
-            // makeVisual so it can be spun.
-            let housing = ModelEntity(
-                mesh: Primitives.cylinder(height: 0.07, radius: 0.022),
-                materials: [Materials.machined(UIColor(white: 0.2, alpha: 1), roughness: 0.4)])
-            housing.orientation = simd_quatf(angle: .pi / 2, axis: [0, 0, 1])
-            let plate = ModelEntity(
-                mesh: Primitives.cylinder(height: 0.006, radius: 0.023),
-                materials: [Materials.machined(UIColor(red: 0.15, green: 0.5, blue: 0.55, alpha: 1), roughness: 0.35)])
-            plate.position = [0, -0.038, 0]   // local −y = +x (shaft end)
-            housing.addChild(plate)
-            return housing
-        case .fuse:
-            var glass = PhysicallyBasedMaterial()
-            glass.baseColor = .init(tint: .white)
-            glass.roughness = 0.1
-            glass.blending = .transparent(opacity: .init(floatLiteral: 0.3))
-            let body = ModelEntity(
-                mesh: Primitives.cylinder(height: 0.06, radius: 0.012), materials: [glass])
-            body.orientation = simd_quatf(angle: .pi / 2, axis: [0, 0, 1])
-            let filament = ModelEntity(
-                mesh: Primitives.cylinder(height: 0.055, radius: 0.0018),
-                materials: [Self.copperMaterial])
-            body.addChild(filament)
-            for sign: Float in [-1, 1] {
-                let cap = ModelEntity(
-                    mesh: Primitives.cylinder(height: 0.01, radius: 0.0125),
-                    materials: [Materials.machined(UIColor(white: 0.8, alpha: 1), roughness: 0.25)])
-                cap.position = [0, sign * 0.03, 0]
-                body.addChild(cap)
-            }
-            return body
+            return (shell, ceramic)
         }
+        if let modeled = modeledBody(for: kind) {
+            return (modeled, nil)
+        }
+        return (fallbackBody(for: kind), nil)
+    }
+
+    /// A plain stand-in on the carrier, in the part's own colour.
+    private static func fallbackBody(for kind: CircuitsModel.ComponentKind) -> ModelEntity {
+        let colour: UIColor = switch kind {
+        case .battery: UIColor(red: 0.35, green: 0.45, blue: 0.35, alpha: 1)
+        case .capacitor: UIColor(red: 0.12, green: 0.2, blue: 0.45, alpha: 1)
+        case .acSource: UIColor(red: 0.1, green: 0.5, blue: 0.6, alpha: 1)
+        case .motor, .switcher: UIColor(white: 0.2, alpha: 1)
+        default: UIColor(white: 0.6, alpha: 1)
+        }
+        let body = ModelEntity(
+            mesh: Primitives.box(size: [0.070, 0.024, 0.030], cornerRadius: 0.006),
+            materials: [Materials.machined(colour, roughness: 0.4)])
+        body.position = [0, carrierTop + 0.012, 0]
+        return body
     }
 
     // MARK: Wires

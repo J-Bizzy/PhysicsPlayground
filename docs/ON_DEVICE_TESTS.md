@@ -338,6 +338,28 @@ working session:
 
 ## Circuit Workshop
 
+### ⟳ 2026-10-18 — the parts are lab-kit modules
+
+- [ ] **Read a part from where you stand.** Each part sits on a graphite
+      carrier with its symbol on the chamfer facing you. Do the 13 mm
+      symbols read at arm's length, and do the brass balls at the ends
+      read as the place a wire goes?
+- [ ] **Turn a part end-for-end.** Carry a bulb round so its ends swap:
+      it stays upright and shows its back chamfer (the symbol reads the
+      right way from that side too). Nothing hangs upside down.
+- [ ] **Stand a part on end, then wobble it.** Near vertical it keeps the
+      roll it had — it must not spin about its own axis as your hand
+      shakes. Tip it past about 15° and it eases upright.
+- [ ] **Light, glow, break.** A lit bulb's filament glows and warms the
+      carrier under it; an LED glows red; short a fuse across a battery
+      and the middle of its filament vanishes behind clear glass; an AC
+      source's needle swings with the bulb's flicker; a charging
+      capacitor's brass bar fills.
+- [ ] **Labels are numbers only.** A switch and an LED carry none; a blown
+      fuse still reads "1.0 A". Is the state always clear from the part?
+- [ ] **The shelf shows whole modules.** Each slot holds the carrier and
+      its contacts; pulling one out gives the same object at full size.
+
 ### ⟳ 2026-10-18 — the floating circuit gets a turntable
 
 - [ ] **Look down.** A slim dark disc, 0.9 m across with a knurled champagne

@@ -60,10 +60,26 @@ enum CircuitTextures {
                     image: image, options: .init(semantic: .color)) {
                     cache[key] = resource
                     version += 1
+                    waiting.removeValue(forKey: key)?.forEach { $0(resource) }
                 }
             }
         }
         return nil
+    }
+
+    private static var waiting: [String: [@MainActor (TextureResource) -> Void]] = [:]
+
+    /// Hands `paint` the texture for `ohms`: now when it is drawn, or when it
+    /// lands — for a part with no renderer frame to retry from, such as a
+    /// shelf preview.
+    static func withResistorTexture(ohms: Double,
+                                    _ paint: @escaping @MainActor (TextureResource) -> Void) {
+        if let texture = resistorTexture(ohms: ohms) {
+            paint(texture)
+            return
+        }
+        guard let code = CircuitSolver.colorBands(ohms: ohms) else { return }
+        waiting["\(code.digit1)-\(code.digit2)-\(code.multiplier)", default: []].append(paint)
     }
 
     private static func draw(_ code: (digit1: Int, digit2: Int, multiplier: Int)) -> CGImage? {

@@ -37,7 +37,7 @@ sys.dont_write_bytecode = True
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import bpy  # noqa: E402
-from blenderprops import band, bevel, cylinder, export, join, material, reset_scene, shade  # noqa: E402
+from blenderprops import band, bevel, cylinder, export, join, material, reset_scene, shade, tube  # noqa: E402
 
 ROOT = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
                     "PhysicsPlayground", "Models", "Hub")
@@ -74,26 +74,6 @@ def stocks():
                                   roughness=0.30, metallic=0.10), 0.60, 0.25),
         "champagne": material("StageChampagne", (0.83, 0.70, 0.45), roughness=0.28, metallic=0.9),
     }
-
-
-def tube(name, points, radius, mat, resolution=8):
-    """A round tube along a polyline, ends capped."""
-    data = bpy.data.curves.new(name, type="CURVE")
-    data.dimensions = "3D"
-    data.bevel_depth = radius
-    data.bevel_resolution = resolution
-    data.use_fill_caps = True
-    spline = data.splines.new("POLY")
-    spline.points.add(len(points) - 1)
-    for point, co in zip(spline.points, points):
-        point.co = (*co, 1.0)
-    obj = bpy.data.objects.new(name, data)
-    bpy.context.collection.objects.link(obj)
-    bpy.ops.object.select_all(action="DESELECT")
-    obj.select_set(True)
-    bpy.context.view_layer.objects.active = obj
-    bpy.ops.object.convert(target="MESH")
-    return shade(bpy.context.active_object, mat)
 
 
 def build_stage(s):

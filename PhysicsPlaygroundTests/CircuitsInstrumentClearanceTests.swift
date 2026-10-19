@@ -38,8 +38,9 @@ final class CircuitsInstrumentClearanceTests: XCTestCase {
         var lo = SIMD3<Double>(Double(slots[0].x), Double(slots[0].y),
                                Double(slots[0].z))
         var hi = lo
-        // Each mouth's own half-extents, as `Well` measures them.
-        let mouth = SIMD3<Double>(0.06, 0.055, 0.06)
+        // Each mouth's own half-extents, which every preview fits
+        // (`CircuitsModuleTests`).
+        let mouth = SIMD3<Double>(CircuitsPartsLayout.mouthHalfExtents)
         for slot in slots {
             let p = SIMD3<Double>(Double(slot.x), Double(slot.y), Double(slot.z))
             lo = simd_min(lo, p - mouth)

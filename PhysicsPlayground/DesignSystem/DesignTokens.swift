@@ -104,6 +104,10 @@ enum DesignTokens {
         static let electronUI: UIColor = .systemCyan
         /// The motor's propeller — its own owned entry, not a borrowed hue.
         static let motorAccentUI = UIColor(red: 0.2, green: 0.85, blue: 0.75, alpha: 1)
+        /// A lab-kit module's contacts, traces and switch blade: brass, warmer
+        /// and lighter than the wire's copper so a contact reads as the
+        /// place a wire lands, not more wire.
+        static let contactBrassUI = UIColor(red: 0.80, green: 0.64, blue: 0.34, alpha: 1)
 
         // Module accent colours, one per catalog entry, and the one authority
         // for the two domain hues (`HubDomain.color` reads the door values from

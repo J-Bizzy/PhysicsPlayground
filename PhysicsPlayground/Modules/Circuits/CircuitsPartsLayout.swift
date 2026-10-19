@@ -51,6 +51,11 @@ enum CircuitsPartsLayout {
     /// How many are on screen at once; the rest are a drag away.
     static let rightVisibleRows = 6
 
+    /// Each well mouth's half-extents: what a part's preview must fit inside
+    /// (`CircuitsRenderer.shelfPreviewScale` is chosen against it), and the
+    /// block the furniture clearances measure.
+    static let mouthHalfExtents = SIMD3<Float>(0.06, 0.055, 0.06)
+
     /// Where slot `index` stands, in world coordinates; `Well` hides what
     /// falls outside the window.
     static func rightSlot(index: Int) -> SIMD3<Float> {
