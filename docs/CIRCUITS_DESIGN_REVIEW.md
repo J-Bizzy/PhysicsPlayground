@@ -23,6 +23,14 @@
 >
 > The standing rule behind most of these declines: *"improve" means
 > refine what exists, not add.* Nine of the eleven are new features.
+>
+> **2026-10-18 — the owner overrode that rule for this lab** and asked
+> for every part redesigned, a better presence on the bench and wiring
+> that works smoothly (DECISIONS.md, five entries that day): lab-kit
+> parts, a turntable that turns and carries the circuit, joints with a
+> collar, a same-net refusal that lights the connection it found, and a
+> landing that glides. C1's question — where will this land — is now also
+> answered by the glide; C4's "copper lead" is a brass contact.
 
 The deferred revisit, delivered as a document. The owner's brief
 (ON_DEVICE_TESTS.md, Deferred): *"Okay I want to revisit this with you

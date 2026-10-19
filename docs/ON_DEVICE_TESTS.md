@@ -46,14 +46,17 @@ contradicts this section, this section is current.
       the wordmark, six short names, More.
 - [ ] **1 · Enter.** Pinch the Projectiles portal: dissolve through
       passthrough, the lab fades up with the room ramping (not snapping)
-      to 0.35, a welcome shot already in the air.
+      to 0.35, quiet: a ball waiting at your left hand (no welcome shot
+      since 2026-10-17).
 - [ ] **2 · Projectiles.** Pull a basketball from the well and throw it
       overhand at a real wall: it bounces AT the wall. In More, slide
       Gravity onto Jupiter (arc collapses, the readout names it) and
       Zero-g (dead straight). Catch a ball on your fingertips. Air on in
-      More: the Wind slider wakes, a wind bends the flight. Pull the aim
-      bead outward: the shaft lengthens, the protractor's speed climbs
-      and the arc stretches; inward, all three shrink.
+      More: the Wind slider wakes, a wind bends the flight. Turn on
+      Trajectory in More and pull the aim bead outward: the shaft
+      lengthens, the bead's own "angle · speed" climbs while you hold it
+      (the protractor went on 2026-10-17) and the arc stretches; inward,
+      all three shrink.
       **[F]** Pull a hoop from its well (the mint mouth beside the ball's)
       and stand it across the room. Tap it: its ring — Aim, Drop when
       fired, Delete — and under it a callout reading "low 32° · high 74°"
@@ -65,8 +68,8 @@ contradicts this section, this section is current.
       meets it in mid-air, on the Moon and on Jupiter too, and the next
       shot re-hangs it. Pick Custom in the ball fan: More's Custom ball
       mass wakes; change it and the arc changes only with Air on.
-      Air on: the vacuum ghost stands beside the real arc and the landing
-      ring reads both ranges. Throw at your coffee table: it bounces off
+      Air on, with Trajectory and Numbers on: the vacuum ghost stands
+      beside the real arc and the landing ring reads both ranges. Throw at your coffee table: it bounces off
       the top and comes to rest on it, rolls off the edge and falls; swat
       a ball out of the air with an open hand, and confirm a still hand
       still CATCHES. **[C]** Tap the launcher: its ring unfolds

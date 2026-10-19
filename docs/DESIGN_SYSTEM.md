@@ -85,6 +85,8 @@ More.
 | **The object itself** | — | When the quantity *is* a size, a length, a direction or a place: Projectiles' aim bead is the launch velocity (its direction the aim, its distance from the launcher the speed); a capacitor plate dragged sets the gap; the dielectric slab slides in. |
 | **Ring + grip** | `DesignSystem/Bloom`, `RingState` | Per-object controls, unfolded by **tap** (never gaze). Discrete actions are petals (Flip, Delete, Mass, Fire…); the value is a **handle pulled out of the object** on a stalk — `Bloom.Grip.Stretch`: `.surface` for a sphere drawn with volume ∝ value (a planet's mass, a charge's \|q\|), so it swells under the hand; `.track` for an object whose size is not its value (a circuit part, a bar magnet), a stalk out of its underside toward the viewer's right; a pendulum's length runs along its own cable. |
 | **Well** | `DesignSystem/Well` | Creation as a physical act — reach in and pull the object out, born at your fingertips. Given a `visibleCount`, `facing` and `windowTitle` it becomes a **shelf** (Circuit Workshop's parts): a window of slots with the title above and a hairline spine beside, and on the spine a knurled **crown** (`Models/Shell/ShelfCrown.usdz`) that is the one thing that scrolls — roll it and the column rides the hand one to one, with flick, rubber-banded ends and a detent per slot; it **turns with the column**, so at rest it is a readout of where the shelf is. Never a caret, never a scrollbar. |
+| **Joint** | `CircuitsRenderer.wireGrabShape` | Where two of Circuit Workshop's contacts meet (2026-10-18): a champagne collar that is the one target there — the two coincident contacts withdraw theirs — and a pull on it takes the wire out of the side pulled away from. A cable's own target stops short of both its contacts, so a contact and its cable never compete for a pinch. |
+| **Turntable** | `CircuitsModel.Stage`, `CircuitsRenderer.stageRoot` | Circuit Workshop's floating circuit stands over a disc that is both its container and its handle (2026-10-18; ARCHITECTURE.md's one exception to "no tables"): the knurled rim turns the whole circuit, one to one, with a detent every 30° and a coast — the same knurl that says "this turns" on the shelf's crown — and the deck's outer band carries it. Its middle takes no hand. |
 | **Fan** | `DesignSystem/SpatialPicker` | A momentary N-way choice opened from a petal: Projectiles' ball fan and the hoop's Low/High arc. The current choice is lit. |
 | **Rail** | `RenderKit/SpatialTrackControl` | Only where a continuous quantity has to stand at its object: the Time Capsule's scrub, and an AC source's frequency under the part. The family's slider on glass. |
 | **More** | `Shell/LabMorePanel`, `ModuleDescriptor.more` | Everything secondary, as `MoreItem`s the shell draws in the family: display layers and modes (`toggle`), verbs (`action`, arming first when they throw work away), named choices (`choice`), a quantity with no object (`slider`), a set of things to add (`verbs`). A control that needs another stands under it, disabled until it is on. Below them the lab's live Values, then the room (Move, Studio Mode, dimming), Settings and Reset. |
@@ -164,6 +166,20 @@ this is the pass that is probably missing.**
 
 Lighting is `RenderKit/Lighting.keyLight()` — one warm key from upper front-left,
 supplementing (never replacing) the room's own image-based light.
+
+**A part shows its own state (Circuit Workshop's lab-kit modules,
+2026-10-18).** Every part is the real component on one graphite carrier,
+its ANSI symbol inlaid in champagne on the chamfer facing you (and
+mirrored on the back one), wired by brass traces to two brass contacts
+(`DesignTokens.Palette.contactBrassUI`): brass is where a wire goes,
+copper is the wire. Its label is its number and nothing else; what it is
+doing is on the part — a lit filament and the warm light it throws, an LED
+lit at its own 625 nm, a fuse's filament broken behind clear glass, a
+capacitor's brass gauge, an AC dial's needle, a switch's blade. A word in
+the room repeating what the object already shows is the clutter the
+subtraction pass removed. **Glass from Blender must set Transmission
+Weight:** the USD exporter writes opacity as 1 − Transmission and ignores
+Alpha, which is how every glass part shipped opaque until that pass.
 
 ---
 

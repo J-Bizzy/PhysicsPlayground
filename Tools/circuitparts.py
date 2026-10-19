@@ -25,7 +25,8 @@ Outputs, all under PhysicsPlayground/Models/Circuits/ (name a few after
                              on the +X (terminal 1) side
     CircuitInductor.usdz     a copper-wound bobbin on graphite cradles
     CircuitBulb.usdz         a glass envelope on a copper screw base in a
-                             champagne socket (Swift lights the filament)
+                             champagne socket, the filament's two supports
+                             inside (Swift hangs and lights the filament)
     CircuitLED.usdz          a red dome on a flange and two legs
     CircuitMotor.usdz        a ribbed can on a cradle, teal faceplate and
                              shaft at +X (Swift spins the rotor)
