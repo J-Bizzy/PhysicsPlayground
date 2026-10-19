@@ -149,29 +149,199 @@ final class CircuitsModel {
     /// lowest it may go.
     nonisolated static let stageClearance = 0.30
     nonisolated static let stageFloor = 0.30
-    private(set) var stage = Stage(center: SIMD2(buildCenter.x, buildCenter.z),
-                                   top: 0.82, yaw: 0)
+    /// Where the stage stands at a reset: the frame the starter loop and the
+    /// presets are authored in.
+    nonisolated static let homeStage = Stage(center: SIMD2(buildCenter.x, buildCenter.z),
+                                             top: 0.82, yaw: 0)
+    private(set) var stage = CircuitsModel.homeStage
 
     /// Carries the whole circuit and its stage by `offset`: every part, so
-    /// every wire, rigidly. Each part stays inside the room's safety box, and
-    /// a move the box would bend is refused whole rather than shearing the
-    /// circuit. Returns whether it moved.
+    /// every wire, rigidly. The offset is clamped, axis by axis, so every part
+    /// stays inside the room's safety box and the stage never sinks below its
+    /// floor — the circuit slides along a limit rather than shearing at it.
+    /// Returns the offset applied.
     @discardableResult
-    func moveCircuit(by offset: SIMD3<Double>) -> Bool {
-        guard scrubTime == nil, leadPull == nil, !components.isEmpty else { return false }
+    func moveCircuit(by offset: SIMD3<Double>) -> SIMD3<Double> {
+        guard scrubTime == nil, leadPull == nil, !components.isEmpty else { return .zero }
+        var low = -SIMD3<Double>(repeating: .infinity), high = SIMD3<Double>(repeating: .infinity)
+        var boxLow = Self.buildCenter - Self.safetyHalfExtents
+        boxLow.y = max(boxLow.y, Self.floorMargin)
+        let boxHigh = Self.buildCenter + Self.safetyHalfExtents
+        var lowest = Double.infinity
         for component in components {
-            let moved = component.position + offset
-            for point in [moved, moved - component.axis * Self.terminalOffset,
-                          moved + component.axis * Self.terminalOffset]
+            for point in [component.position, component.terminalPosition(0),
+                          component.terminalPosition(1)] {
+                low = simd_max(low, boxLow - point)
+                high = simd_min(high, boxHigh - point)
+                lowest = min(lowest, point.y)
+            }
+        }
+        // The stage hangs `stageClearance` under the lowest point and stops
+        // at `stageFloor`: the circuit stops with it.
+        low.y = max(low.y, Self.stageFloor + Self.stageClearance - lowest)
+        let applied = simd_clamp(offset, simd_min(low, .zero), simd_max(high, .zero))
+        guard simd_length(applied) > 1e-12 else { return .zero }
+        for index in components.indices { components[index].position += applied }
+        stage.center += SIMD2(applied.x, applied.z)
+        settleStage()
+        persistSoon()
+        return applied
+    }
+
+    // MARK: Turning the circuit on its stage (2026-10-18)
+
+    /// A turn the hand is making: its last bearing about the stage's axis,
+    /// when, and how fast it has been turning.
+    private struct StageSpin {
+        var bearing: Double
+        var time: Double
+        var rate: Double
+    }
+    @ObservationIgnored private var stageSpin: StageSpin?
+    /// The coast a let-go turn keeps, rad/s, dying away over `stageCoastTime`.
+    /// Apparatus, so recorded by the Time Capsule.
+    private(set) var stageSpinRate = 0.0
+    nonisolated static let stageCoastTime = 0.35
+    /// Below this a coast has stopped, rad/s.
+    nonisolated static let stageCoastStop = 0.05
+    /// The fastest a let-go turn coasts, rad/s — a flick is not a centrifuge.
+    nonisolated static let stageCoastLimit = 6.0
+    /// A quiet detent tick every this many radians of turn, as the shelf's
+    /// crown ticks a slot.
+    nonisolated static let stageTickAngle = Double.pi / 6
+    @ObservationIgnored private var stageTickTravel = 0.0
+    /// Where the hand carrying the stage by its deck last was.
+    @ObservationIgnored private var stageCarryHand: SIMD3<Double>?
+
+    /// Turns the whole circuit about the stage's vertical axis by `angle`:
+    /// every part's centre and its axis, so every wire, rigidly. Refused
+    /// whole if a part would leave the room's safety box, while scrubbed,
+    /// or while a lead is being pulled. Returns whether it turned.
+    @discardableResult
+    func spinCircuit(by angle: Double) -> Bool {
+        guard scrubTime == nil, leadPull == nil, !components.isEmpty,
+              angle.isFinite, angle != 0 else { return false }
+        let turn = simd_quatd(angle: angle, axis: [0, 1, 0])
+        let axis = SIMD3(stage.center.x, 0, stage.center.y)
+        var turned = components
+        for index in turned.indices {
+            turned[index].position = axis + turn.act(turned[index].position - axis)
+            turned[index].axis = turn.act(turned[index].axis)
+            for point in [turned[index].position, turned[index].terminalPosition(0),
+                          turned[index].terminalPosition(1)]
             where simd_distance(Self.clampToRoomSafety(point), point) > 1e-9 {
                 return false
             }
         }
-        for index in components.indices { components[index].position += offset }
-        stage.center += SIMD2(offset.x, offset.z)
-        settleStage()
-        persistSoon()
+        components = turned
+        stage.yaw = (stage.yaw + angle).remainder(dividingBy: 2 * .pi)
+        stageTickTravel += abs(angle)
+        if stageTickTravel >= Self.stageTickAngle {
+            stageTickTravel = stageTickTravel.truncatingRemainder(dividingBy: Self.stageTickAngle)
+            emitSound(.grabTick, at: SIMD3(stage.center.x, stage.top, stage.center.y), volume: 0.12)
+        }
         return true
+    }
+
+    /// A hand's bearing about the stage's axis, rad, in the sense `yaw`
+    /// turns (counter-clockwise from above).
+    private func bearing(of hand: SIMD3<Double>) -> Double {
+        atan2(-(hand.z - stage.center.y), hand.x - stage.center.x)
+    }
+
+    /// A hand takes the rim. `time` is the gesture's clock, s.
+    @discardableResult
+    func beginSpin(hand: SIMD3<Double>, at time: Double) -> Bool {
+        guard scrubTime == nil, leadPull == nil, !components.isEmpty else { return false }
+        stageSpinRate = 0
+        stageCarryHand = nil
+        stageSpin = StageSpin(bearing: bearing(of: hand), time: time, rate: 0)
+        return true
+    }
+
+    /// The circuit turns with the hand about the stage's axis, one to one.
+    func updateSpin(hand: SIMD3<Double>, at time: Double) {
+        guard var spin = stageSpin else { return }
+        // Too near the axis a bearing is noise.
+        guard simd_length(SIMD2(hand.x - stage.center.x, hand.z - stage.center.y)) > 0.05
+        else { return }
+        let now = bearing(of: hand)
+        let delta = (now - spin.bearing).remainder(dividingBy: 2 * .pi)
+        let elapsed = time - spin.time
+        if spinCircuit(by: delta), elapsed > 1e-4 {
+            // Smoothed over ~80 ms: one jittery sample must not set the coast.
+            spin.rate += (delta / elapsed - spin.rate) * min(1, elapsed / 0.08)
+        }
+        spin.bearing = now
+        spin.time = time
+        stageSpin = spin
+    }
+
+    /// Lets the rim go. It coasts on at the hand's rate — unless `coasts` is
+    /// false (Reduce Motion), the bench is paused, or the hand had stopped.
+    func endSpin(coasts: Bool, at time: Double) {
+        guard let spin = stageSpin else { return }
+        stageSpin = nil
+        let stillFor = time - spin.time
+        let rate = coasts && !isPaused && stillFor < 0.1 ? spin.rate : 0
+        stageSpinRate = abs(rate) < Self.stageCoastStop
+            ? 0 : min(max(rate, -Self.stageCoastLimit), Self.stageCoastLimit)
+        persistSoon()
+    }
+
+    /// A press on any part stops a coast: the hand wants the circuit still.
+    func stopStageCoast() { stageSpinRate = 0 }
+
+    #if DEBUG
+    /// `-circStageCoast <deg/s>`: a coast for a still.
+    func setStageCoast(rate: Double) { stageSpinRate = rate }
+    #endif
+
+    /// A hand takes the deck's band: the circuit rides it.
+    @discardableResult
+    func beginStageCarry(hand: SIMD3<Double>) -> Bool {
+        guard scrubTime == nil, leadPull == nil, !components.isEmpty else { return false }
+        stageSpinRate = 0
+        stageSpin = nil
+        stageCarryHand = hand
+        return true
+    }
+
+    /// The circuit follows the hand. Against a limit it stops and the hand
+    /// slips, so it follows straight back the moment the hand turns.
+    func updateStageCarry(hand: SIMD3<Double>) {
+        guard let last = stageCarryHand else { return }
+        moveCircuit(by: hand - last)
+        stageCarryHand = hand
+    }
+
+    func endStageCarry() {
+        guard stageCarryHand != nil else { return }
+        stageCarryHand = nil
+        persistSoon()
+    }
+
+    /// The coast, each unpaused frame: the turn decays as e^(−t/τ).
+    private func coastStage(dt: Double) {
+        guard stageSpinRate != 0, stageSpin == nil else { return }
+        guard !isPaused, scrubTime == nil, spinCircuit(by: stageSpinRate * dt) else {
+            stageSpinRate = 0
+            return
+        }
+        stageSpinRate *= exp(-dt / Self.stageCoastTime)
+        if abs(stageSpinRate) < Self.stageCoastStop {
+            stageSpinRate = 0
+            persistSoon()
+        }
+    }
+
+    /// A point authored about the home stage, in the stage as it stands: set
+    /// over its centre and height. A preset keeps its own facing — authored to
+    /// face the wearer, it would face away on a stage turned round.
+    private func onStage(_ point: SIMD3<Double>) -> SIMD3<Double> {
+        let home = Self.homeStage
+        return point + SIMD3(stage.center.x - home.center.x,
+                             0, stage.center.y - home.center.y)
     }
 
     /// Sets the stage `stageClearance` under the circuit's lowest point — a
@@ -370,7 +540,7 @@ final class CircuitsModel {
         guard scrubTime == nil else { return nil }
         guard components.count < Self.componentBudget else { return nil }
         let angle = Double(components.count) * 2.4
-        let fallback = Self.buildCenter
+        let fallback = onStage(Self.buildCenter)
             + SIMD3(cos(angle) * 0.35, Double(components.count % 3) * 0.15 - 0.1, sin(angle) * 0.25)
         let position = clamp(point ?? fallback)
         let component = Component(id: UUID(), kind: kind, position: position,
@@ -1131,6 +1301,7 @@ final class CircuitsModel {
     /// recorded.
     func step(dt: Double) {
         let isRecordingFrame = !isPaused
+        coastStage(dt: dt)
         solve(dt: dt)
         if isRecordingFrame {
             recordCapsuleFrame(dt: min(max(dt, 1e-4), 1.0 / 30.0))
@@ -1486,6 +1657,11 @@ final class CircuitsModel {
     }
 
     /// The terminal nearest `point`, if one is within `radius`.
+    /// Where a terminal is now, bench coordinates; nil once its part is gone.
+    func position(of terminal: Terminal) -> SIMD3<Double>? {
+        terminalWorldPosition(terminal)
+    }
+
     func nearestTerminal(to point: SIMD3<Double>,
                          within radius: Double) -> Terminal? {
         var best: (terminal: Terminal, distance: Double)?
@@ -1739,6 +1915,9 @@ final class CircuitsModel {
     struct SavedBench: Codable {
         var components: [Component]
         var wires: [Wire]
+        /// Where the stage stood and how far it was turned. Absent in a bench
+        /// written before the stage moved (2026-10-18): `apply` derives one.
+        var stage: Stage?
     }
 
     // MARK: The on-disk row, and why it is not `Component`
@@ -1762,6 +1941,7 @@ final class CircuitsModel {
     struct StoredBench: Codable {
         var components: [StoredComponent]
         var wires: [Wire]
+        var stage: Stage?
     }
 
     /// Brings a bench forward across retired kinds. A retired part is
@@ -1818,7 +1998,7 @@ final class CircuitsModel {
         // Nothing retired, nothing rerouted: re-deriving an already-current
         // bench would move cables the user placed.
         if components.count == stored.components.count {
-            return SavedBench(components: components, wires: stored.wires)
+            return SavedBench(components: components, wires: stored.wires, stage: stored.stage)
         }
 
         // One star per net over whatever survived it.
@@ -1832,7 +2012,7 @@ final class CircuitsModel {
                 firstOfNet[root] = entry.terminal
             }
         }
-        return SavedBench(components: components, wires: wires)
+        return SavedBench(components: components, wires: wires, stage: stored.stage)
     }
 
     /// The one decode path — auto-save and named slots both come through here,
@@ -1870,7 +2050,7 @@ final class CircuitsModel {
         // Never save mid-pull: a lifted wire is parked in `detachedWires` and
         // a cancel would restore it.
         guard leadPull == nil else { return }
-        let bench = SavedBench(components: components, wires: wires)
+        let bench = SavedBench(components: components, wires: wires, stage: stage)
         if let data = try? JSONEncoder().encode(bench) {
             UserDefaults.standard.set(data, forKey: Self.saveKey)
         }
@@ -1884,6 +2064,8 @@ final class CircuitsModel {
         let bench = Self.sanitized(bench)
         components = bench.components
         wires = bench.wires
+        stage = bench.stage ?? Self.derivedStage(for: bench.components)
+        stageSpinRate = 0
         settleStage()
         selectedID = nil
         cancelLeadPull()
@@ -1925,7 +2107,26 @@ final class CircuitsModel {
             kept.append(wire)
         }
         result.wires = kept
+        if var stage = result.stage {
+            let safe = clampToRoomSafety(SIMD3(stage.center.x, buildCenter.y, stage.center.y))
+            stage.center = SIMD2(safe.x, safe.z)
+            stage.yaw = stage.yaw.isFinite ? stage.yaw.remainder(dividingBy: 2 * .pi) : 0
+            result.stage = stage
+        }
         return result
+    }
+
+    /// The stage under a bench saved before it could move: centred under its
+    /// parts, unturned.
+    static func derivedStage(for components: [Component]) -> Stage {
+        guard !components.isEmpty else { return homeStage }
+        var low = SIMD2<Double>(repeating: .infinity), high = -low
+        for component in components {
+            let point = SIMD2(component.position.x, component.position.z)
+            low = simd_min(low, point)
+            high = simd_max(high, point)
+        }
+        return Stage(center: (low + high) / 2, top: homeStage.top, yaw: 0)
     }
 
     /// Restores the auto-saved bench if one exists.
@@ -1966,7 +2167,7 @@ final class CircuitsModel {
         var slots = readSlots()
         guard slots[name] != nil || slots.count < Self.slotBudget else { return false }
         guard let data = try? JSONEncoder().encode(
-            SavedBench(components: components, wires: wires)) else { return false }
+            SavedBench(components: components, wires: wires, stage: stage)) else { return false }
         slots[name] = data
         writeSlots(slots)
         return true
@@ -2026,7 +2227,10 @@ final class CircuitsModel {
     }
 
     func loadPreset(_ preset: Preset) {
+        // Onto the stage where it stands, not where the clear sends it.
+        let standing = stage.center
         clearBench()
+        stage.center = standing
         showElectronFlow = true
         isPaused = false
         let up = SIMD3<Double>(0, 1, 0)
@@ -2070,6 +2274,13 @@ final class CircuitsModel {
             let battery = place(.battery, at: SIMD3(0, 1.12, -0.9))
             connect((battery, 1), (battery, 0))
         }
+        // Laid out about the home stage, set over the stage where it stands,
+        // facing the wearer.
+        for index in components.indices {
+            components[index].position = onStage(components[index].position)
+        }
+        stage.yaw = 0
+        stageSpinRate = 0
         selectedID = components.first?.id
         settleStage()
         solve(dt: 1.0 / 90.0)
@@ -2142,10 +2353,17 @@ final class CircuitsModel {
 
     // MARK: Reset
 
-    /// Empties the bench completely — the Clear bench path.
+    /// Empties the bench completely — the Clear bench path. The stage goes
+    /// home with it: an empty bench has no circuit to have carried, and the
+    /// parts that come next come from the shelf.
     func clearBench() {
         components = []
         wires = []
+        stage.center = Self.homeStage.center
+        stage.yaw = 0
+        stageSpinRate = 0
+        stageSpin = nil
+        stageCarryHand = nil
         armedWireID = nil
         selectedID = nil
         cancelLeadPull()
@@ -2170,6 +2388,10 @@ final class CircuitsModel {
         meterMode = .voltsDC
         isPaused = false
         clearCapsule()
+        stage = Self.homeStage
+        stageSpinRate = 0
+        stageSpin = nil
+        stageCarryHand = nil
         seedStarterLoop()
     }
 
@@ -2263,17 +2485,25 @@ extension CircuitsModel: TimeCapsuleRecording {
         var components: [Component]
         var wires: [Wire]
         var simTime: Double
+        /// The stage is apparatus, not a display layer: where it stood, how far
+        /// it was turned, and the coast it was turning at.
+        var stage: Stage
+        var stageSpinRate: Double
     }
 
     func captureCapsuleSnapshot() -> CapsuleSnapshot {
-        CapsuleSnapshot(components: components, wires: wires, simTime: simTime)
+        CapsuleSnapshot(components: components, wires: wires, simTime: simTime,
+                        stage: stage, stageSpinRate: stageSpinRate)
     }
 
     func restoreCapsuleSnapshot(_ snapshot: CapsuleSnapshot) {
         components = snapshot.components
         wires = snapshot.wires
         simTime = snapshot.simTime
-        settleStage()
+        stage = snapshot.stage
+        stageSpinRate = snapshot.stageSpinRate
+        stageSpin = nil
+        stageCarryHand = nil
         // A restore replaces the whole bench, so all in-flight observer state
         // clears unconditionally.
         cancelLeadPull()

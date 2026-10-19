@@ -8,6 +8,7 @@
 //
 
 import PhysicsCore
+import QuartzCore
 import SwiftUI
 import RealityKit
 import RenderKit
@@ -40,6 +41,10 @@ struct CircuitsSpaceView: View {
     /// A press on a shelf slot: it becomes a pull once the hand travels, so a
     /// tap on the shelf never spawns a part.
     @State private var sourcePress = PressLatch<Int>()
+    /// A press on the stage — its rim turns the circuit, its deck's band
+    /// carries it — and, once it travels, the hold it became.
+    @State private var stagePress = PressLatch<StageHold>()
+    @State private var stageDrag: StageHold?
     @State private var partDrag: RelativeDrag?
     /// The part a pull off the shelf just made, so the drag that made it
     /// keeps moving it.
@@ -74,6 +79,7 @@ struct CircuitsSpaceView: View {
             renderer.onTerminalAction = { model.voiceOverWire($0) }
             renderer.onLeverAction = { model.toggleSwitch(id: $0) }
             renderer.onWireAction = { model.voiceOverRemoveWire(id: $0) }
+            renderer.onStageAction = { model.spinCircuit(by: .pi / 4) }
             content.add(renderer.root)
             // Disabled here and raised by `Fade.tick`, so the apparatus arrives
             // rather than appears.
@@ -98,6 +104,9 @@ struct CircuitsSpaceView: View {
             renderer.root.addChild(multimeter.root)
             multimeter.onTap = { [weak multimeter] entity in
                 _ = multimeter?.handleTap(entity, model: model)
+            }
+            multimeter.benchToRoom = { [weak renderer] point in
+                renderer?.worldPosition(ofBenchPoint: point) ?? SIMD3<Float>(point)
             }
             self.meter = multimeter
 
@@ -253,6 +262,13 @@ struct CircuitsSpaceView: View {
                     model.moveCircuit(by: SIMD3(values[0], values[1], values[2]))
                 }
             }
+            // `-circStageYaw <degrees>` turns the circuit on its stage, and
+            // `-circStageCoast <degrees/s>` sets it coasting, as a let-go
+            // flick of the rim would.
+            let stageYaw = UserDefaults.standard.double(forKey: "circStageYaw")
+            if stageYaw != 0 { model.spinCircuit(by: stageYaw * .pi / 180) }
+            let stageCoast = UserDefaults.standard.double(forKey: "circStageCoast")
+            if stageCoast != 0 { model.setStageCoast(rate: stageCoast * .pi / 180) }
 
             // The index-naming arguments below must run after the bench-shaping
             // ones: `-circPreset` starts with `clearBench`.
@@ -410,10 +426,10 @@ struct CircuitsSpaceView: View {
                     }
 
                     if bloom.updateGrip(hand: handF) { return }
-                    if model.leadPull == nil, partDrag == nil,
+                    if model.leadPull == nil, partDrag == nil, stageDrag == nil,
                        !leadPress.isPending, !partPress.isPending,
                        !wirePress.isPending, !leverPress.isPending,
-                       !sourcePress.isPending {
+                       !sourcePress.isPending, !stagePress.isPending {
                         if bloom.beginGrip(value.entity, hand: handF) { return }
                         beginCircuitDrag(entity: value.entity, hand: hand,
                                          roomHand: roomHand, renderer: renderer)
@@ -434,6 +450,14 @@ struct CircuitsSpaceView: View {
                     // A lever press that travels is a drag to nowhere: consume and discard
                     // it.
                     _ = leverPress.promote(hand: hand)
+                    // A stage press that travels takes hold: the rim turns the
+                    // circuit about the stage's axis, the deck's band carries it.
+                    if let hold = stagePress.promote(hand: hand) {
+                        let took = hold == .rim
+                            ? model.beginSpin(hand: hand, at: CACurrentMediaTime())
+                            : model.beginStageCarry(hand: hand)
+                        if took { stageDrag = hold }
+                    }
                     // A slot press that travels is the pull: the part is born at the
                     // hand and carried from this frame.
                     if let index = sourcePress.promote(hand: hand),
@@ -446,6 +470,7 @@ struct CircuitsSpaceView: View {
                     switch Self.carryDispatch(
                         leadPullActive: model.leadPull != nil,
                         partDragActive: partDrag != nil,
+                        stageHeld: stageDrag != nil,
                         rackDragging: palette?.isDragging == true
                     ) {
                     case .leadPull:
@@ -455,6 +480,12 @@ struct CircuitsSpaceView: View {
                         // the one-shot pull, and the part it spawned must follow the hand from
                         // its first frame.
                         if let partDrag { applyCircuitDrag(partDrag, hand: hand) }
+                    case .stage:
+                        if stageDrag == .rim {
+                            model.updateSpin(hand: hand, at: CACurrentMediaTime())
+                        } else {
+                            model.updateStageCarry(hand: hand)
+                        }
                     case .rack:
                         // The crown rides the hand; nothing spawns from it.
                         palette?.updateDrag(hand: roomHand)
@@ -478,7 +509,14 @@ struct CircuitsSpaceView: View {
                     if let id = leverPress.settle() {
                         model.toggleSwitch(id: id)
                     }
+                    switch stageDrag {
+                    case .rim: model.endSpin(coasts: !Motion.isReduced, at: CACurrentMediaTime())
+                    case .deck: model.endStageCarry()
+                    case nil: break
+                    }
                     defer {
+                        stagePress.cancel()
+                        stageDrag = nil
                         renderer?.previewComponentID = nil
                         leadPress.cancel()
                         partPress.cancel()
@@ -615,10 +653,25 @@ struct CircuitsSpaceView: View {
         case body(UUID)
         case wire(UUID)
         case lever(UUID)
+        /// The stage, lowest of all: its rim turns the circuit, its deck's
+        /// band carries it (2026-10-18).
+        case stageRim
+        case stageDeck
         case none
     }
 
+    /// Which part of the stage a hand holds.
+    enum StageHold: Equatable, Sendable { case rim, deck }
+
     static func resolveGrab(names: [String], on model: CircuitsModel) -> Grab {
+        let grab = resolvePartGrab(names: names, on: model)
+        guard grab == .none else { return grab }
+        if names.contains(CircuitsRenderer.stageRimName) { return .stageRim }
+        if names.contains(CircuitsRenderer.stageDeckName) { return .stageDeck }
+        return .none
+    }
+
+    private static func resolvePartGrab(names: [String], on model: CircuitsModel) -> Grab {
         for name in names {
             if name.hasPrefix("t0-") || name.hasPrefix("t1-"),
                let id = UUID(uuidString: String(name.dropFirst(3))),
@@ -646,14 +699,19 @@ struct CircuitsSpaceView: View {
     /// true after its one-shot pull; the shelf still gets the spawn frame,
     /// when no carry exists yet.
     enum CarryPhase: Equatable {
-        case leadPull, carry, rack, idle
+        case leadPull, carry, stage, rack, idle
     }
 
+    /// The stage held by its rim or deck ranks after a part's carry and
+    /// before the shelf: a hand cannot hold the stage and a part at once,
+    /// and the shelf's `isDragging` outlives its pull.
     static func carryDispatch(
-        leadPullActive: Bool, partDragActive: Bool, rackDragging: Bool
+        leadPullActive: Bool, partDragActive: Bool, stageHeld: Bool = false,
+        rackDragging: Bool
     ) -> CarryPhase {
         if leadPullActive { return .leadPull }
         if partDragActive { return .carry }
+        if stageHeld { return .stage }
         if rackDragging { return .rack }
         return .idle
     }
@@ -675,7 +733,15 @@ struct CircuitsSpaceView: View {
         entity: Entity, hand: SIMD3<Double>, roomHand: SIMD3<Float>,
         renderer: CircuitsRenderer
     ) {
-        switch Self.resolveGrab(names: Self.nameChain(from: entity), on: model) {
+        let grab = Self.resolveGrab(names: Self.nameChain(from: entity), on: model)
+        switch grab {
+        case .lead, .body, .wire, .lever:
+            // A hand on any part wants the circuit still.
+            model.stopStageCoast()
+        default:
+            break
+        }
+        switch grab {
         case .lead(let terminal):
             // Pressed, not pulled: it becomes a lead pull only once the hand
             // travels.
@@ -683,6 +749,12 @@ struct CircuitsSpaceView: View {
             return
         case .body(let id):
             partPress.press(id, at: hand)
+            return
+        case .stageRim:
+            stagePress.press(.rim, at: hand)
+            return
+        case .stageDeck:
+            stagePress.press(.deck, at: hand)
             return
         case .wire(let id):
             // Grab the cable (or a joint's collar) to move a wire, a lead to
@@ -758,6 +830,9 @@ struct CircuitsSpaceView: View {
             // `onLeverAction`.
             model.select(id: id)
             return
+        case .stageRim, .stageDeck:
+            // A tap on the stage is a tap on empty space.
+            break
         case .body(let id):
             model.clearNetHighlight()
             if ring.openID == id {

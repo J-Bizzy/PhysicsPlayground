@@ -30,6 +30,9 @@ final class CircuitsRenderer {
     /// VoiceOver's wire removal: the pinch path deletes a wire by pulling
     /// it into open air, so its activate deletes directly.
     var onWireAction: ((UUID) -> Void)?
+    /// VoiceOver's turn of the stage: a hand turns it by its rim, which
+    /// VoiceOver cannot, so activating the rim turns the circuit 45°.
+    var onStageAction: (() -> Void)?
 
     /// Called from the SpaceView's `onDisappear` — an `EventSubscription`
     /// outlives the view that made it and would hold the entity graph alive.
@@ -162,11 +165,16 @@ final class CircuitsRenderer {
         root.addChild(viewRoot)
         stageRoot.name = "circuit-stage"
         if let deck = PropCache.instance(named: "CircuitStageDeck") {
-            deck.name = "circuit-stage-deck"
+            deck.name = Self.stageDeckName
+            deck.components.set(CollisionComponent(shapes: Self.deckBandShapes()))
+            deck.components.set(InputTargetComponent())
             stageRoot.addChild(deck)
         }
         if let rim = PropCache.instance(named: "CircuitStageRim") {
-            rim.name = "circuit-stage-rim"
+            rim.name = Self.stageRimName
+            rim.components.set(CollisionComponent(shapes: Self.rimShapes()))
+            rim.components.set(InputTargetComponent())
+            rim.components.set(HoverEffectComponent())
             stageRoot.addChild(rim)
         }
         GroundingShadows.receive(on: stageRoot)
@@ -195,6 +203,12 @@ final class CircuitsRenderer {
 
         audioEmitter.components.set(SpatialAudioComponent())
         viewRoot.addChild(audioEmitter)
+
+        if let rim = stageRoot.findEntity(named: Self.stageRimName) {
+            SpatialActions.attach(
+                to: rim, label: "Turntable. Activate to turn the circuit 45 degrees.",
+                activate: { [weak self] in self?.onStageAction?() })
+        }
 
     }
 
@@ -736,7 +750,7 @@ final class CircuitsRenderer {
     /// The zoom, as one number: Electron View is a floor under the same
     /// continuous two-hand zoom, not a competing 1×/4× flip.
     private var benchScale: Float = 1
-    static let benchPivot = SIMD3<Float>(0, 1.25, -0.85)
+    nonisolated static let benchPivot = SIMD3<Float>(0, 1.25, -0.85)
 
     /// A bench-space point in the room, through the zoom rig, for an
     /// instrument that hangs under a part without scaling with the bench.
@@ -779,11 +793,14 @@ final class CircuitsRenderer {
         tickHum(model)
         pendingPulsePhase += dt * 6
         let target = targetZoom(model)
+        if abs(benchScale - 1) < 1e-3, abs(target - 1) < 1e-3 {
+            zoomPivot = Self.zoomPivot(for: model.stage)
+        }
         if abs(benchScale - target) > 1e-3 {
             // Eased toward the target so an Electron View flick glides.
             benchScale += (target - benchScale) * Float(min(dt * 8, 1))
             viewRoot.scale = SIMD3(repeating: benchScale)
-            viewRoot.position = Self.benchPivot * (1 - benchScale)
+            viewRoot.position = zoomPivot * (1 - benchScale)
         }
         render(model, dt: dt)
     }
@@ -808,6 +825,61 @@ final class CircuitsRenderer {
         SoundPalette.play(.releaseTick, on: entity, volume: 0.18)
         pulsedGrabEntity = nil
     }
+
+    // MARK: Taking hold of the stage (2026-10-18)
+
+    nonisolated static let stageRimName = "circuit-stage-rim"
+    nonisolated static let stageDeckName = "circuit-stage-deck"
+    /// The rim's grab ring: capsules along the knurled band's centre line,
+    /// as thick as the collider rule allows a 12 mm disc.
+    nonisolated static let rimGrabRadius: Float = 0.020
+    nonisolated static let rimGrabSegments = 48
+    /// The deck takes a hand only on a band inside the rim — the middle,
+    /// under the parts, takes nothing, so a pinch that misses a part never
+    /// carries the whole circuit.
+    nonisolated static let deckBand: ClosedRange<Float> =
+        Float(CircuitsModel.stageRadius) - 0.12 ... Float(CircuitsModel.stageRadius) - 0.035
+    nonisolated static let deckBandSegments = 24
+
+    private static func rimShapes() -> [ShapeResource] {
+        let radius = Float(CircuitsModel.stageRadius) - 0.009
+        let step = 2 * Float.pi / Float(rimGrabSegments)
+        let chord = 2 * radius * sin(step / 2)
+        return (0..<rimGrabSegments).map { index in
+            let angle = (Float(index) + 0.5) * step
+            let centre = SIMD3(radius * cos(angle) * cos(step / 2), -0.006,
+                               -radius * sin(angle) * cos(step / 2))
+            let tangent = SIMD3(-sin(angle), 0, -cos(angle))
+            return Primitives.collisionCapsule(height: chord + 2 * rimGrabRadius,
+                                               radius: rimGrabRadius)
+                .offsetBy(rotation: VectorFieldArrows.rotationFromYAxis(to: tangent),
+                          translation: centre)
+        }
+    }
+
+    private static func deckBandShapes() -> [ShapeResource] {
+        let inner = deckBand.lowerBound, outer = deckBand.upperBound
+        let step = 2 * Float.pi / Float(deckBandSegments)
+        let width = 2 * outer * sin(step / 2)
+        return (0..<deckBandSegments).map { index in
+            let angle = Float(index) * step
+            let middle = (inner + outer) / 2
+            return Primitives.collisionBox(size: [outer - inner, 0.030, width])
+                .offsetBy(rotation: simd_quatf(angle: angle, axis: [0, 1, 0]),
+                          translation: SIMD3(middle * cos(angle), -0.006, -middle * sin(angle)))
+        }
+    }
+
+    /// The zoom grows the bench about this point, which rides the stage
+    /// while the bench is at 1× and holds still once a zoom is under way —
+    /// a circuit carried a metre away still zooms about itself.
+    nonisolated static func zoomPivot(for stage: CircuitsModel.Stage) -> SIMD3<Float> {
+        let home = CircuitsModel.homeStage
+        return benchPivot + SIMD3<Float>(Float(stage.center.x - home.center.x),
+                                         Float(stage.top - home.top),
+                                         Float(stage.center.y - home.center.y))
+    }
+    private var zoomPivot = CircuitsRenderer.benchPivot
 
     /// How opaque the stage is at a zoom: whole to 1.25×, gone by 2×.
     nonisolated static func stageOpacity(atZoom zoom: Float) -> Float {

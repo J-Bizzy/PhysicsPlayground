@@ -16,6 +16,28 @@ A running log of consequential decisions — architectural, physical, or product
 
 (The template sat stranded at line 309, mid-log between two 2026-07-29 entries, until 2026-08-01.)
 
+## 2026-10-18 — The turntable turns and carries the circuit
+
+**Decision:** The stage under the floating circuit (B1a) becomes its handle.
+- **Turn it.** Pinch the knurled rim and the whole circuit turns about the stage's axis, one to one with the hand, with a detent tick every 30°. A flick coasts and dies away over 0.35 s.
+- **Carry it.** Pinch the deck's outer band and the circuit rides the hand. The deck's middle, under the parts, takes no hand, so a pinch that misses a part never carries everything.
+- **It is a gesture, not a mode.** A press on any part stops a coast. Turning is refused while scrubbed and while a lead is in the hand.
+- **The stage is apparatus.** It is saved with the bench and recorded with its coast in the Time Capsule.
+- **Where it goes:**
+  - Clear the bench sends it home.
+  - A preset lands over it where it stands, facing the wearer.
+  - A reset brings it home.
+
+**Context:**
+- **The carry clamps instead of refusing.** `moveCircuit(by:)` used to refuse a move the safety box would bend, which under a hand reads as the circuit freezing. It now clamps axis by axis, against the box and the stage's floor, and the grip slips at a limit so the circuit follows straight back.
+- **Presets.** With the stage able to move, a preset authored at the home position would have landed away from it. It now lands over the stage, but unturned: a preset is authored to face the wearer.
+- **The meter.** A probe latched to a terminal used to stay where the terminal had been.
+- **The zoom.** It grew about a fixed point, so a circuit carried a metre away zoomed off sideways.
+
+**Consequences:**
+- **Tests:** `CircuitsStageTests` (rigidity, the coast and its stops, the clamped carry, presets, saving, the handles, the pivot), `TimeCapsuleRoundTripTests.testCircuitsReplaysAMidCoastTurn` and `MultimeterTests.testALatchedProbeRidesItsTerminalWhenTheCircuitTurns`.
+- **The collider rule shaped the targets.** The rim's 48 capsules are as thick as the rule allows for a 12 mm disc (20 mm).
+
 ## 2026-10-18 — Wiring made smooth: clear targets, joints, a refusal that shows, a landing that glides
 
 **Decision:** The owner said the current wiring system "works fine" and asked that it "work smoothly". The gesture is unchanged (pull a lead, set a part down); four rough edges are filed off:

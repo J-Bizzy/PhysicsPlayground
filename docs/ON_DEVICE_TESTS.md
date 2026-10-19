@@ -338,6 +338,24 @@ working session:
 
 ## Circuit Workshop
 
+### ⟳ 2026-10-18 — the turntable turns and carries the circuit
+
+- [ ] **Turn it by the rim.** Pinch the knurled edge and walk your hand
+      round: the whole circuit turns with it, one to one, ticking quietly
+      every 30°. Let go mid-swing: it coasts and settles within a second.
+      Pinch any part while it coasts: it stops.
+- [ ] **Carry it by the deck.** Pinch the deck a hand's width in from the
+      rim and move: the circuit rides your hand. Push it down hard: it
+      stops at its floor, and comes straight back as your hand rises.
+- [ ] **A miss is a miss.** Pinch the deck's middle, under the parts, or
+      just miss a part: nothing moves.
+- [ ] **The meter rides.** Latch a probe onto a lead, then turn the
+      circuit: the probe stays on the lead.
+- [ ] **Zoom after carrying.** Carry the circuit well off to one side,
+      then spread two hands: it grows about itself, not about where it
+      used to be.
+- [ ] **Does the coast feel right?** Too long, too short, too loose?
+
 ### ⟳ 2026-10-18 — wiring made smooth
 
 - [ ] **Pinch a plug.** Where a wire meets a contact, a pinch on the

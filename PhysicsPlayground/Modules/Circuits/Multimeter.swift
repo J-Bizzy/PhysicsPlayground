@@ -247,6 +247,34 @@ final class Multimeter {
     /// holster and follow the instrument wherever it goes.
     private var carried: Set<CircuitsModel.ProbeSlot> = []
 
+    /// A bench point in this meter's frame (`root`'s), through the zoom —
+    /// the space view hands it the renderer's.
+    var benchToRoom: ((SIMD3<Double>) -> SIMD3<Float>)?
+    /// The terminal each placed probe is latched to and where it was, so a
+    /// probe rides its terminal when the circuit turns or is carried
+    /// (2026-10-18) instead of hanging where the terminal used to be.
+    private var latchedAt: [CircuitsModel.ProbeSlot: (terminal: CircuitsModel.Terminal,
+                                                       point: SIMD3<Double>)] = [:]
+
+    /// Moves each placed probe by however far its latched terminal moved
+    /// since the last frame.
+    private func rideLatchedTerminals(_ model: CircuitsModel) {
+        for slot in [CircuitsModel.ProbeSlot.red, .black] {
+            guard carried.contains(slot),
+                  let terminal = slot == .red ? model.probeA : model.probeB,
+                  let point = model.position(of: terminal) else {
+                latchedAt[slot] = nil
+                continue
+            }
+            if let last = latchedAt[slot], last.terminal == terminal,
+               simd_distance(last.point, point) > 1e-9, let toRoom = benchToRoom,
+               let tip = probeTip[slot] {
+                probeTip[slot] = tip + (toRoom(point) - toRoom(last.point))
+            }
+            latchedAt[slot] = (terminal, point)
+        }
+    }
+
     // MARK: Render
 
     /// A small stand-in for the shelf slot; `handOver` moves the real
@@ -295,6 +323,7 @@ final class Multimeter {
     /// `homeAnchor`. Called on a reset only.
     func stow() {
         carried.removeAll()
+        latchedAt.removeAll()
         anchor = homeAnchor
         root.isEnabled = false
     }
@@ -308,6 +337,7 @@ final class Multimeter {
         // stowing a meter the user just pulled out.
         if let seen = seenResetNonce, seen != resetNonce { stow() }
         seenResetNonce = resetNonce
+        rideLatchedTerminals(model)
         let anchor = self.anchor
         // On the chassis, not `root` (see `chassis`): the case moves, the
         // probes hanging off `root` do not.

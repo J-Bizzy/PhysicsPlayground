@@ -333,6 +333,32 @@ final class TimeCapsuleRoundTripTests: XCTestCase {
         XCTAssertEqual(model.captureCapsuleSnapshot(), snapshot)
     }
 
+    /// A coasting turntable replays exactly: where the stage stood, how far
+    /// it was turned and the coast it was turning at are apparatus, so a
+    /// restore mid-coast re-steps to the same bench.
+    func testCircuitsReplaysAMidCoastTurn() {
+        let model = CircuitsModel()
+        model.clearCapsule()
+        let centre = SIMD3(model.stage.center.x, 1.0, model.stage.center.y)
+        func hand(_ angle: Double) -> SIMD3<Double> {
+            centre + SIMD3(cos(angle), 0, -sin(angle)) * CircuitsModel.stageRadius
+        }
+        model.beginSpin(hand: hand(0), at: 0)
+        for frame in 1...6 { model.updateSpin(hand: hand(0.05 * Double(frame)), at: Double(frame) * dt) }
+        model.endSpin(coasts: true, at: 6 * dt)
+        XCTAssertGreaterThan(model.stageSpinRate, 0)
+        for _ in 0..<10 { model.step(dt: dt) }
+
+        let snapshot = model.captureCapsuleSnapshot()
+        for _ in 0..<20 { model.step(dt: dt) }
+        let expected = model.captureCapsuleSnapshot()
+        XCTAssertNotEqual(expected.stage.yaw, snapshot.stage.yaw, "it should still be turning")
+
+        model.restoreCapsuleSnapshot(snapshot)
+        for _ in 0..<20 { model.step(dt: dt) }
+        XCTAssertEqual(model.captureCapsuleSnapshot(), expected)
+    }
+
     /// A scrubbed bench must never be written to disk: a rewind you were
     /// only inspecting must not become the bench you find next launch.
     func testCircuitsDoesNotPersistWhileScrubbed() {

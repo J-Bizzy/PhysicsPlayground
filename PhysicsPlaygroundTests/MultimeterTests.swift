@@ -188,6 +188,26 @@ final class MultimeterTests: XCTestCase {
                        "carrying the meter dragged a placed probe with it")
     }
 
+    /// A probe latched onto a terminal rides it when the circuit turns on
+    /// its stage (2026-10-18) — it used to hang where the terminal had been.
+    func testALatchedProbeRidesItsTerminalWhenTheCircuitTurns() throws {
+        let meter = meter()
+        meter.benchToRoom = { SIMD3<Float>($0) }
+        let model = CircuitsModel()
+        let terminal = CircuitsModel.Terminal(componentID: model.components[0].id, end: 1)
+        let point = try XCTUnwrap(model.position(of: terminal))
+        meter.update(viewer: nil, model: model)
+        meter.moveProbe(.red, local: SIMD3<Float>(point), bench: point, model: model)
+        XCTAssertEqual(model.probeA, terminal)
+        meter.update(viewer: nil, model: model)
+
+        XCTAssertTrue(model.spinCircuit(by: .pi / 2))
+        meter.update(viewer: nil, model: model)
+        let moved = try XCTUnwrap(model.position(of: terminal))
+        let tip = try XCTUnwrap(meter.probeTip[.red])
+        XCTAssertLessThan(simd_distance(tip, SIMD3<Float>(moved)), 1e-5)
+    }
+
     /// And the lead still reaches: it is drawn jack-to-tip and scaled to
     /// span the gap, so its length is the assertion.
     func testTheLeadStretchesWhenTheMeterMovesAway() throws {
