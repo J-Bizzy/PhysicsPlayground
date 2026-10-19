@@ -55,6 +55,9 @@ final class CircuitsRenderer {
         var terminals: [ModelEntity]
         /// Each lead's current accessibility value — unchanged state costs no write.
         var terminalValues: [String] = ["", ""]
+        /// Whether each lead is in a joint, its target withdrawn for the
+        /// joint's collar — changed only when it moves.
+        var terminalJoined: [Bool] = [false, false]
         let label: BackedLabel
         let halo: ModelEntity
         var glow: ModelEntity?
@@ -602,6 +605,15 @@ final class CircuitsRenderer {
     private(set) var previewTargets: Set<CircuitsModel.Terminal> = []
     private var previewWireEntities: [ModelEntity] = []
 
+    /// The terminals a carried part would be refused against, found while
+    /// drawing its previews: their nets light, so the "no" shows the
+    /// connection that is already there.
+    private var refusedPreviewTargets: [CircuitsModel.Terminal] = []
+    /// A refused join's net stays lit this long after the release.
+    nonisolated static let refusalLinger = 0.8
+    private var lingeringRefusal: (terminal: CircuitsModel.Terminal, remaining: Double)?
+    private var lastNetRefusalSerial = 0
+
     /// The lead in flight. Fatter than a wire's jacket, or a lead lying
     /// along an existing wire is swallowed by it — the refusal case.
     private static let flyingLeadRadius: Float = 0.008
@@ -696,6 +708,7 @@ final class CircuitsRenderer {
         }
         // Only the joinable targets swell — never one that would refuse.
         previewTargets = Set(pairs.filter { !$0.refused }.map(\.target))
+        refusedPreviewTargets = pairs.filter(\.refused).map(\.target)
         // A lead in flight swells its landing target on the same terms.
         if let pull = model.leadPull, pull.refusal == nil, let target = pull.target {
             previewTargets.insert(target)
@@ -778,6 +791,7 @@ final class CircuitsRenderer {
     /// Acknowledge a grab: the live glow and a tick on the part just taken.
     /// The glow stays until `flashRelease`.
     func flashPickup(id: UUID) {
+        landings[id] = nil
         guard let holder = visuals[id]?.holder else { return }
         if let previous = pulsedGrabEntity, previous !== holder {
             LiveGlow.set(false, on: previous)
@@ -822,6 +836,8 @@ final class CircuitsRenderer {
     }
 
     private func render(_ model: CircuitsModel, dt: Double) {
+        advanceLandings(dt: dt)
+        advanceRefusal(model, dt: dt)
         syncStage(model, dt: dt)
         if appliedResistorTextureVersion != CircuitTextures.version {
             appliedResistorTextureVersion = CircuitTextures.version
@@ -1013,12 +1029,104 @@ final class CircuitsRenderer {
         }
     }
 
-    /// The lit net's terminals, recomputed once a frame rather than
-    /// once per lead — `highlightedTerminals` walks the topology.
-    private var highlightedTerminals: Set<CircuitsModel.Terminal> = []
+    /// The lit terminals, recomputed once a frame rather than once per lead
+    /// — a net walks the topology: the tapped net, and while a join is
+    /// refused because its ends are already one point, that point's net.
+    private(set) var litTerminals: Set<CircuitsModel.Terminal> = []
+
+    static func litTerminals(_ model: CircuitsModel,
+                             refused: [CircuitsModel.Terminal]) -> Set<CircuitsModel.Terminal> {
+        var lit = Set(model.highlightedTerminals)
+        for terminal in refused where !lit.contains(terminal) {
+            lit.formUnion(model.netTerminals(containing: terminal))
+        }
+        return lit
+    }
+
+    /// The terminals whose nets a refusal lights this frame: a lead held on
+    /// its own net, a carried part over one, and a refused release's for
+    /// `refusalLinger` after. A full wire budget lights nothing — that "no"
+    /// is the recoil alone.
+    private func refusalSources(_ model: CircuitsModel) -> [CircuitsModel.Terminal] {
+        var sources = refusedPreviewTargets
+        if let pull = model.leadPull, pull.refusal == .sameNet, let target = pull.target {
+            sources.append(target)
+        }
+        if let lingering = lingeringRefusal { sources.append(lingering.terminal) }
+        return sources
+    }
+
+    private func advanceRefusal(_ model: CircuitsModel, dt: Double) {
+        if let event = model.lastNetRefusal, event.serial != lastNetRefusalSerial {
+            lastNetRefusalSerial = event.serial
+            lingeringRefusal = (event.terminal, Self.refusalLinger)
+        } else if var lingering = lingeringRefusal {
+            lingering.remaining -= dt
+            lingeringRefusal = lingering.remaining > 0 ? lingering : nil
+        }
+    }
+
+    /// Every lead in a joint, where the renderer draws it — through a
+    /// landing's ease, so a joint forms as the part arrives.
+    private func jointTerminals(_ model: CircuitsModel) -> Set<CircuitsModel.Terminal> {
+        var joined: Set<CircuitsModel.Terminal> = []
+        for wire in model.wires {
+            guard let a = terminalWorld(wire.from, model), let b = terminalWorld(wire.to, model),
+                  simd_distance(a, b) < Float(CircuitsModel.jointLength) else { continue }
+            joined.insert(wire.from)
+            joined.insert(wire.to)
+        }
+        return joined
+    }
+
+    // MARK: The landing
+
+    /// A released part snapped onto a neighbour's lead glides the last few
+    /// centimetres instead of jumping (2026-10-18), over this long. Only a
+    /// release starts one — never a restore, a preset or a spin.
+    nonisolated static let landingDuration = 0.12
+
+    private struct Landing {
+        let position: SIMD3<Double>
+        let axis: SIMD3<Double>
+        var elapsed: Double
+    }
+    private var landings: [UUID: Landing] = [:]
+
+    /// Called around `CircuitsModel.release(id:)` with the pose the part
+    /// had before it: what is drawn eases from there to where the model put
+    /// it — the holder, and through `terminalWorld` its wires and electrons.
+    func easeLanding(id: UUID, from position: SIMD3<Double>, axis: SIMD3<Double>) {
+        guard !Motion.isReduced else { return }
+        landings[id] = Landing(position: position, axis: axis, elapsed: 0)
+    }
+
+    private func advanceLandings(dt: Double) {
+        for id in Array(landings.keys) {
+            landings[id]?.elapsed += dt
+            if let landing = landings[id], landing.elapsed >= Self.landingDuration {
+                landings[id] = nil
+            }
+        }
+    }
+
+    /// Where a part is drawn: the model's pose, or partway through a landing.
+    func displayPose(of component: CircuitsModel.Component)
+    -> (position: SIMD3<Double>, axis: SIMD3<Double>) {
+        guard let landing = landings[component.id] else {
+            return (component.position, component.axis)
+        }
+        let t = min(max(landing.elapsed / Self.landingDuration, 0), 1)
+        let e = t * t * (3 - 2 * t)
+        let position = landing.position + (component.position - landing.position) * e
+        let from = simd_normalize(landing.axis), to = simd_normalize(component.axis)
+        let turn = simd_slerp(simd_quatd(angle: 0, axis: [0, 1, 0]), simd_quatd(from: from, to: to), e)
+        return (position, turn.act(from))
+    }
 
     private func syncComponents(_ model: CircuitsModel, dt: Double) {
-        highlightedTerminals = Set(model.highlightedTerminals)
+        litTerminals = Self.litTerminals(model, refused: refusalSources(model))
+        let joined = jointTerminals(model)
         // Remove visuals whose components are gone.
         let liveIDs = Set(model.components.map(\.id))
         for id in visuals.keys where !liveIDs.contains(id) {
@@ -1030,9 +1138,11 @@ final class CircuitsRenderer {
         for component in model.components {
             var visual = visuals[component.id] ?? makeVisual(for: component)
 
-            // The model owns motion; the renderer follows it.
-            visual.holder.position = SIMD3<Float>(component.position)
-            orient(&visual, along: SIMD3<Float>(component.axis), yaw: model.stage.yaw, dt: dt)
+            // The model owns motion; the renderer follows it, through a
+            // released part's eased landing.
+            let pose = displayPose(of: component)
+            visual.holder.position = SIMD3<Float>(pose.position)
+            orient(&visual, along: SIMD3<Float>(pose.axis), yaw: model.stage.yaw, dt: dt)
             Fade.tick(visual.halo, visible: component.id == model.selectedID)
 
             // One contact at each end, and nothing else to hit there.
@@ -1049,7 +1159,20 @@ final class CircuitsRenderer {
                     visual.terminalValues[end] = spokenValue
                     SpatialActions.republish(value: spokenValue, on: terminal)
                 }
-                let isLit = highlightedTerminals.contains(key)
+                let isLit = litTerminals.contains(key)
+                // A lead in a joint gives its target to the joint's collar:
+                // two coincident leads' targets overlapped, and which one a
+                // pinch took was hit order.
+                let inJoint = joined.contains(key)
+                if visual.terminalJoined[end] != inJoint {
+                    visual.terminalJoined[end] = inJoint
+                    if inJoint {
+                        terminal.components.remove(CollisionComponent.self)
+                    } else {
+                        terminal.components.set(CollisionComponent(
+                            shapes: [Primitives.collisionSphere(radius: Self.terminalTargetRadius)]))
+                    }
+                }
                 terminal.scale = SIMD3(repeating: isSource
                     // Breathes to say "wiring from here"; held at its mean
                     // size under Reduce Motion.
@@ -1516,10 +1639,36 @@ final class CircuitsRenderer {
     /// are allocations.
     private static let colliderRebuildEpsilon: Float = 0.002
 
-    /// One capsule along the wire, on this unscaled parent: the visual
-    /// segment carries its length as a Y scale, which
-    /// `ColliderCriterionTests` refuses to measure under a world scale of
-    /// 0.05.
+    /// A wire's grab volume (2026-10-18). It never reaches a lead's own
+    /// target: a capsule along the cable that stops `wireGrabInset` short of
+    /// each lead's centre — it used to run end to end, overlapping both
+    /// leads' targets, so a pinch at a plug took whichever was hit first.
+    /// Two leads closer than `CircuitsModel.jointLength` are a joint: one
+    /// sphere where they meet, the leads' own targets withdrawn.
+    enum WireGrabShape: Equatable {
+        case joint(radius: Float)
+        /// `height` is the capsule's whole length, caps included.
+        case cable(height: Float, radius: Float)
+        /// Too short to hold a target clear of both leads: grab a lead.
+        case none
+    }
+
+    /// How far short of a lead's centre a cable's target stops: the lead's
+    /// own target radius and 2 mm of daylight.
+    nonisolated static let wireGrabInset: Float = 0.028
+    nonisolated static let wireGrabRadius: Float = 0.016
+    nonisolated static let jointGrabRadius: Float = 0.022
+
+    nonisolated static func wireGrabShape(length: Float) -> WireGrabShape {
+        if length < Float(CircuitsModel.jointLength) { return .joint(radius: jointGrabRadius) }
+        let half = length / 2 - wireGrabInset
+        guard half > 0.004 else { return .none }
+        return .cable(height: 2 * half, radius: min(wireGrabRadius, half))
+    }
+
+    /// On this unscaled parent: the visual segment carries its length as a
+    /// Y scale, which `ColliderCriterionTests` refuses to measure under a
+    /// world scale of 0.05.
     private func reshapeCollider(_ entity: ModelEntity, id: UUID,
                                  from a: SIMD3<Float>, to b: SIMD3<Float>) {
         if let previous = wireColliderAnchors[id],
@@ -1531,23 +1680,71 @@ final class CircuitsRenderer {
 
         let direction = b - a
         let length = simd_length(direction)
-        guard length > 1e-4 else { return }
-        let capsule = Primitives.collisionCapsule(height: length, radius: 0.016)
-            .offsetBy(rotation: VectorFieldArrows.rotationFromYAxis(to: direction / length),
-                      translation: (a + b) / 2)
-        entity.components.set(CollisionComponent(shapes: [capsule]))
+        let shape: ShapeResource
+        switch Self.wireGrabShape(length: length) {
+        case .joint(let radius):
+            shape = Primitives.collisionSphere(radius: radius).offsetBy(translation: (a + b) / 2)
+        case .cable(let height, let radius):
+            shape = Primitives.collisionCapsule(height: height, radius: radius)
+                .offsetBy(rotation: VectorFieldArrows.rotationFromYAxis(to: direction / length),
+                          translation: (a + b) / 2)
+        case .none:
+            entity.components.remove(CollisionComponent.self)
+            return
+        }
+        entity.components.set(CollisionComponent(shapes: [shape]))
         entity.components.set(InputTargetComponent())
         entity.components.set(HoverEffectComponent())
+    }
+
+    /// A joint's collar: a champagne sleeve round the two meeting contacts,
+    /// what says "these are joined, and you can pull them apart here".
+    private static let collarMaterial = Materials.machined(
+        UIColor(red: 0.83, green: 0.70, blue: 0.45, alpha: 1), roughness: 0.30)
+    nonisolated static let collarRadius: Float = 0.015
+    nonisolated static let collarLength: Float = 0.016
+
+    /// Shows or hides a wire's collar, sleeved along the line between its two
+    /// parts — the joint's own axis when they lie end to end.
+    private func syncCollar(_ entity: ModelEntity, _ wire: CircuitsModel.Wire,
+                            model: CircuitsModel, at a: SIMD3<Float>, _ b: SIMD3<Float>) {
+        let isJoint = simd_distance(a, b) < Float(CircuitsModel.jointLength)
+        var collar = entity.children.first { $0.name == "collar" } as? ModelEntity
+        guard isJoint else {
+            collar?.isEnabled = false
+            return
+        }
+        if collar == nil {
+            let made = ModelEntity(
+                mesh: Primitives.cylinder(height: Self.collarLength, radius: Self.collarRadius),
+                materials: [Self.collarMaterial])
+            made.name = "collar"
+            GroundingShadows.cast(on: made)
+            entity.addChild(made)
+            collar = made
+        }
+        guard let collar else { return }
+        collar.isEnabled = true
+        collar.position = (a + b) / 2
+        let centres = [wire.from, wire.to].compactMap { terminal in
+            model.components.first { $0.id == terminal.componentID }
+                .map { SIMD3<Float>(displayPose(of: $0).position) }
+        }
+        if centres.count == 2, simd_distance(centres[0], centres[1]) > 1e-4 {
+            collar.orientation = VectorFieldArrows.rotationFromYAxis(
+                to: simd_normalize(centres[1] - centres[0]))
+        }
     }
 
     /// Stretches a wire's one segment taut between its endpoints: a copper
     /// core with a dark jacket child; the electrons ride inside.
     private func layOut(segmentsOf entity: ModelEntity,
                         from a: SIMD3<Float>, to b: SIMD3<Float>) {
-        if entity.children.isEmpty {
+        if !entity.children.contains(where: { $0.name == "cable" }) {
             let core = ModelEntity(
                 mesh: Primitives.cylinder(height: 1, radius: 0.0032),
                 materials: [Self.copperMaterial])
+            core.name = "cable"
             let jacket = ModelEntity(
                 mesh: Primitives.cylinder(height: 1, radius: 0.0062),
                 materials: [Self.wireJacketMaterial])
@@ -1558,7 +1755,7 @@ final class CircuitsRenderer {
             // (`reshapeCollider`).
             entity.addChild(core)
         }
-        guard let child = entity.children.first else { return }
+        guard let child = entity.children.first(where: { $0.name == "cable" }) else { return }
         let direction = b - a
         let length = simd_length(direction)
         guard length > 1e-6 else { child.isEnabled = false; return }
@@ -1613,11 +1810,9 @@ final class CircuitsRenderer {
                 entity.isEnabled = false
                 continue
             }
+            // Two leads snapped into one point need no cable between them,
+            // and are drawn and grabbed as a joint.
             entity.isEnabled = true
-            let length = simd_distance(a, b)
-            // Two leads snapped into one point need no cable between
-            // them.
-            guard length > 1e-4 else { entity.isEnabled = false; continue }
 
             // Re-laid only when an end moved: on an idle bench the endpoints are
             // bit-identical frame to frame.
@@ -1625,6 +1820,7 @@ final class CircuitsRenderer {
                 wireLaidEndpoints[wire.id] = (a, b)
                 layOut(segmentsOf: entity, from: a, to: b)
                 reshapeCollider(entity, id: wire.id, from: a, to: b)
+                syncCollar(entity, wire, model: model, at: a, b)
                 // A re-lay can mint the segment in bare copper, and stretching changes
                 // no voltage; forget the bucket so the repaint covers it.
                 wireVoltBuckets[wire.id] = nil
@@ -1638,17 +1834,20 @@ final class CircuitsRenderer {
             let vB = model.terminalVoltages[wire.to] ?? 0
             let t = ((vA + vB) / 2 - span.min) / width
             // A lit net overrides the voltage ramp; `-1` is the highlight bucket,
-            // so dropping it repaints once.
-            let lit = model.isHighlighted(wire: wire)
+            // so dropping it repaints once. Both ends are one point, so either
+            // answers.
+            let lit = litTerminals.contains(wire.from)
             let bucket = lit ? -1 : min(max(Int(t * 7.999), 0), 7)
             if wireVoltBuckets[wire.id] != bucket {
                 wireVoltBuckets[wire.id] = bucket
                 let material: RealityKit.Material = lit
                     ? Self.netHighlightMaterial
                     : Self.voltageMaterials[bucket]
-                for segment in entity.children {
+                for segment in entity.children where segment.name == "cable" {
                     (segment as? ModelEntity)?.model?.materials = [material]
                 }
+                (entity.children.first { $0.name == "collar" } as? ModelEntity)?
+                    .model?.materials = [lit ? Self.netHighlightMaterial : Self.collarMaterial]
             }
         }
     }
@@ -1656,8 +1855,14 @@ final class CircuitsRenderer {
     private func terminalWorld(_ terminal: CircuitsModel.Terminal, _ model: CircuitsModel) -> SIMD3<Float>? {
         guard let component = model.components.first(where: { $0.id == terminal.componentID })
         else { return nil }
-        // The model owns where a lead is, carried or not.
-        return SIMD3<Float>(component.terminalPosition(terminal.end))
+        // The model owns where a lead is, carried or not; a landing eases
+        // what is drawn, wires and electrons with it.
+        guard landings[component.id] != nil else {
+            return SIMD3<Float>(component.terminalPosition(terminal.end))
+        }
+        let pose = displayPose(of: component)
+        let half = CircuitsModel.terminalOffset
+        return SIMD3<Float>(pose.position + (terminal.end == 0 ? -half : half) * pose.axis)
     }
 
     // MARK: Electron flow (drift is − to +: opposite conventional current)

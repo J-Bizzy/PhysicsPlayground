@@ -496,8 +496,9 @@ final class CircuitsModel {
         guard !pairs.isEmpty else {
             // Nothing joinable, but a same-net terminal in reach gets the same
             // "no" the lead pull gives.
-            guard refusedJoins(for: id).isEmpty else {
+            if let refused = refusedJoins(for: id).first {
                 emitSound(.thud, at: component.position, volume: 0.5)
+                announceNetRefusal(at: refused.to)
                 return .refused
             }
             return .nothingNear
@@ -730,10 +731,12 @@ final class CircuitsModel {
         var refusal: ConnectOutcome?
     }
 
-    /// One end of one wire — what a hand grabs near a plug.
-    struct WireEnd: Equatable, Sendable {
+    /// A press on a wire: which wire, and where the hand pressed it. Which
+    /// end comes off is decided when the press becomes a pull
+    /// (`endToLift`), from the way the hand has moved by then.
+    struct WirePress: Equatable, Sendable {
         let wire: UUID
-        let end: Int
+        let pressedAt: SIMD3<Double>
     }
 
     /// What a released lead did.
@@ -790,6 +793,36 @@ final class CircuitsModel {
         return simd_distance(from, hand) <= simd_distance(to, hand) ? 0 : 1
     }
 
+    /// Two leads nearer than this are one JOINT (2026-10-18): the renderer
+    /// draws a collar there and makes it the one thing to grab, withdrawing
+    /// the two coincident leads' own targets, which overlapped.
+    nonisolated static let jointLength = 0.052
+
+    func isJoint(_ wire: Wire) -> Bool { wireLength(wire) < Self.jointLength }
+
+    /// Which end a pull lifts, decided when the press becomes a pull — so
+    /// the hand's first 12 mm of travel are known. Along a cable, the end
+    /// nearer the hand: that end if pressed near it, and from the middle
+    /// the end the hand moved toward. At a joint, where both ends are one
+    /// point, the side the hand pulls away from keeps the wire: the lead is
+    /// drawn out of that part's contact and the other part's comes free.
+    func endToLift(of id: UUID, pressedAt press: SIMD3<Double>,
+                   hand: SIMD3<Double>) -> Int? {
+        guard let wire = wires.first(where: { $0.id == id }) else { return nil }
+        guard isJoint(wire) else { return nearerEnd(of: id, to: hand) }
+        let motion = hand - press
+        // How far the hand moves toward each side's own part, from the joint.
+        func toward(_ terminal: Terminal) -> Double {
+            guard let part = components.first(where: { $0.id == terminal.componentID })
+            else { return 0 }
+            let body = part.position - part.terminalPosition(terminal.end)
+            let length = simd_length(body)
+            return length > 1e-9 ? simd_dot(body / length, motion) : 0
+        }
+        // The side pulled away from is the anchor; the other end lifts.
+        return toward(wire.from) <= toward(wire.to) ? 1 : 0
+    }
+
     /// Follow the hand, and work out what a release would do.
     func updateLeadPull(hand: SIMD3<Double>) {
         guard var pull = leadPull else { return }
@@ -841,8 +874,10 @@ final class CircuitsModel {
             if let detached = pull.detached { detachedWires[detached] = nil }
             return .connected(id)
         default:
-            // The refusal is the renderer's recoil; no text.
+            // The refusal is the renderer's recoil; no text — and a same-net
+            // "no" lights the net that already joins them.
             emitSound(.thud, at: pull.hand, volume: 0.35)
+            if outcome == .sameNet { announceNetRefusal(at: target) }
             if let detached = pull.detached {
                 // A refused rewire is not a deletion — put the wire back.
                 restore(wireID: detached)
@@ -902,11 +937,33 @@ final class CircuitsModel {
 
     /// The terminals currently lit — empty when nothing is.
     var highlightedTerminals: [Terminal] {
-        guard let highlightedSource else { return [] }
+        highlightedSource.map(netTerminals(containing:)) ?? []
+    }
+
+    /// Every terminal at one electrical point with this one, itself
+    /// included — what the tap highlight lights, and what a "these are
+    /// already connected" refusal lights to show the path that connects them.
+    func netTerminals(containing terminal: Terminal) -> [Terminal] {
         let net = topology()
-        guard let node = net.node(of: highlightedSource),
-              node < net.terminalsByNode.count else { return [] }
+        guard let node = net.node(of: terminal), node < net.terminalsByNode.count else { return [] }
         return net.terminalsByNode[node]
+    }
+
+    /// The last join refused because its two ends were already one point
+    /// (2026-10-18): a lead let go on its own net, or a part set down
+    /// against it. The renderer lights that net for a moment, so the "no"
+    /// shows the connection it found. A full wire budget is not one of
+    /// these — it only recoils. An event, like `soundEvent`.
+    struct NetRefusal: Equatable {
+        let terminal: Terminal
+        let serial: Int
+    }
+    private(set) var lastNetRefusal: NetRefusal?
+    private var netRefusalCounter = 0
+
+    private func announceNetRefusal(at terminal: Terminal) {
+        netRefusalCounter += 1
+        lastNetRefusal = NetRefusal(terminal: terminal, serial: netRefusalCounter)
     }
 
     /// Whether a wire lies inside the lit net (either end answers — both are one point).

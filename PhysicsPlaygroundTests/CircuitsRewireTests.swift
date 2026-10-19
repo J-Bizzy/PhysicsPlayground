@@ -280,9 +280,9 @@ final class CircuitsRewireTests: XCTestCase {
         let (_, bulb, _, wire) = loop(model)
         let before = model.wires.count
 
-        var latch = PressLatch<CircuitsModel.WireEnd>()
+        var latch = PressLatch<CircuitsModel.WirePress>()
         let start = lead(model, bulb, 0)
-        latch.press(.init(wire: wire, end: 1), at: start)
+        latch.press(.init(wire: wire, pressedAt: start), at: start)
         for _ in 0..<10 {
             XCTAssertNil(latch.promote(hand: start + SIMD3(0.001, 0, 0.001)))
         }

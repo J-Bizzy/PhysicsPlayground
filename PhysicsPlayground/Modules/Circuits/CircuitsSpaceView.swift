@@ -30,9 +30,9 @@ struct CircuitsSpaceView: View {
     /// tap, so a latch promotes to a pull only past `PressLatch.tapTravel`.
     @State private var leadPress = PressLatch<CircuitsModel.Terminal>()
     @State private var partPress = PressLatch<UUID>()
-    /// A wire end being lifted off its terminal. The payload is the
-    /// wire and which of its two ends the hand was nearer to.
-    @State private var wirePress = PressLatch<CircuitsModel.WireEnd>()
+    /// A wire under a finger, and where it was pressed: which end lifts is
+    /// decided once the hand has moved (`CircuitsModel.endToLift`).
+    @State private var wirePress = PressLatch<CircuitsModel.WirePress>()
     /// A switch lever under a finger. Never promotes to a drag: it survives
     /// 12 mm of drift and toggles on `settle()` at gesture end. The
     /// TapGesture only selects, or a clean tap would toggle twice.
@@ -426,9 +426,10 @@ struct CircuitsSpaceView: View {
                     if let id = partPress.promote(hand: hand) {
                         beginCarrying(id, hand: hand, renderer: renderer)
                     }
-                    if let grabbed = wirePress.promote(hand: hand) {
-                        model.beginRewire(wire: grabbed.wire,
-                                          grabbing: grabbed.end, hand: hand)
+                    if let grabbed = wirePress.promote(hand: hand),
+                       let end = model.endToLift(of: grabbed.wire,
+                                                 pressedAt: grabbed.pressedAt, hand: hand) {
+                        model.beginRewire(wire: grabbed.wire, grabbing: end, hand: hand)
                     }
                     // A lever press that travels is a drag to nowhere: consume and discard
                     // it.
@@ -504,7 +505,13 @@ struct CircuitsSpaceView: View {
                     guard let partDrag else { return }
                     applyCircuitDrag(partDrag, hand: hand)
                     if let id = spawnedPartID ?? UUID(uuidString: partDrag.name) {
+                        // A part snapped onto a neighbour glides the last few
+                        // centimetres rather than jumping there.
+                        let before = model.components.first { $0.id == id }
                         model.release(id: id)
+                        if let before {
+                            renderer.easeLanding(id: id, from: before.position, axis: before.axis)
+                        }
                     }
                     renderer.flashRelease()
                 }
@@ -678,11 +685,9 @@ struct CircuitsSpaceView: View {
             partPress.press(id, at: hand)
             return
         case .wire(let id):
-            // Grab the cable to move a wire, the copper to make one: the bead is
-            // fatter than the cable and sits at its endpoint.
-            if let end = model.nearerEnd(of: id, to: hand) {
-                wirePress.press(.init(wire: id, end: end), at: hand)
-            }
+            // Grab the cable (or a joint's collar) to move a wire, a lead to
+            // make one: their targets never overlap.
+            wirePress.press(.init(wire: id, pressedAt: hand), at: hand)
             return
         case .lever(let id):
             // Pressed and never promoted: a lever is a toggle, and the press
@@ -738,6 +743,13 @@ struct CircuitsSpaceView: View {
             }
             return
         case .wire(let id):
+            // A joint's leads give their targets to its collar, so an armed
+            // meter probes the joint there.
+            if model.multimeterArmed, let wire = model.wires.first(where: { $0.id == id }),
+               model.isJoint(wire) {
+                model.probeTap(wire.from)
+                return
+            }
             model.selectWire(id: id)
             return
         case .lever(let id):

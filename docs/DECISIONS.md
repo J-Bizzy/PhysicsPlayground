@@ -16,6 +16,29 @@ A running log of consequential decisions — architectural, physical, or product
 
 (The template sat stranded at line 309, mid-log between two 2026-07-29 entries, until 2026-08-01.)
 
+## 2026-10-18 — Wiring made smooth: clear targets, joints, a refusal that shows, a landing that glides
+
+**Decision:** The owner said the current wiring system "works fine" and asked that it "work smoothly". The gesture is unchanged (pull a lead, set a part down); four rough edges are filed off:
+- **Targets never overlap.** A wire's grab capsule used to run end to end, over both leads' own targets, so a pinch at a plug took whichever was hit first. It now stops 28 mm short of each lead's centre (`wireGrabShape`). A wire too short to keep a target clear of both leads (52–64 mm) has none; grab a lead.
+- **A joint is one thing.** Two leads closer than 52 mm (`CircuitsModel.jointLength`; a snapped pair is 0) are a joint. A champagne collar sleeves it, its 22 mm sphere is the one target there, and the two coincident leads withdraw theirs, which overlapped exactly. The leads take their targets back when the joint opens. An armed meter probes a joint through its collar.
+- **The pull lifts the end the hand means.** The end is decided when the press becomes a pull (after 12 mm), not at the press (`endToLift`):
+  - along a cable, the nearer end — so from the middle, the end the hand moved toward;
+  - at a joint, the side the hand pulls away from keeps the wire, and the other part's contact comes free.
+- **"Already connected" shows the connection.**
+  - A lead held over a terminal on its own net lights that net in the accent, over the red recoil.
+  - So does a carried part over one.
+  - A refused release keeps the net lit for 0.8 s (`refusalLinger`, `CircuitsModel.lastNetRefusal`).
+  - A full wire budget is the recoil alone, so the two refusals look different.
+- **A snapped part glides.** A part released onto a neighbour's lead used to jump there. It is now drawn gliding over 0.12 s (`easeLanding`, `displayPose`), and its wires and electrons follow through `terminalWorld`. Only a release starts one, a pickup stops it, and Reduce Motion skips it.
+
+**Context:** Collected while exploring for the plan:
+- overlapping colliders at every plug;
+- invisible, ungrabbable joints;
+- a silent same-net "no";
+- a part that teleported on release.
+
+**Consequences:** `CircuitsConnectionTests` and `ColliderCriterionTests.testCircuitsJointCollidersFit` hold all of it. The joint threshold is 2 mm wider than two contact diameters on purpose: a pair set down just short of snapping still reads as one.
+
 ## 2026-10-18 — Circuit Workshop's parts become lab-kit modules
 
 **Decision:** The owner asked to "improve the design of every part" and chose lab-kit modules. Every part is now the real component mounted on one shared carrier:

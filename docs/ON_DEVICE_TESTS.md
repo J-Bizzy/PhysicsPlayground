@@ -338,6 +338,23 @@ working session:
 
 ## Circuit Workshop
 
+### ⟳ 2026-10-18 — wiring made smooth
+
+- [ ] **Pinch a plug.** Where a wire meets a contact, a pinch on the
+      contact pulls a NEW lead and a pinch a few centimetres up the cable
+      lifts the wire's end — never the other way round.
+- [ ] **Snap two parts together.** Set a bulb down just off a battery's
+      lead: it glides the last few centimetres into place (no jump), and a
+      champagne collar appears where the two contacts meet.
+- [ ] **Pull a joint apart.** Pinch the collar and pull toward one part:
+      the wire comes out of the OTHER part's contact into your hand. Let go
+      in the air and the joint is simply open.
+- [ ] **Try to connect what is already connected.** Pull a lead onto a
+      terminal on its own net: the lead recoils red AND the wire path that
+      already joins them lights; let go and it stays lit a moment.
+- [ ] **Carry a part against its own net.** The red ghost shows, and the
+      net that already connects it lights.
+
 ### ⟳ 2026-10-18 — the parts are lab-kit modules
 
 - [ ] **Read a part from where you stand.** Each part sits on a graphite

@@ -222,6 +222,23 @@ final class ColliderCriterionTests: XCTestCase {
         assertCollidersFit(renderer.root, "Circuits")
     }
 
+    /// A joint: two parts snapped nose-to-tail, the collar's sphere the one
+    /// target where their leads meet.
+    func testCircuitsJointCollidersFit() {
+        let model = CircuitsModel()
+        model.clearBench()
+        guard let battery = model.add(.battery, at: CircuitsModel.buildCenter),
+              let part = model.components.first(where: { $0.id == battery }) else {
+            return XCTFail("no battery")
+        }
+        let landing = part.terminalPosition(1) + SIMD3(0.03 + CircuitsModel.terminalOffset, 0.02, 0)
+        if let bulb = model.add(.bulb, at: landing) { model.release(id: bulb) }
+        XCTAssertEqual(model.wires.count, 1)
+        let renderer = CircuitsRenderer()
+        for _ in 0..<3 { renderer.tick(dt: 1 / 90, model: model) }
+        assertCollidersFit(renderer.root, "Circuits, a joint")
+    }
+
     /// Every kind of part, not just the starter loop's three: each module's
     /// contacts, carry box and (on the switch) blade are measured.
     func testCircuitsCollidersFitEveryKind() {
