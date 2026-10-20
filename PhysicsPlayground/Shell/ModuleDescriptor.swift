@@ -22,9 +22,9 @@ struct ModuleDescriptor: Identifiable {
     let icon: String
     /// From DesignTokens.Palette — never an ad-hoc color.
     let accent: Color
-    /// How the shared immersive space presents this module: .mixed keeps
-    /// the room (default); .progressive lets the crown open into a full
-    /// environment the module renders (Orbital Mechanics' starfield).
+    /// How the shared immersive space presents this module in the room:
+    /// .mixed keeps it (default); .progressive lets the crown close it
+    /// down. Deep space is always .full (`AppModel.surroundings`).
     var immersionStyle: ImmersionStyle = .mixed
     /// How far the dimming shell is closed when this module opens, 0…1 —
     /// for apparatus with no contrast against a sunlit wall.
@@ -32,6 +32,13 @@ struct ModuleDescriptor: Identifiable {
     /// How far out this module wants the dimming shell, metres; larger only
     /// when the apparatus is larger than the default.
     var preferredDimmingRadius: Float = RoomDimmerView.defaultRadius
+    /// The surroundings this lab opens in for a visit, whatever the wearer
+    /// last chose; nil follows the choice. The atmosphere above applies
+    /// whenever the wearer is in the room.
+    var preferredSurroundings: Surroundings? = nil
+    /// True when the lab draws a Sun of its own, so deep space puts its
+    /// distant one away rather than show two.
+    var drawsItsOwnSun = false
     /// Freeze-everything state, driving the shared in-space pause orb.
     let isPaused: () -> Bool
     let togglePause: () -> Void

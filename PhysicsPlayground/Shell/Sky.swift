@@ -38,7 +38,7 @@ final class SkyResources {
     /// The same glow, transparent, for a sky laid over the room.
     let roomGlow: UnlitMaterial
 
-    /// Stars on a sphere this far out — Studio's proven radius, past every
+    /// Stars on a sphere this far out — the retired Studio Mode's proven radius, past every
     /// lab and past Orbital Mechanics' 16 m shell — and the glow just behind.
     nonisolated static let starRadius: Float = 45
     nonisolated static let domeRadius: Float = 46
@@ -120,35 +120,46 @@ enum Sky {
 
     /// The sky turned into the room. `overRoom` lays the Milky Way over
     /// passthrough as a transparent glow; otherwise it is the opaque
-    /// surroundings.
-    static func make(overRoom: Bool, resources: SkyResources) -> Entity {
+    /// surroundings. Its two parts take orders 0 and 1 (`lastOrder`) in
+    /// `group`, so a caller can draw its own transparent parts after them.
+    static func make(overRoom: Bool, resources: SkyResources,
+                     group: ModelSortGroup = ModelSortGroup(depthPass: nil)) -> Entity {
         let root = Entity()
         root.name = "sky"
         root.position = centre
         root.orientation = orientation
-        let group = ModelSortGroup(depthPass: nil)
 
         let dome = ModelEntity(mesh: resources.domeMesh,
                                materials: [overRoom ? resources.roomGlow : resources.spaceGlow])
         dome.name = "sky-milky-way"
-        dome.components.set(ModelSortGroupComponent(group: group, order: 0))
+        // Over the room the Milky Way is transparent and sorted under the
+        // stars. In space it is opaque and left out of the group, so it is
+        // drawn with the opaque pass, first: sorted, it was drawn late, and
+        // any transparent part that writes depth (Orbital's Sun glow) cut a
+        // hole through it to whatever lay beyond.
+        if overRoom {
+            dome.components.set(ModelSortGroupComponent(group: group, order: 0))
+        }
         root.addChild(dome)
 
         let stars = ModelEntity(mesh: resources.starMesh, materials: [resources.starMaterial])
         stars.name = "sky-stars"
-        stars.components.set(ModelSortGroupComponent(group: group, order: 1))
+        stars.components.set(ModelSortGroupComponent(group: group, order: lastOrder))
         root.addChild(stars)
         return root
     }
 
+    /// The sort order the stars take; a caller's parts come after it.
+    static let lastOrder: Int32 = 1
+
     /// The house evening — or, for a still, the sky turned so a named target
-    /// stands ahead 20° up (`-skyLook orion|polaris|core|cygnus|zenith|sun`).
+    /// stands ahead 8° up — inside the simulator camera's frame, which ends about 12° up (`-skyLook orion|polaris|core|cygnus|zenith|sun`).
     static var orientation: simd_quatf {
         let house = simd_quatd(SkyOrientation.house.matrix)
         #if DEBUG
         if let name = UserDefaults.standard.string(forKey: "skyLook"),
            let target = lookTarget(named: name) {
-            let ahead = SIMD3<Double>(0, sin(20 * Double.pi / 180), -cos(20 * Double.pi / 180))
+            let ahead = SIMD3<Double>(0, sin(8 * Double.pi / 180), -cos(8 * Double.pi / 180))
             let from = SkyOrientation.house.world(target)
             return single(simd_quatd(from: simd_normalize(from), to: ahead) * house)
         }

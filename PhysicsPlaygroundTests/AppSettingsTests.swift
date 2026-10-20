@@ -17,6 +17,7 @@ final class AppSettingsTests: XCTestCase {
         "settings.masterVolume",
         "settings.ambientAudio",
         "settings.timeCapsule",
+        "settings.surroundings",
     ]
 
     private func clearKeys() {
@@ -44,6 +45,8 @@ final class AppSettingsTests: XCTestCase {
         // preference.
         XCTAssertTrue(settings.timeCapsule)
         XCTAssertTrue(TimeCapsuleSettings.isEnabled)
+        // The room is the default; deep space is chosen.
+        XCTAssertEqual(settings.surroundings, .room)
     }
 
     func testEveryPreferenceSurvivesRelaunch() {
@@ -51,12 +54,14 @@ final class AppSettingsTests: XCTestCase {
         settings.masterVolume = 0.4
         settings.ambientAudio = false
         settings.timeCapsule = false
+        settings.surroundings = .deepSpace
 
         // A second instance is a relaunch: nothing but UserDefaults
         // connects the two.
         let relaunched = AppSettings()
         XCTAssertEqual(relaunched.masterVolume, 0.4)
         XCTAssertFalse(relaunched.ambientAudio)
+        XCTAssertEqual(relaunched.surroundings, .deepSpace)
         // Off is the non-default now, so it is the direction that has to
         // persist — and reach the recording gate without Settings' help.
         XCTAssertFalse(relaunched.timeCapsule)

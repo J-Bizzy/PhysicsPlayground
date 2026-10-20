@@ -4,8 +4,8 @@
 //
 //  The room's brightness is part of the set: one house
 //  `preferredDimming`, at most one module departing from it, and that
-//  module must also move its shell out. A criterion, not a snapshot of
-//  six numbers.
+//  module must also move its shell out — and be the one lab that opens in
+//  deep space. A criterion, not a snapshot of six numbers.
 //
 
 import XCTest
@@ -70,5 +70,20 @@ final class AtmosphereCriterionTests: XCTestCase {
             exception is a decision; two is a second convention nobody \
             declared.
             """)
+    }
+
+    /// The one lab that dims past half is the one that opens in deep space
+    /// and draws its own Sun: its heavy room atmosphere is for a wearer who
+    /// chooses the room there, and nowhere else may need one.
+    func testTheHeavilyDimmedLabIsTheOneThatOpensInSpace() {
+        let modules = descriptors()
+        let heavy = modules.filter { $0.preferredDimming > 0.5 }.map(\.id)
+        let spacebound = modules.filter { $0.preferredSurroundings == .deepSpace }.map(\.id)
+        XCTAssertEqual(heavy, spacebound)
+        for module in modules where module.preferredSurroundings == .deepSpace {
+            XCTAssertTrue(module.drawsItsOwnSun, "\(module.id) opens in space under a second Sun")
+        }
+        XCTAssertTrue(modules.allSatisfy { $0.preferredSurroundings != .room },
+                      "no lab may refuse a wearer's deep space")
     }
 }

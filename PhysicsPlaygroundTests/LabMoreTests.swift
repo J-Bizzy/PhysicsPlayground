@@ -5,7 +5,7 @@
 //  More is the fallback for everything that is not the apparatus. These
 //  hold what it promises: every lab says something there, its numbers
 //  read what the room is doing, nothing it offers is offered twice, and
-//  the room's own chrome — Move, Studio, dimming, Reset — is the same in
+//  the room's own chrome — Move, Deep space, dimming, Reset — is the same in
 //  every lab.
 //
 

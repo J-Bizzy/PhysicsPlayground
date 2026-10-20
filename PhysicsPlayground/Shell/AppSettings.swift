@@ -40,6 +40,15 @@ final class AppSettings {
         }
     }
 
+    // MARK: Surroundings
+
+    /// The room, or deep space: chosen in More, on the home or in a lab,
+    /// and remembered here. A lab with its own preference overrides it for
+    /// a visit (`AppModel.surroundings`).
+    var surroundings: Surroundings {
+        didSet { UserDefaults.standard.set(surroundings.rawValue, forKey: "settings.surroundings") }
+    }
+
     // MARK: What is NOT here any more
 
     init() {
@@ -56,6 +65,17 @@ final class AppSettings {
         }
         #endif
         timeCapsule = capsule
+        var chosen = defaults.string(forKey: "settings.surroundings")
+            .flatMap(Surroundings.init(rawValue:)) ?? .room
+        #if DEBUG
+        // `-surroundings space|room` holds for one launch without writing
+        // the choice; `AppModel` hands it to a lab with a preference too.
+        if let argument = defaults.string(forKey: "surroundings"),
+           let launch = Surroundings(argument: argument) {
+            chosen = launch
+        }
+        #endif
+        surroundings = chosen
         // `didSet` does not fire during init, so the restored answer is handed
         // to the recording gate by hand.
         TimeCapsuleSettings.isEnabled = timeCapsule

@@ -72,6 +72,8 @@ struct HubSpaceView: View {
         } attachments: {
             Attachment(id: "more") {
                 HomeMore(
+                    deepSpace: Binding(get: { appModel.surroundings == .deepSpace },
+                                       set: { appModel.choose($0 ? .deepSpace : .room) }),
                     // Never a second one — see `AppModel.mainWindowCount`.
                     openCatalog: {
                         if appModel.wantsMainWindow {
@@ -132,15 +134,19 @@ struct HubSpaceView: View {
     }
 }
 
-/// The home's one way to what is secondary: the flat lab list (the
-/// accessibility path — nothing may be reachable only in space), Settings
-/// and About, behind More. They open as one row beneath it, above the
-/// portals rather than behind them; the button never moves.
+/// The home's one way to what is secondary: Deep space, the flat lab list
+/// (the accessibility path — nothing may be reachable only in space),
+/// Settings and About, behind More. They open as one row beneath it, above
+/// the portals rather than behind them; the button never moves.
 private struct HomeMore: View {
     /// The fixed frame the More stands in, points; the button at its top.
     static let frameHeight: CGFloat = 170
+    /// Wide enough for the row of four.
+    static let frameWidth: CGFloat = 760
     static let buttonHalfHeight: CGFloat = (ControlMetrics.minimumTarget + 12) / 2
 
+    /// The surroundings: deep space or the room, as every lab's More offers.
+    @Binding var deepSpace: Bool
     let openCatalog: () -> Void
     let openSettings: () -> Void
     let openAbout: () -> Void
@@ -153,6 +159,8 @@ private struct HomeMore: View {
                 .glassBackgroundEffect(in: Capsule())
             if isExpanded {
                 HStack(spacing: ControlMetrics.spacing) {
+                    ControlToggle("Deep space", systemImage: "sparkles", isOn: $deepSpace)
+                        .accessibilityHint("Stands you among the stars instead of in your room")
                     ControlButton("Lab list", systemImage: "list.bullet.rectangle",
                                   action: openCatalog)
                         .accessibilityHint("Opens a flat list of every lab in a window")
@@ -168,7 +176,7 @@ private struct HomeMore: View {
                 .transition(.opacity.combined(with: .scale(scale: 0.92, anchor: .top)))
             }
         }
-        .frame(width: 560, height: Self.frameHeight, alignment: .top)
+        .frame(width: Self.frameWidth, height: Self.frameHeight, alignment: .top)
         .animation(.easeOut(duration: 0.2), value: isExpanded)
         #if DEBUG
         // `-moreOpen 1` unfolds it for a screenshot; the simulator cannot pinch.

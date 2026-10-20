@@ -17,12 +17,17 @@ enum OrbitalMechanicsModule {
             shortTitle: "Orbits",
             icon: "sun.max.fill",
             accent: DesignTokens.Palette.gravityAccent,
+            // The sky is space: the lab opens there whatever the wearer last
+            // chose, and puts deep space's distant Sun away for its own.
+            // The three below are the room, for a wearer who chooses it here.
             // .progressive so the Digital Crown genuinely dims the room; the 0.85 shell does the contrast work.
             immersionStyle: .progressive,
             // 0.85: the one allowed departure from the house dimming — pale Sun has no contrast on a lit wall.
             preferredDimming: 0.85,
             // Shell must stand outside the apparatus: 16 m clears Neptune at 1×; the default 3.4 m dome cuts through the rings (AtmosphereCriterionTests).
             preferredDimmingRadius: 16,
+            preferredSurroundings: .deepSpace,
+            drawsItsOwnSun: true,
             isPaused: { appModel.orbitalMechanicsModel.isPaused },
             togglePause: { appModel.orbitalMechanicsModel.togglePauseRespectingScrub() },
             makeScene: {

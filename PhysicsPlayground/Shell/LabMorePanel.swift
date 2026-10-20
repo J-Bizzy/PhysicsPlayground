@@ -7,7 +7,7 @@
 //    • the lab's own secondary controls (`ModuleDescriptor.more`) and a
 //      slider for each quantity it has no object for (`adjustables`);
 //    • its live numbers (`readings`) — the Physics box, folded in;
-//    • the room: move the lab, Studio Mode, how dim;
+//    • the room: move the lab, Deep space, how dim;
 //    • Settings and Reset (Reset arms first, like every destructive verb).
 //  Every control is the one family's, so nothing here is new to the hand.
 //
@@ -54,14 +54,18 @@ struct LabMorePanel: View {
                         ControlToggle("Move the lab", systemImage: "move.3d",
                                       presentation: .row, isOn: $placement.isPlacing)
                             .accessibilityHint("Shows an anchor you can drag to move the whole lab")
-                        ControlToggle("Studio Mode", systemImage: "moon.stars",
-                                      presentation: .row, isOn: $appModel.studioMode)
-                            .accessibilityHint("Replaces your room with a dark studio")
+                        ControlToggle("Deep space", systemImage: "sparkles",
+                                      presentation: .row,
+                                      isOn: { appModel.surroundings == .deepSpace },
+                                      set: { appModel.choose($0 ? .deepSpace : .room) })
+                            .accessibilityHint("Stands you among the stars instead of in your room")
+                        // There is no room to dim in deep space.
                         ControlSlider("Dim the room", systemImage: "circle.lefthalf.filled",
                                       range: 0...1,
                                       read: { appModel.roomDimming },
                                       write: { appModel.setDimming($0) },
                                       format: { "\(Int(($0 * 100).rounded())) %" })
+                            .disabled(appModel.surroundings == .deepSpace)
                     }
 
                     HStack(spacing: ControlMetrics.spacing) {

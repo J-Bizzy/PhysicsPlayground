@@ -20,8 +20,9 @@ final class AppModel {
     /// by `closeForDismissal()`.
     private(set) var activeModuleID: String? {
         didSet {
-            refreshImmersionStyle()
+            // The lab's surroundings first: the immersion style reads them.
             adoptModuleAtmosphere()
+            refreshImmersionStyle()
         }
     }
 
@@ -81,11 +82,24 @@ final class AppModel {
     /// launch is an arrival; a walk back from a lab is not.
     var hasPlayedArrival = false
 
-    /// Studio Mode: full immersion that shuts the room out and stages the
-    /// physics in a dark gallery. Overrides every module's immersion
-    /// preference until switched off.
-    var studioMode = false {
-        didSet { refreshImmersionStyle() }
+    /// What stands around the wearer now (`Surroundings`): the lab's own
+    /// for this visit when it has one, else the wearer's remembered choice.
+    /// Deep space is full immersion; the room keeps each lab's own style.
+    var surroundings: Surroundings {
+        Surroundings.resolve(choice: settings.surroundings, labPrefers: labSurroundings)
+    }
+
+    /// The lab's surroundings for this visit: its descriptor's preference on
+    /// entry, or what the wearer chose there since. Nil follows the choice.
+    private(set) var labSurroundings: Surroundings?
+
+    /// The wearer's choice, from More: remembered, and taken by the lab on
+    /// screen too when it came with a preference of its own — choosing the
+    /// room in Orbital Mechanics brings the room back now, not next visit.
+    func choose(_ choice: Surroundings) {
+        settings.surroundings = choice
+        if labSurroundings != nil { labSurroundings = choice }
+        refreshImmersionStyle()
     }
 
     /// The title bar's More: everything secondary in a lab, its live
@@ -123,11 +137,13 @@ final class AppModel {
         let module = activeModule
         roomDimming = module?.preferredDimming ?? Self.homeDimming
         dimmingRadius = module?.preferredDimmingRadius ?? RoomDimmerView.defaultRadius
+        labSurroundings = module?.preferredSurroundings
         if let id = activeModuleID { labPlacement.adopt(moduleID: id) }
     }
 
     private func refreshImmersionStyle() {
-        immersionStyle = studioMode ? .full : (activeModule?.immersionStyle ?? .mixed)
+        immersionStyle = surroundings == .deepSpace
+            ? .full : (activeModule?.immersionStyle ?? .mixed)
     }
 
     /// The user's real room — bounds, walls, furniture. Shared by every
@@ -181,9 +197,6 @@ final class AppModel {
                       """)
             }
         }
-        if UserDefaults.standard.bool(forKey: "studioMode") {
-            studioMode = true
-        }
         // `-startPaused 1` opens the module frozen.
         if UserDefaults.standard.bool(forKey: "startPaused") {
             activeModule?.togglePause()
@@ -197,6 +210,20 @@ final class AppModel {
             pauseAfterSeconds = pauseAfter
         }
         #endif
+        // Observers do not fire in an initialiser, so a launch straight into
+        // a lab adopts its atmosphere and surroundings here — or a cold
+        // launch into Orbital Mechanics would open on .mixed, not in space.
+        adoptModuleAtmosphere()
+        #if DEBUG
+        // `-surroundings space|room` holds for this launch over a lab's own
+        // preference too (`AppSettings` takes it as the choice).
+        if labSurroundings != nil,
+           let argument = UserDefaults.standard.string(forKey: "surroundings"),
+           let launch = Surroundings(argument: argument) {
+            labSurroundings = launch
+        }
+        #endif
+        refreshImmersionStyle()
     }
 
     #if DEBUG

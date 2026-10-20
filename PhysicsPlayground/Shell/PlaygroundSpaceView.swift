@@ -191,11 +191,12 @@ struct PlaygroundSpaceView: View {
             // the modules too.
             if ready {
             Group {
-                // Studio Mode's dark gallery sits behind whatever is active —
-                // hub ring or module — and survives switches between them.
-                if appModel.studioMode {
-                    StudioEnvironmentView()
-                        .id("studio")
+                // What stands around the wearer (`Surroundings`): deep space
+                // behind whatever is active — the home or a lab — surviving
+                // switches between them, or the room with its dimming shell.
+                if appModel.surroundings == .deepSpace {
+                    DeepSpaceView(showsSun: !(appModel.activeModule?.drawsItsOwnSun ?? false))
+                        .id("deep-space")
                 } else {
                     // The middle setting: the room stays, a dark shell gives the physics its
                     // contrast back. Mounted unconditionally so it can ramp down when a lab

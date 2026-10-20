@@ -264,7 +264,11 @@ final class OrbitalMechanicsRenderer {
         ))
         systemRoot.addChild(sunLight)
 
-        let glowMaterial = Materials.unlit(UIColor(red: 1.0, green: 0.82, blue: 0.5, alpha: 1), opacity: 0.16)
+        // Light, not a surface: writing depth, the glow cut its disc out of
+        // the 16 m shell (an undimmed room round the Sun) and out of deep
+        // space's sky. A copy, so the shared recipe keeps its depth.
+        var glowMaterial = Materials.unlit(UIColor(red: 1.0, green: 0.82, blue: 0.5, alpha: 1), opacity: 0.16)
+        glowMaterial.writesDepth = false
         sunGlow = ModelEntity(mesh: Primitives.sphere(radius: Float(Self.glowBaseRadius)),
                               materials: [glowMaterial])
         systemRoot.addChild(sunGlow)
