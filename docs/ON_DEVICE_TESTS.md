@@ -311,11 +311,15 @@ working session:
       on a glass capsule with the lab's colour as a dot.
 - [ ] **The particles are points of light**, not beads or tiles: soft
       halos, no square around any of them, and the room's dimming intact
-      behind them. They draw each portal's ring as its glass grows the
-      last few per cent into place, and the wordmark rises into its spot.
-- [ ] **The bezels are one clean ring each** — champagne alloy, the
-      colour of the i's dot, no notch or tick anywhere round it, the glass
-      meeting it with no gap at any angle you look from.
+      behind them. They line each plinth's knurled rim as the lab on it
+      grows the last few per cent into place, and the wordmark rises into
+      its spot.
+- [ ] **Each lab stands free on its plinth** (2026-10-19): no glass and no
+      ring round it. The seven plinths are one size at one height, a row
+      of milled turntables with a fine champagne knurl, not gear teeth.
+      Each swings slowly back and forth so you see round the lab, never in
+      step with its neighbours. Walk up to one: it is an object, not a
+      picture. Its name hangs just under the plinth's front edge.
 - [ ] **At rest the portals float** a few millimetres, never in step —
       felt rather than seen. Under Reduce Motion they hang still.
 - [ ] **The wordmark is the app's own type** (2026-10-14): rounded white

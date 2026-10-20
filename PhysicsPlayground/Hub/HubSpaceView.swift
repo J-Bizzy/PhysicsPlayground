@@ -1,7 +1,8 @@
-//  HubSpaceView.swift — the home: the labs' portals standing around the wearer, each running its
-//  lab's physics in a loop. A pinch on a portal enters that lab. The home is the end state of
-//  the opening (`Opening`): particles that fall, swirl and ripple, then settle onto the
-//  portals' rims. Any pinch skips the opening; Reduce Motion fades the portals in instead.
+//  HubSpaceView.swift — the home: the labs standing around the wearer in miniature, each on its
+//  own plinth and running its lab's physics in a loop. A pinch on one (a "portal") enters that
+//  lab. The home is the end state of the opening (`Opening`): particles that fall, swirl and
+//  ripple, then settle onto the plinths' rims. Any pinch skips the opening; Reduce Motion fades
+//  the labs in instead.
 //  Secondary things — the flat lab list, Settings, About — are behind the one More.
 
 import SwiftUI
@@ -178,26 +179,6 @@ private struct HomeMore: View {
     }
 }
 
-/// A portal's pane: stock glass, darkening softly toward its rim like a
-/// lens, so the lab running in front of it sits in depth rather than on a
-/// flat grey plate. A backdrop, never a target — the portal's own collider
-/// takes the pinch.
-private struct PortalPane: View {
-    let diameter: CGFloat
-
-    var body: some View {
-        Circle()
-            .fill(RadialGradient(colors: [.black.opacity(0.04), .black.opacity(0.14),
-                                          .black.opacity(0.34)],
-                                 center: .center, startRadius: 0,
-                                 endRadius: diameter / 2))
-            .frame(width: diameter, height: diameter)
-            .glassBackgroundEffect(in: Circle())
-            .allowsHitTesting(false)
-            .accessibilityHidden(true)
-    }
-}
-
 /// A portal's name: the system's own type on a glass capsule, with a dot
 /// of the lab's colour — crisp at any distance, legible against any wall,
 /// and native where extruded neon on a dark pill was not. Never a target:
@@ -272,6 +253,10 @@ final class HubScene {
         let animate: (Double) -> Void
         /// Each preview runs on its own phase, so the loops never pulse together.
         let phase: Double
+        /// The lab on its plinth, turned slowly about `swayAxis` — the
+        /// plinth's own normal, through its top centre.
+        let sway: Entity
+        let swayAxis: SIMD3<Float>
     }
     private var portals: [Portal] = []
     private var time = 0.0
@@ -348,7 +333,6 @@ final class HubScene {
 
     private func buildPortal(_ module: ModuleDescriptor, at slot: PortalLayout.Portal,
                              phase: Double) {
-        let radius = Float(PortalLayout.rimRadius)
         let anchor = Entity()
         anchor.name = module.id
         anchor.position = SIMD3<Float>(slot.position)
@@ -357,54 +341,45 @@ final class HubScene {
         body.name = "portal-body"
         anchor.addChild(body)
 
-        // The pane: glass in the bezel's own plane, its edge just inside the
-        // ring's inner edge, so the two meet without parallax at any angle.
-        let diameter = CGFloat(2 * radius - 0.008) * CGFloat(ControlMetrics.pointsPerMeter)
-        let pane = ControlAttachment.entity(PortalPane(diameter: diameter),
-                                            name: "portal-pane")
-        body.addChild(pane)
-
-        // The bezel the opening's particles draw: a fine ring of the
-        // wordmark's own champagne alloy — round in section (sixteen sides,
-        // where six read as a faceted tube) and lit as metal, so it belongs
-        // to the title above it. Not a glow: the glow means a hand is on
-        // something.
-        //
-        // Swept lying flat and stood up by rotation: a tube swept round a
-        // vertical circle pinches where its path runs straight up or down
-        // (the sweep's frame loses its reference there), which drew two dark
-        // ticks on every ring.
-        let points = (0...128).map { step -> SIMD3<Float> in
-            let angle = Float(step) / 128 * 2 * .pi
-            return SIMD3(cos(angle) * radius, 0, sin(angle) * radius)
-        }
-        if let mesh = TubeMesh.tube(lines: [points], radius: 0.0024, sides: 16) {
-            let rim = ModelEntity(mesh: mesh, materials: [Self.bezelMaterial])
-            rim.name = "portal-rim"
-            rim.orientation = simd_quatf(angle: .pi / 2, axis: [1, 0, 0])
-            body.addChild(rim)
-        }
-
         // The lab in miniature, looping its own physics: what the portal says
-        // it does. A diorama has depth, so it stands just in front of the
-        // pane with its back clear of the glass.
+        // it does. Nothing frames it (2026-10-19, owner's call — the glass
+        // circles and their rings read as badges): it stands on its plinth,
+        // and every plinth is the same size at the same height, so the row
+        // is the frame. The plinth's top centre is the pivot it turns on.
         let built = HubVignettes.make(for: module.id)
-        let bounds = built.entity.visualBounds(relativeTo: nil).extents
-        let largest = max(bounds.x, max(bounds.y, 1e-4))
-        built.entity.scale = SIMD3(repeating: Self.previewSize / largest)
-        let depth = built.entity.visualBounds(relativeTo: nil)
-        built.entity.position = [0, 0, Self.paneClearance - depth.min.z]
-        let front = built.entity.position.z + depth.max.z
-        body.addChild(built.entity)
+        // `fit`'s invisible square, a pose-independent box to measure by;
+        // placed by its plinth, the lab needs none, and here it would only
+        // stretch the bounds the target is measured against.
+        built.entity.findEntity(named: Self.vignetteSquareName)?.removeFromParent()
+        let pivot = Entity()
+        pivot.name = "portal-plinth"
+        pivot.position = [0, -Float(PortalLayout.plinthDrop), 0]
+        body.addChild(pivot)
+        pivot.addChild(built.entity)
+        var axis = SIMD3<Float>(0, 1, 0)
+        if let stage = built.entity.findEntity(named: HubVignettes.stageName) {
+            let centre = stage.convert(position: .zero, to: built.entity)
+            let edge = stage.convert(position: [HubVignettes.stageRadius, 0, 0], to: built.entity)
+            let scale = Float(PortalLayout.plinthRadius) / max(simd_distance(centre, edge), 1e-6)
+            built.entity.scale = SIMD3(repeating: scale)
+            built.entity.position -= stage.position(relativeTo: pivot)
+            axis = simd_normalize(stage.convert(direction: [0, 1, 0], to: pivot))
+        }
 
-        // Its name under it: system type on glass, with the lab's colour as a
-        // dot. A transparent proxy the label's size stands with it, so the
-        // portal's target is measured against the label it covers.
+        // Its name under the plinth's front edge: system type on glass, with
+        // the lab's colour as a dot. A transparent proxy the label's size
+        // stands with it, so the portal's target is measured against the
+        // label it covers.
+        let plinthLow = built.entity.findEntity(named: HubVignettes.stageName)?
+            .visualBounds(relativeTo: body).min.y
+            ?? -Float(PortalLayout.plinthDrop + PortalLayout.plinthRadius * 0.3)
         let title = module.shortTitle ?? module.title
         let labelSize = PortalLabel.size(for: title)
         let label = Entity()
         label.name = "portal-label"
-        label.position = [0, -(radius + Self.labelDrop + labelSize.y / 2), 0.01]
+        let labelTop = plinthLow - Self.labelGap
+        label.position = [0, labelTop - labelSize.y / 2,
+                          Float(PortalLayout.plinthRadius) * Self.labelForward]
         label.addChild(ControlAttachment.entity(
             PortalLabel(title: title, accent: module.accent), name: "portal-label-text"))
         let proxy = ModelEntity(
@@ -415,15 +390,20 @@ final class HubScene {
         label.addChild(proxy)
         body.addChild(label)
 
-        // The whole portal is the target, its name included.
-        let bottom = radius + Self.labelDrop + labelSize.y
-        let top = radius + 0.01
+        // The whole exhibit is the target — the plinth, the lab over its
+        // whole motion and its name. `contentExtents` is the lab swept over
+        // its cycle and centred on the miniature's origin.
+        let radius = Float(PortalLayout.plinthRadius)
+        let origin = built.entity.position(relativeTo: body).y
+        let contentTop = origin + built.entity.scale.y * built.contentExtents.y / 2
+        let top = max(contentTop, pivot.position.y + 0.08) + 0.01
+        let bottom = labelTop - labelSize.y
+        let width = max(2 * radius + 0.02, labelSize.x)
+        let depth = 2 * radius + 0.02
         anchor.components.set(InputTargetComponent())
-        // Deep enough to take a pinch on the front of the diorama.
-        let back: Float = 0.04
         anchor.components.set(CollisionComponent(shapes: [
-            Primitives.collisionBox(size: [2 * radius + 0.02, top + bottom, front + back],
-                                    offset: [0, (top - bottom) / 2, (front - back) / 2]),
+            Primitives.collisionBox(size: [width, top - bottom, depth],
+                                    offset: [0, (top + bottom) / 2, 0]),
         ]))
         anchor.components.set(HoverEffectComponent())
         SpatialActions.attach(
@@ -432,30 +412,35 @@ final class HubScene {
             activate: { [weak self] in self?.onEnter?(module.id) })
         root.addChild(anchor)
         portals.append(Portal(moduleID: module.id, anchor: anchor, body: body,
-                              label: label, animate: built.animate, phase: phase))
+                              label: label, animate: built.animate, phase: phase,
+                              sway: pivot, swayAxis: axis))
     }
 
-    /// The preview's largest extent, metres. Its square's corners reach
-    /// 0.71 of this from the centre, so 20 cm keeps even a corner 3 cm
-    /// inside the 17 cm rim (at 22 cm, the pendulum's beam touched it).
-    private static let previewSize: Float = 0.26
-    /// How far in front of the pane a diorama's back stands.
-    private static let paneClearance: Float = 0.012
-    /// From the rim to the label's top edge.
-    private static let labelDrop: Float = 0.035
+    /// `HubVignettes.fit`'s invisible square.
+    static let vignetteSquareName = "vignette-square"
+    /// From the plinth's lowest point to its name's top edge.
+    private static let labelGap: Float = 0.02
+    /// How far forward the name hangs, as a share of the plinth's radius:
+    /// under its front edge, where a museum puts a plinth's label.
+    private static let labelForward: Float = 0.75
 
-    /// The wordmark's keyline alloy (`HubTitleStyle.milled`'s rim), here on
-    /// the portals' bezels so the home is one material family.
-    private static let bezelMaterial: PhysicallyBasedMaterial = {
-        var metal = PhysicallyBasedMaterial()
-        metal.baseColor = .init(tint: HubTitleStyle.champagne)
-        metal.metallic = .init(floatLiteral: 0.30)
-        metal.roughness = .init(floatLiteral: 0.50)
-        metal.clearcoat = .init(floatLiteral: 0.0)
-        metal.emissiveColor = .init(color: HubTitleStyle.champagne)
-        metal.emissiveIntensity = 0.45
-        return metal
-    }()
+    /// The slow turn: each plinth swings ±12° about its own axis over 14 s,
+    /// so the lab on it shows its depth — the turntable's turn, never a
+    /// spin, and never under stillness. It builds over `swayRise` once the
+    /// labs have landed, so nothing jumps.
+    private static let swayAmplitude: Float = 0.21
+    private static let swayPeriod = 14.0
+    private static let swayRise = 2.0
+    /// The scene time the turn began from.
+    private var swayOrigin = 0.0
+
+    /// How far a portal's plinth is turned at `elapsed` seconds into the turn.
+    static func swayAngle(elapsed: Double, phase: Double) -> Float {
+        guard elapsed > 0 else { return 0 }
+        let x = min(elapsed / swayRise, 1)
+        let rise = Float(x * x * (3 - 2 * x))
+        return swayAmplitude * rise * Float(sin(2 * .pi * elapsed / swayPeriod + phase * 2.3))
+    }
 
     /// The portals' idle float: a few millimetres over several seconds, so
     /// the home breathes rather than hangs. Never under stillness.
@@ -485,6 +470,7 @@ final class HubScene {
         if (stillness || openingAlreadyPlayed) && !frozen {
             // Reduce Motion, or a walk back from a lab: the portals fade in.
             openingPhase = .done
+            swayOrigin = time
             presence = 0
             return
         }
@@ -641,6 +627,8 @@ final class HubScene {
 
     private func finishOpening() {
         openingPhase = .done
+        // The turn carries on from the landing; a skip before it starts it now.
+        swayOrigin = min(time, openingStart + Opening.landingTime)
         particleRoot.removeFromParent()
         particleRoot.children.removeAll()
         particles.removeAll()
@@ -694,11 +682,21 @@ final class HubScene {
         fadePresence(dt: dt)
         updateOpening()
 
-        // Every portal runs its lab's physics and floats a few millimetres,
-        // each on its own phase so they never rise together. Under
-        // stillness they park.
+        // Every portal runs its lab's physics, floats a few millimetres and
+        // turns slowly on its plinth, each on its own phase so they never
+        // move together. Under stillness they park. The turn waits for the
+        // landing, on the opening's clock while it plays (pinned with it
+        // for a screenshot).
+        let swayElapsed: Double = switch openingPhase {
+        case .pending: 0
+        case .running: openingTime - Opening.landingTime
+        case .done: time - swayOrigin
+        }
         for portal in portals {
             portal.animate(stillness ? 0 : time + portal.phase)
+            portal.sway.orientation = simd_quatf(
+                angle: stillness ? 0 : Self.swayAngle(elapsed: swayElapsed, phase: portal.phase),
+                axis: portal.swayAxis)
             portal.body.position.y = stillness ? 0
                 : Self.floatHeight * Float(sin(2 * .pi * time / Self.floatPeriod
                                                + portal.phase * 2.1))

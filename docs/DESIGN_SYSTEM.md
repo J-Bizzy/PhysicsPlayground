@@ -269,8 +269,8 @@ All hub motion ticks from `SceneEvents.Update` — never `RealityView`'s
 
 | State | Behaviour | Value |
 |---|---|---|
-| Opening | Particles fall and swirl (crossed-field cycloid), ripple (deep-water wave), and settle onto the portal rims (critically damped); the glass fades up under them (`Hub/Opening.swift`) | ~3.1 s; any pinch skips |
-| Idle portal | The lab's own physics loops in front of the glass — the portal **is** the demo; each on its own phase | — |
+| Opening | Particles fall and swirl (crossed-field cycloid), ripple (deep-water wave), and settle onto the plinths' knurled rims (critically damped); the labs fade up on them (`Hub/Opening.swift`) | ~3.1 s; any pinch skips |
+| Idle portal | The lab's own physics loops on its plinth, nothing framing it — the portal **is** the demo; the plinth swings slowly about its own axis so the lab shows its depth; each on its own phase (2026-10-19: the glass circles and rings went) | plinth 0.32 m, ±12° over 14 s |
 | Wordmark | Arrives by physics (Physics drops and bounces, Playground swings in, the dot lands last), then a travelling wave a few millimetres high and a glint every 9 s; a pinch hops a letter (`Hub/HubTitleMotion.swift`) | wave 3.5 mm, hop 7 cm |
 | Enter | The portal swells toward you and the home dissolves — an arrival, never a hard cut | scale 1.35, +0.25 m, 0.42 s |
 | Live | `LiveGlow` fades up around what the hand takes and out when it lets go | 0.15 s |

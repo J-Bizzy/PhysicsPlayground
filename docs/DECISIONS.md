@@ -16,6 +16,25 @@ A running log of consequential decisions — architectural, physical, or product
 
 (The template sat stranded at line 309, mid-log between two 2026-07-29 entries, until 2026-08-01.)
 
+## 2026-10-19 — The home's labs stand free on plinths; the circles go
+
+**Decision:** Nothing frames a lab in the home any more (owner's call: "the module circles really aren't doing it for me"). The glass pane and the champagne ring of every portal are deleted.
+- **Each lab stands on its plinth.** `HubStage` (`Tools/hubdioramas.py`) is re-milled as a miniature of Circuit Workshop's turntable: satin graphite deck, champagne keyline, knurled champagne rim, set-back foot.
+- **One row.** Every plinth is the same size, 0.32 m across, at the same height, 10 cm under the portal's centre (`PortalLayout.plinthRadius`, `plinthDrop`). The home places each lab by its stage rather than fitting it into the old square, so the labs rise from one line.
+- **It turns.** Each plinth swings ±12° about its own axis over 14 s, each on its own phase. The swing builds over 2 s once the labs have landed, and never runs under Reduce Motion.
+- **Names under the plinths.** Each name hangs just under its plinth's front edge.
+- **The opening lands on the rims.** The particles now settle onto each plinth's knurled rim, in its tilted plane (`PortalLayout.rimPoint`), instead of drawing a ring that is no longer there.
+
+**Context:** Two mock-ups were set beside the circles on 2026-10-19: the labs standing free, and each lab in a glass globe resting in a champagne ring. The owner chose free-standing.
+- **Against the circles:** a flat disc behind a 3-D miniature read as an app icon, a badge on a wall.
+- **Against the globes:** they reflected the room (under the star sky they mirrored the hidden living room), and Light's beams sorted poorly behind glass.
+
+**Consequences:**
+- **The home is the labs and their names.** Each portal's target is the plinth, the lab over its whole swept motion, and the name.
+- **The bezel material is gone with the rings.** The champagne on the plinths is the milled alloy.
+- **Birth of a System (planned) changes with this.** Its worlds will land on the plinths, not open into rims.
+- **Tests:** `HubDioramaTests` holds each plinth's size, height and tilt to the layout. It also holds each name under its plinth, that nothing frames a lab, and that the turn starts from rest without a jump. `OpeningTests` holds every particle to its plinth's rim and plane.
+
 ## 2026-10-18 — The turntable turns and carries the circuit
 
 **Decision:** The stage under the floating circuit (B1a) becomes its handle.

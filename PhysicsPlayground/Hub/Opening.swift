@@ -4,8 +4,8 @@
 //
 //  The opening, as pure functions of time (no RealityKit, so it is
 //  tested on numbers). About three seconds in which a field of glowing
-//  particles visibly obeys physics, then settles into the labs' portals
-//  that are the home screen:
+//  particles visibly obeys physics, then settles onto the plinths the
+//  labs stand on, which are the home screen:
 //
 //    1. GATHER   The room dims; the particles fade up at rest on a
 //                horizontal sheet above eye level.
@@ -24,14 +24,14 @@
 //                particles on circles, the dispersion relation ω² = g·k
 //                with the same g — swelling and dying under a sin²
 //                envelope, so it, too, ends with everything at rest.
-//    4. SETTLE   Each particle is drawn onto its portal's rim by a
-//                critically damped spring (closed form, no overshoot),
-//                landing as the portal's glass fades up under it.
+//    4. SETTLE   Each particle is drawn onto its plinth's knurled rim by
+//                a critically damped spring (closed form, no overshoot),
+//                landing as the lab fades up on it.
 //
 //  Between phases nothing is eased: each hand-over happens at an instant
 //  when every particle is at rest, so position and velocity are both
 //  continuous. Any pinch skips to the end; under Reduce Motion there are
-//  no particles at all and the portals simply fade in.
+//  no particles at all and the labs simply fade in.
 //
 
 import Foundation
@@ -50,10 +50,10 @@ enum Opening {
     static let rippleDuration = 0.75
     static let settleStart = rippleStart + rippleDuration
     static let settleDuration = 0.75
-    /// The instant the particles land on the rims — and the bell strikes.
+    /// The instant the particles land on the plinths' rims — and the bell strikes.
     /// Pinned to `SoundPalette.calibrationLanding` by test.
     static let landingTime = settleStart + settleDuration
-    /// The portals' glass fades up as the particles arrive.
+    /// The labs fade up on their plinths as the particles arrive.
     static let portalFadeStart = landingTime - 0.4
     static let portalFadeDuration = 0.5
     /// The particles go out once they have drawn the rims.
@@ -100,7 +100,7 @@ enum Opening {
         let charge: Double
         /// Which portal it ends on, in arc order.
         let portal: Int
-        /// The point on that portal's rim it lands at.
+        /// The point on that portal's plinth rim it lands at.
         let target: SIMD3<Double>
     }
 
@@ -204,11 +204,11 @@ enum Opening {
         return Float(1 - pow(1 - x, 3))
     }
 
-    /// How much smaller a portal is when its glass begins to fade up.
+    /// How much smaller a lab is when it begins to fade up.
     static let portalGrowth: Float = 0.08
 
-    /// A portal's scale as it arrives: it grows the last few per cent into
-    /// place while its glass fades up, and is exactly 1 once that is done.
+    /// A lab's scale as it arrives: it grows the last few per cent into
+    /// place while it fades up, and is exactly 1 once that is done.
     static func portalScale(at time: Double) -> Float {
         1 - portalGrowth * (1 - easeOut(time, from: portalFadeStart, over: portalFadeDuration))
     }
@@ -227,7 +227,7 @@ enum Opening {
     // MARK: The cloud
 
     /// The sheet's height above the floor: above eye level, so the arches
-    /// dip toward the wearer's eyes and the portals are below it.
+    /// dip toward the wearer's eyes and the labs are below it.
     static let sheetHeight = 1.95
 
     /// The particles for these portals: `perPortal` each, deterministic.
@@ -235,8 +235,7 @@ enum Opening {
     /// ones negative; each particle starts one drift upstream of its
     /// portal, so the arch delivers it overhead and the two streams cross.
     static func particles(for portals: [PortalLayout.Portal],
-                          perPortal: Int = 30,
-                          rimRadius: Double = PortalLayout.rimRadius) -> [Particle] {
+                          perPortal: Int = 30) -> [Particle] {
         var state: UInt64 = 0x5DEECE66D
         func random() -> Double {
             state = state &* 6364136223846793005 &+ 1442695040888963407
@@ -253,9 +252,7 @@ enum Opening {
                     sheetHeight + (random() - 0.5) * 0.10,
                     portal.position.z + (random() - 0.5) * 0.60)
                 let angle = 2 * Double.pi * Double(slot) / Double(perPortal)
-                let target = portal.position
-                    + portal.right * (rimRadius * cos(angle))
-                    + SIMD3(0, rimRadius * sin(angle), 0)
+                let target = PortalLayout.rimPoint(of: portal, angle: angle)
                 out.append(Particle(start: start, charge: charge,
                                     portal: index, target: target))
             }
@@ -264,8 +261,9 @@ enum Opening {
     }
 }
 
-/// Where the portals stand: one arc at eye level around the wearer,
-/// facing them. Pure geometry, so it is tested on numbers.
+/// Where the labs stand: one arc at eye level around the wearer, each lab
+/// in miniature on its own plinth, facing them. Pure geometry, so it is
+/// tested on numbers.
 enum PortalLayout {
     struct Portal: Equatable {
         /// The portal's centre, in the space's coordinates.
@@ -274,17 +272,30 @@ enum PortalLayout {
         let yaw: Double
         /// The portal's own right, horizontal.
         let right: SIMD3<Double>
+        /// Horizontal, from the portal toward the wearer: its front.
+        let toward: SIMD3<Double>
     }
 
     /// Far enough that seven fit the field of view with a turn of the head,
-    /// near enough to read a 30 cm portal.
+    /// near enough to read a lab 30 cm across.
     static let radius = 1.75
     /// Eye height for a standing wearer, a little low for a seated one.
     static let height = 1.35
     /// Between neighbouring portals, degrees.
     static let step = 20.0
-    /// The portal's rim, metres: what the particles draw.
-    static let rimRadius = 0.17
+
+    /// The plinth every lab stands on — a miniature of Circuit Workshop's
+    /// turntable, the same size and height in every portal, so seven
+    /// differently shaped labs read as one row of exhibits. Metres, to the
+    /// knurled rim, which is what the particles draw.
+    static let plinthRadius = 0.16
+    /// How far the plinth's top centre stands below the portal's centre:
+    /// every lab rises from the same height.
+    static let plinthDrop = 0.10
+    /// How far every plinth is turned toward the wearer: enough that its
+    /// top reads as a surface from a standing eye, little enough that a
+    /// cable still hangs plumb to it. `HubVignettes.stageTilt` is this.
+    static let plinthTilt = 10 * Double.pi / 180
 
     static func portals(count: Int) -> [Portal] {
         (0..<count).map { index in
@@ -293,7 +304,25 @@ enum PortalLayout {
             let position = SIMD3(radius * sin(azimuth), height, -radius * cos(azimuth))
             return Portal(position: position,
                           yaw: -azimuth,
-                          right: SIMD3(cos(azimuth), 0, sin(azimuth)))
+                          right: SIMD3(cos(azimuth), 0, sin(azimuth)),
+                          toward: SIMD3(-sin(azimuth), 0, cos(azimuth)))
         }
+    }
+
+    /// The point `angle` round a portal's plinth rim, in the space's
+    /// coordinates: 0 at the portal's right, π/2 at its front. The plinth
+    /// is tilted about the portal's right, so its front edge dips.
+    static func rimPoint(of portal: Portal, angle: Double) -> SIMD3<Double> {
+        let side = plinthRadius * cos(angle)
+        let front = plinthRadius * sin(angle)
+        return portal.position
+            + portal.right * side
+            + portal.toward * (front * cos(plinthTilt))
+            + SIMD3(0, -plinthDrop - front * sin(plinthTilt), 0)
+    }
+
+    /// The plinth's top centre, in the space's coordinates.
+    static func plinthCentre(of portal: Portal) -> SIMD3<Double> {
+        portal.position + SIMD3(0, -plinthDrop, 0)
     }
 }

@@ -21,10 +21,13 @@
 //    • Orbital Mechanics — an orrery: the four inner planets on their real
 //      ellipses, perihelia and period ratios, on arms from the Sun's post.
 //
-//  THE STAGE (`Tools/hubdioramas.py`) is the same size and height in every
-//  portal, so seven differently shaped labs read as one row of exhibits.
-//  Diorama space is metres, y up, the stage's top at y = 0; a lab built at
-//  its own size hangs off a `bench` scaled into it.
+//  THE STAGE (`Tools/hubdioramas.py`, a miniature of Circuit Workshop's
+//  turntable) is the plinth each lab stands on in the home, with nothing
+//  round it: the home scales and places every one by its stage
+//  (`PortalLayout.plinthRadius`, `plinthDrop`), so seven differently shaped
+//  labs read as one row of exhibits. Diorama space is metres, y up, the
+//  stage's top at y = 0; a lab built at its own size hangs off a `bench`
+//  scaled into it.
 //
 
 import Foundation
@@ -43,10 +46,10 @@ extension HubVignettes {
 
     /// The stage's radius in diorama space, as `hubdioramas.py` mills it.
     static let stageRadius: Float = 0.100
-    /// How far every stage is turned toward the reader: enough that its top
-    /// reads as a surface from a standing eye, little enough that a cable
-    /// still hangs plumb to it.
-    static let stageTilt: Float = 10 * .pi / 180
+    /// How far every stage is turned toward the reader — the plinth's tilt
+    /// in the home (`PortalLayout.plinthTilt`), where the opening's
+    /// particles land on its rim.
+    static let stageTilt = Float(PortalLayout.plinthTilt)
     /// The stage's share of the common square's width.
     static let stageShare: Float = 0.92
     /// What share of the stage's radius a lab's footprint fills.

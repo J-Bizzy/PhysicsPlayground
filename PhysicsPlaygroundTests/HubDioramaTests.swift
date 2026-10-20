@@ -8,7 +8,9 @@
 //  sends violet further than red, onto its screen; the coil's LED lights
 //  both colours and is dark when the magnet stops; the orrery keeps
 //  Kepler's third law and solves Kepler's equation; and every lab's stage
-//  is the same size in its portal, which is what makes them one set.
+//  is the same size in its portal, which is what makes them one set. In the
+//  home nothing frames them: each stands on its plinth, every plinth one
+//  size at one height with its name under it, turning slowly.
 //
 
 import XCTest
@@ -134,6 +136,82 @@ final class HubDioramaTests: XCTestCase {
         let reference = try XCTUnwrap(widths.values.first)
         for (id, width) in widths {
             XCTAssertEqual(width, reference, accuracy: reference * 0.002, "\(id)'s stage differs")
+        }
+    }
+
+    // MARK: The home
+
+    private func home() -> HubScene {
+        let scene = HubScene()
+        scene.openingAlreadyPlayed = true
+        scene.build(modules: ModuleCatalog.all(appModel: AppModel()))
+        return scene
+    }
+
+    /// Every lab stands on a plinth of `PortalLayout.plinthRadius` whose top
+    /// centre and tilt are the layout's — one size, one height, the row is
+    /// the frame, and the opening's particles land on its rim.
+    func testEveryLabStandsOnOnePlinthAtOneHeight() throws {
+        let scene = home()
+        let layout = PortalLayout.portals(count: scene.portalIDs.count)
+        for (id, slot) in zip(scene.portalIDs, layout) {
+            let anchor = try XCTUnwrap(scene.portal(id))
+            let stage = try XCTUnwrap(anchor.findEntity(named: HubVignettes.stageName),
+                                      "\(id) stands on no plinth")
+            let centre = stage.convert(position: .zero, to: nil)
+            let edge = stage.convert(position: [HubVignettes.stageRadius, 0, 0], to: nil)
+            XCTAssertEqual(simd_distance(centre, edge), Float(PortalLayout.plinthRadius),
+                           accuracy: 1e-4, "\(id)'s plinth is another size")
+            let expected = SIMD3<Float>(PortalLayout.plinthCentre(of: slot))
+            XCTAssertLessThan(simd_distance(centre, expected), 1e-4,
+                              "\(id)'s plinth is not where the particles land")
+            // And in the plane they land in: tipped toward the wearer by the tilt.
+            let tilt = PortalLayout.plinthTilt
+            let normal = SIMD3<Float>(SIMD3<Double>(0, cos(tilt), 0) + slot.toward * sin(tilt))
+            XCTAssertGreaterThan(simd_dot(stage.convert(direction: [0, 1, 0], to: nil), normal),
+                                 1 - 1e-5, "\(id)'s plinth is tipped another way")
+        }
+    }
+
+    /// Nothing frames a lab any more: no glass pane, no ring.
+    func testNothingFramesALab() throws {
+        let scene = home()
+        for id in scene.portalIDs {
+            let anchor = try XCTUnwrap(scene.portal(id))
+            for name in ["portal-pane", "portal-rim", HubScene.vignetteSquareName] {
+                XCTAssertNil(anchor.findEntity(named: name), "\(id) still has a \(name)")
+            }
+        }
+    }
+
+    /// A lab's name hangs under its plinth, clear of it.
+    func testTheNameHangsUnderThePlinth() throws {
+        let scene = home()
+        for id in scene.portalIDs {
+            let anchor = try XCTUnwrap(scene.portal(id))
+            let stage = try XCTUnwrap(anchor.findEntity(named: HubVignettes.stageName))
+            let label = try XCTUnwrap(anchor.findEntity(named: "portal-label-extent"))
+            let plinth = stage.visualBounds(relativeTo: nil)
+            let name = label.visualBounds(relativeTo: nil)
+            XCTAssertLessThan(name.max.y, plinth.min.y, "\(id)'s name overlaps its plinth")
+            XCTAssertGreaterThan(name.max.y, plinth.min.y - 0.05, "\(id)'s name hangs far below it")
+        }
+    }
+
+    /// The turn starts from rest, builds without a jump, and never passes
+    /// ±12° — a turntable easing back and forth, not a spin.
+    func testThePlinthsTurnGentlyFromRest() {
+        for phase in [0.0, 0.73, 2.19, 4.38] {
+            XCTAssertEqual(HubScene.swayAngle(elapsed: -1, phase: phase), 0)
+            XCTAssertEqual(HubScene.swayAngle(elapsed: 0, phase: phase), 0, accuracy: 1e-6)
+            var previous: Float = 0
+            for step in 1...3000 {
+                let angle = HubScene.swayAngle(elapsed: Double(step) / 90, phase: phase)
+                XCTAssertLessThanOrEqual(abs(angle), 0.21 + 1e-6)
+                XCTAssertLessThan(abs(angle - previous), 0.004,
+                                  "the turn jumped at \(Double(step) / 90) s")
+                previous = angle
+            }
         }
     }
 }

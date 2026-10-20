@@ -4,20 +4,26 @@ The home's dioramas: the stage every lab stands on in its portal, and the
 one apparatus the labs do not already mill — the cradle's frame.
 
     /Applications/Blender.app/Contents/MacOS/Blender -b -noaudio \\
-        --python Tools/hubdioramas.py
+        --python Tools/hubdioramas.py [-- HubStage HubCradle]
 
 Writes, under PhysicsPlayground/Models/Hub/:
 
-    HubStage.usdz     the plinth: an anodised graphite disc on a champagne
-                      foot, a champagne keyline let into its top
+    HubStage.usdz     the plinth: a miniature of Circuit Workshop's
+                      turntable (`circuitparts.py`) — a satin graphite deck
+                      with a champagne keyline, in a knurled champagne rim,
+                      on a set-back foot
     HubCradle.usdz    Newton's cradle's frame: two bent champagne tubes on
                       turned feet, the balls' rails at their tops
 
 WHY A STAGE. Seven labs drawn seven ways read as seven pictures; the same
 plinth under each, the same size in every portal, makes them one set — a
-row of exhibits, each standing on its own disc. It is milled in the house
-alloys (`pickupcoil.py`'s stocks): graphite with a clear coat, champagne
-metal, nothing else.
+row of exhibits, each standing on its own disc. Since 2026-10-19 nothing
+frames them (the glass circles and their champagne rings are gone, owner's
+call), so the plinth is the exhibit's whole base and is milled as the
+turntable the owner chose for Circuit Workshop: the same satin deck, the
+same knurled rim, at a sixth of the size — the home stands each lab on the
+thing the labs are handled on. House alloys only (`pickupcoil.py`'s
+stocks): graphite, champagne metal, nothing else.
 
 THE CONTRACT WITH `HubVignettes`. Diorama space is metres, y up, the
 stage's TOP face at y = 0 and its centre on the axis; `STAGE_RADIUS` is
@@ -37,15 +43,20 @@ sys.dont_write_bytecode = True
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import bpy  # noqa: E402
-from blenderprops import band, bevel, cylinder, export, join, material, reset_scene, shade, tube  # noqa: E402
+from blenderprops import band, bevel, box, cylinder, export, join, material, reset_scene, shade, tube  # noqa: E402
 
 ROOT = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
                     "PhysicsPlayground", "Models", "Hub")
 
-# The stage, metres.
+# The stage, metres of diorama space (the home draws it 1.6 times this:
+# `PortalLayout.plinthRadius` over `HubVignettes.stageRadius`).
 STAGE_RADIUS = 0.100
 STAGE_THICKNESS = 0.010
 FOOT_HEIGHT = 0.003
+RIM_DEPTH = 0.005            # the knurled band's own radial width
+# Fine, and shallower than the band: at 0.014 thick with 144 full-height
+# ridges the first still read as a gear's teeth, not a knurl.
+KNURLS = 240
 
 # The cradle's frame, metres, on the stage's top face.
 RAIL_HEIGHT = 0.118
@@ -73,25 +84,45 @@ def stocks():
         "graphite": coat(material("StageGraphite", (0.088, 0.090, 0.096),
                                   roughness=0.30, metallic=0.10), 0.60, 0.25),
         "champagne": material("StageChampagne", (0.83, 0.70, 0.45), roughness=0.28, metallic=0.9),
+        # The turntable's satin deck: a glossy coat at a grazing angle
+        # mirrors the room and reads as a pale slab.
+        "satin": coat(material("StageSatinGraphite", (0.070, 0.072, 0.078),
+                               roughness=0.55, metallic=0.05), 0.15, 0.45),
     }
 
 
 def build_stage(s):
     parts = []
-    # The disc, its top at z = 0.
-    disc = cylinder("StageDisc", STAGE_RADIUS, STAGE_THICKNESS,
-                    location=(0, 0, -STAGE_THICKNESS / 2), vertices=128)
-    bevel(disc, 0.0022, segments=4)
-    parts.append(shade(disc, s["graphite"]))
-    # A champagne keyline let into the top, a few millimetres in from the edge.
-    key = band("StageKeyline", STAGE_RADIUS - 0.006, STAGE_RADIUS - 0.0075, 0.0007,
-               location=(0, 0, 0.00025), vertices=128)
+    deck_radius = STAGE_RADIUS - RIM_DEPTH
+    # The deck, its top at z = 0. Flat-shaded, as the turntable's is:
+    # smoothing blends the bevel's side normals across the cap.
+    deck = cylinder("StageDeck", deck_radius, STAGE_THICKNESS,
+                    location=(0, 0, -STAGE_THICKNESS / 2), vertices=160)
+    bevel(deck, 0.0010, segments=3)
+    parts.append(shade(deck, s["satin"], smooth=False))
+    # The keyline, eight millimetres in: the milled edge every stage wears.
+    key = band("StageKeyline", deck_radius - 0.008, deck_radius - 0.0092, 0.0006,
+               location=(0, 0, 0.0002), vertices=160)
     parts.append(shade(key, s["champagne"]))
-    # The foot: a turned champagne ring the disc sits on, set back so the
-    # disc's bevel catches the light above a shadow line.
-    foot = band("StageFoot", STAGE_RADIUS - 0.004, STAGE_RADIUS - 0.016, FOOT_HEIGHT,
-                location=(0, 0, -STAGE_THICKNESS - FOOT_HEIGHT / 2), vertices=128)
-    bevel(foot, 0.0008, segments=2)
+    # The rim: a champagne band round the deck, a hair proud of it, and
+    # knurled — the turntable's "this turns", which the home's slow sway
+    # shows it does.
+    ring = band("StageRim", STAGE_RADIUS - 0.0008, deck_radius, STAGE_THICKNESS + 0.0004,
+                location=(0, 0, -STAGE_THICKNESS / 2 + 0.0002), vertices=160)
+    bevel(ring, 0.0006, segments=2)
+    parts.append(shade(ring, s["champagne"]))
+    for index in range(KNURLS):
+        angle = 2 * math.pi * index / KNURLS
+        ridge = box("StageKnurl", (0.0014, 0.0008, STAGE_THICKNESS - 0.004),
+                    location=((STAGE_RADIUS - 0.0004) * math.cos(angle),
+                              (STAGE_RADIUS - 0.0004) * math.sin(angle),
+                              -STAGE_THICKNESS / 2))
+        ridge.rotation_euler = (0, 0, angle + math.pi / 2)
+        parts.append(shade(ridge, s["champagne"], smooth=False))
+    # The foot, set back under the deck so its edge floats over a shadow line.
+    foot = band("StageFoot", STAGE_RADIUS - 0.022, STAGE_RADIUS - 0.032, FOOT_HEIGHT,
+                location=(0, 0, -STAGE_THICKNESS - FOOT_HEIGHT / 2), vertices=160)
+    bevel(foot, 0.0006, segments=2)
     parts.append(shade(foot, s["champagne"]))
     return join("HubStage", parts)
 
@@ -130,17 +161,17 @@ def build_cradle(s):
     return join("HubCradle", parts)
 
 
+BUILDERS = {"HubStage": build_stage, "HubCradle": build_cradle}
+
+
 def main():
-    reset_scene()
-    s = stocks()
-    stage = build_stage(s)
-    export([stage], os.path.join(ROOT, "HubStage.usdz"))
-    print("  HubStage verts", len(stage.data.vertices))
-    reset_scene()
-    s = stocks()
-    cradle = build_cradle(s)
-    export([cradle], os.path.join(ROOT, "HubCradle.usdz"))
-    print("  HubCradle verts", len(cradle.data.vertices))
+    # `-- HubStage` mills only that; none, both.
+    wanted = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else list(BUILDERS)
+    for name in wanted:
+        reset_scene()
+        built = BUILDERS[name](stocks())
+        export([built], os.path.join(ROOT, f"{name}.usdz"))
+        print(f"  {name} verts", len(built.data.vertices))
 
 
 if __name__ == "__main__":

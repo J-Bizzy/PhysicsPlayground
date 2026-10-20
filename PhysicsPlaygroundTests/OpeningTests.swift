@@ -168,21 +168,42 @@ final class OpeningTests: XCTestCase {
         }
     }
 
-    /// Every particle ends on its own portal's rim.
-    func testEveryParticleLandsOnItsPortalsRim() {
+    /// Every particle ends on its own plinth's rim: on the circle of the
+    /// plinth's radius about its top centre, in the plinth's tilted plane.
+    func testEveryParticleLandsOnItsPlinthsRim() {
+        let tilt = PortalLayout.plinthTilt
         for particle in cloud {
             let portal = portals[particle.portal]
-            XCTAssertEqual(simd_distance(particle.target, portal.position),
-                           PortalLayout.rimRadius, accuracy: 1e-9)
+            let offset = particle.target - PortalLayout.plinthCentre(of: portal)
+            XCTAssertEqual(simd_length(offset), PortalLayout.plinthRadius, accuracy: 1e-9)
+            let normal = SIMD3<Double>(0, cos(tilt), 0) + portal.toward * sin(tilt)
+            XCTAssertEqual(simd_dot(offset, normal), 0, accuracy: 1e-9,
+                           "a particle landed off the plinth's plane")
             XCTAssertEqual(Opening.position(of: particle, at: Opening.duration),
                            particle.target)
         }
         XCTAssertEqual(Set(cloud.map(\.portal)), Set(0..<7))
     }
 
+    /// The plinth tips its top toward the wearer: the rim's front is lower
+    /// than its back, by the plinth's tilt (`HubDioramaTests` holds the
+    /// milled stage to the same plane).
+    func testThePlinthTipsTowardTheWearer() {
+        let portal = portals[3]
+        let front = PortalLayout.rimPoint(of: portal, angle: .pi / 2)
+        let back = PortalLayout.rimPoint(of: portal, angle: -.pi / 2)
+        XCTAssertLessThan(front.y, back.y)
+        XCTAssertEqual(asin((back.y - front.y) / (2 * PortalLayout.plinthRadius)),
+                       PortalLayout.plinthTilt, accuracy: 1e-9)
+        XCTAssertLessThan(simd_length(SIMD3(front.x, 0, front.z)),
+                          simd_length(SIMD3(back.x, 0, back.z)),
+                          "the front of the rim is not the side nearer the wearer")
+    }
+
     // MARK: The portals
 
-    /// Seven portals on one arc, each facing the wearer, none touching.
+    /// Seven portals on one arc, each facing the wearer, no two plinths
+    /// within 20 cm of touching.
     func testThePortalsFaceTheWearerAndDoNotTouch() {
         XCTAssertEqual(portals.count, 7)
         for portal in portals {
@@ -190,10 +211,11 @@ final class OpeningTests: XCTestCase {
             let normal = SIMD3(sin(portal.yaw), 0, cos(portal.yaw))
             let toWearer = simd_normalize(SIMD3(-portal.position.x, 0, -portal.position.z))
             XCTAssertEqual(simd_dot(normal, toWearer), 1, accuracy: 1e-9)
+            XCTAssertEqual(simd_dot(portal.toward, toWearer), 1, accuracy: 1e-9)
         }
         for (a, b) in zip(portals, portals.dropFirst()) {
             XCTAssertGreaterThan(simd_distance(a.position, b.position),
-                                 2 * PortalLayout.rimRadius + 0.2)
+                                 2 * PortalLayout.plinthRadius + 0.2)
         }
     }
 
