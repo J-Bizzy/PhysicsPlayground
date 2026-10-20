@@ -66,6 +66,8 @@ final class TimeRail {
     /// stretches the rail without stretching the range it maps.
     private var visibility: Float = 0
     var isVisible: Bool { visibility > 0.02 }
+    /// Out of sight and not wanted: nothing a frame could change.
+    var isDormant: Bool { visibility == 0 && !isPaused() }
 
     /// Whether the tape has been drawn off the reel. The reel is what is
     /// on screen while paused; the rail is what a pinch asks for.
@@ -361,7 +363,11 @@ struct TimeRailView: View {
             made.subscription = content.subscribe(
                 to: SceneEvents.Update.self
             ) { [weak made] event in
-                made?.update(
+                // Folded away while the lab runs, the rail has nothing to do
+                // — and the head and hand queries for its arguments are the
+                // dearest part of a frame that does nothing.
+                guard let made, !made.isDormant else { return }
+                made.update(
                     dt: event.deltaTime,
                     viewer: appModel.room.headPosition.map { SIMD3<Float>($0) },
                     placement: appModel.labPlacement.offset,

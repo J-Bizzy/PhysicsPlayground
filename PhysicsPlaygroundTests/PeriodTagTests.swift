@@ -92,14 +92,20 @@ final class PeriodTagTests: XCTestCase {
         let label = BackedLabel(size: 0.024)
         label.setText("T = 1.42 s", color: .white)
 
+        // The glyphs: everything with depth (the plate is flat).
         let glyphs = modelEntities(under: label.root)
             .filter { ($0.model?.mesh.bounds.extents.z ?? 0) > 0.0005 }
-        let run = try? XCTUnwrap(glyphs.first)
-        guard let run else { return XCTFail("no glyph run was built") }
+        guard !glyphs.isEmpty else { return XCTFail("no glyph run was built") }
 
-        let bounds = run.model!.mesh.bounds
-        let centreY = run.position.y + (bounds.min.y + bounds.max.y) / 2
-        let centreX = run.position.x + (bounds.min.x + bounds.max.x) / 2
+        var lower = SIMD3<Float>(repeating: .greatestFiniteMagnitude)
+        var upper = SIMD3<Float>(repeating: -.greatestFiniteMagnitude)
+        for glyph in glyphs where glyph.isEnabled {
+            let box = glyph.visualBounds(relativeTo: label.root)
+            lower = simd_min(lower, box.min)
+            upper = simd_max(upper, box.max)
+        }
+        let centreY = (lower.y + upper.y) / 2
+        let centreX = (lower.x + upper.x) / 2
         XCTAssertEqual(centreX, 0, accuracy: 1e-6,
                        "the run is not centred horizontally on its anchor")
         XCTAssertEqual(centreY, 0, accuracy: 1e-6, """

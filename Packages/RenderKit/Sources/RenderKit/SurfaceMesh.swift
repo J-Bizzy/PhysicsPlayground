@@ -14,6 +14,10 @@
 //  surfaces that fit, in the order given, and drops the rest whole — the
 //  caller orders them by what matters most.
 //
+//  Three meshes take turns (`LiveTube` has the same): a write into the one
+//  mesh the last frame drew waited for the GPU to let go of it, and the
+//  shells' frames ran to 26 ms while a charge moved.
+//
 
 import Metal
 import RealityKit
@@ -47,7 +51,10 @@ public final class SurfaceMesh {
         var nx: Float, ny: Float, nz: Float
     }
 
-    private let mesh: LowLevelMesh
+    private let meshes: [LowLevelMesh]
+    private let resources: [MeshResource]
+    /// The mesh the next update writes.
+    private var next = 0
 
     /// How many surfaces the last update drew.
     public private(set) var drawn = 0
@@ -68,10 +75,17 @@ public final class SurfaceMesh {
         descriptor.vertexLayouts = [
             .init(bufferIndex: 0, bufferStride: MemoryLayout<Vertex>.stride),
         ]
-        guard let mesh = try? LowLevelMesh(descriptor: descriptor),
-              let resource = try? MeshResource(from: mesh) else { return nil }
-        self.mesh = mesh
-        entity.model = ModelComponent(mesh: resource, materials: materials)
+        var meshes: [LowLevelMesh] = []
+        var resources: [MeshResource] = []
+        for _ in 0..<LiveTube.rotation {
+            guard let mesh = try? LowLevelMesh(descriptor: descriptor),
+                  let resource = try? MeshResource(from: mesh) else { return nil }
+            meshes.append(mesh)
+            resources.append(resource)
+        }
+        self.meshes = meshes
+        self.resources = resources
+        entity.model = ModelComponent(mesh: resources[0], materials: materials)
         entity.isEnabled = false
     }
 
@@ -92,6 +106,9 @@ public final class SurfaceMesh {
             return
         }
 
+        let turn = next
+        next = (turn + 1) % meshes.count
+        let mesh = meshes[turn]
         var parts: [LowLevelMesh.Part] = []
         mesh.withUnsafeMutableBytes(bufferIndex: 0) { raw in
             let vertices = raw.bindMemory(to: Vertex.self)
@@ -121,12 +138,13 @@ public final class SurfaceMesh {
             }
         }
         mesh.parts.replaceAll(parts)
+        entity.model?.mesh = resources[turn]
         drawn = kept.count
         entity.isEnabled = true
     }
 
     public func clear() {
-        mesh.parts.removeAll()
+        for mesh in meshes { mesh.parts.removeAll() }
         drawn = 0
         entity.isEnabled = false
     }

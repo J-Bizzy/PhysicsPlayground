@@ -74,10 +74,15 @@ struct MagnetismSpaceView: View {
             renderer.viewRoot.addChild(bloom.root)
             wells = sources
 
+            // The lab shows once its scene has taken in the build (`Settle`):
+            // it starts hidden and fades up then, rather than popping in and
+            // stuttering through the long first frames after a mount.
+            renderer.root.components.set(OpacityComponent(opacity: Settle.hiddenOpacity))
+            var settle = Settle()
             renderer.subscriptions.append(
                 content.subscribe(to: SceneEvents.Update.self) { [weak renderer] event in
                     // The lab's arrival and departure, on the shell's one flag.
-                    if let renderer {
+                    if let renderer, settle.tick(dt: event.deltaTime) {
                         Fade.tick(renderer.root, visible: !appModel.isDeparting,
                                   duration: AppModel.departure)
                     }

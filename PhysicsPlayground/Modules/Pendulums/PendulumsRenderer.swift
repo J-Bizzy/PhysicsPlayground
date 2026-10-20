@@ -601,6 +601,7 @@ final class PendulumsRenderer {
     /// side of the low point, short enough that a fast swing does not paint
     /// a solid disc.
     private static let trailLifetime = 1.4
+    private static let trailFadeStep: Float = 0.04
 
     private func syncTrail(dt: Double, model: PendulumsModel) {
         let lifetime = Self.trailLifetime
@@ -645,18 +646,24 @@ final class PendulumsRenderer {
                 slot.entity.isEnabled = false
                 trailBirths[index] = -1
             } else {
-                // Fade by shrinking.
-                let fade = Float(1 - age / lifetime)
-                slot.entity.scale = SIMD3(repeating: max(fade, 0.15))
+                // Fade by shrinking — written only once it has shrunk a
+                // step: a scale written on every live dot every frame was
+                // most of this lab's main thread, and a 4 % step on a
+                // centimetre dot is a fraction of a millimetre.
+                let fade = max(Float(1 - age / lifetime), 0.15)
+                if abs(fade - slot.entity.scale.x) >= Self.trailFadeStep {
+                    slot.entity.scale = SIMD3(repeating: fade)
+                }
             }
         }
     }
 
     // MARK: Ghost prediction
 
-    /// The one place this module builds a mesh on the frame path,
-    /// deliberately: it runs only while a bob is held and only every sixth
-    /// frame, the mesh is ~180 vertices, and the material is banked. A
+    /// The one place this module meshes on the frame path, deliberately:
+    /// it runs only while a bob is held and only every sixth frame, the
+    /// tube is ~180 vertices written in place (`LiveTube`), and the
+    /// material is banked. A
     /// background worker would trade a hitch nobody was losing for lag on
     /// the one thing that must track the hand exactly.
     private func syncGhost(_ model: PendulumsModel) {
@@ -673,8 +680,7 @@ final class PendulumsRenderer {
             return
         }
         let line = path.map { SIMD3<Float>($0) }
-        if let mesh = TubeMesh.tube(lines: [line], radius: 0.0035, sides: 3) {
-            ghostEntity.model = ModelComponent(mesh: mesh, materials: [ghostMaterial])
-        }
+        LiveTube.apply(TubeMesh.buffers(lines: [line], radius: 0.0035, sides: 3),
+                       to: ghostEntity, material: ghostMaterial)
     }
 }

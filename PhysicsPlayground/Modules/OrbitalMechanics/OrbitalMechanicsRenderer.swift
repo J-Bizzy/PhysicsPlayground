@@ -1130,15 +1130,10 @@ final class OrbitalMechanicsRenderer {
 
     private func applyPrediction(_ buffers: PredictionBuffers) {
         guard predictionActive else { return }
-        if let mesh = TubeMesh.mesh(from: buffers.core) {
-            predictionEntity.model = ModelComponent(mesh: mesh, materials: [predictionMaterial])
-            predictionCasingEntity.model = TubeMesh.mesh(from: buffers.casing).map {
-                ModelComponent(mesh: $0, materials: [predictionCasingMaterial])
-            }
-        } else {
-            predictionEntity.model = nil
-            predictionCasingEntity.model = nil
-        }
+        // Rewritten in place (`LiveTube`) while the body is held.
+        LiveTube.apply(buffers.core, to: predictionEntity, material: predictionMaterial)
+        LiveTube.apply(buffers.core.isEmpty ? TubeBuffers() : buffers.casing,
+                       to: predictionCasingEntity, material: predictionCasingMaterial)
     }
 
     private func syncPrediction(_ model: OrbitalMechanicsModel) {

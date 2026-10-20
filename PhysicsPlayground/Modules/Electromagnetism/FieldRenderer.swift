@@ -195,9 +195,12 @@ final class FieldRenderer {
         lineGlowEntity.isEnabled = false
         lineCasingEntity.isEnabled = false
 
+        // At most 30 times a second (`GeometryPipeline.minimumInterval`):
+        // between results the flow warp carries the lines with the charges.
         geometryPipeline = GeometryPipeline(
             compute: { Self.computeGeometry($0) },
-            apply: { [weak self] in self?.applyGeometry($0) }
+            apply: { [weak self] in self?.applyGeometry($0) },
+            minimumInterval: Self.geometryInterval
         )
 
         viewRoot.addChild(shellRoot)
@@ -208,9 +211,13 @@ final class FieldRenderer {
         if let surface = shellSurface { shellRoot.addChild(surface.entity) }
         shellPipeline = GeometryPipeline(
             compute: { Self.computeShells($0) },
-            apply: { [weak self] in self?.applyShells($0) }
+            apply: { [weak self] in self?.applyShells($0) },
+            minimumInterval: Self.geometryInterval
         )
     }
+
+    /// How often moving charges re-mesh the lines and shells.
+    nonisolated static let geometryInterval = 1.0 / 30
 
     // MARK: Render loop
 
@@ -899,22 +906,11 @@ final class FieldRenderer {
     }
 
     private func applyGeometry(_ result: GeometryResult) {
-        if let casingMesh = TubeMesh.mesh(from: result.tubeCasing) {
-            lineCasingEntity.model = ModelComponent(mesh: casingMesh,
-                                                    materials: [lineCasingMaterial])
-        } else {
-            lineCasingEntity.model = nil
-        }
-        if let mesh = TubeMesh.mesh(from: result.tube) {
-            linesEntity.model = ModelComponent(mesh: mesh, materials: [lineMaterial])
-        } else {
-            linesEntity.model = nil
-        }
-        if let glowMesh = TubeMesh.mesh(from: result.tubeGlow) {
-            lineGlowEntity.model = ModelComponent(mesh: glowMesh, materials: [lineGlowMaterial])
-        } else {
-            lineGlowEntity.model = nil
-        }
+        // Rewritten in place (`LiveTube`): a charge being dragged re-meshes
+        // the lines every frame.
+        LiveTube.apply(result.tubeCasing, to: lineCasingEntity, material: lineCasingMaterial)
+        LiveTube.apply(result.tube, to: linesEntity, material: lineMaterial)
+        LiveTube.apply(result.tubeGlow, to: lineGlowEntity, material: lineGlowMaterial)
         syncArrowHeads(points: result.arrowPoints, directions: result.arrowVectors)
         // Fresh geometry is anchored to its own charge layout; re-derive
         // the warp so there's no pop when it lands mid-drag.

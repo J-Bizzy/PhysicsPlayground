@@ -17,6 +17,13 @@ public final class GeometryPipeline<Job: Sendable, Output: Sendable> {
     /// How a job arriving while another waits is folded into it. Without
     /// one the newest job simply replaces the pending one.
     private let coalesce: ((Job, Job) -> Job)?
+    /// The least time between two results applied, seconds; 0 applies each
+    /// as it lands. A result is a mesh written in place, and RealityKit
+    /// lets only so many such writes be in flight at once: Electric Fields'
+    /// lines and shells, each rewritten every frame while a charge moved,
+    /// left the main thread waiting on the renderer half of every frame.
+    /// Jobs arriving in between fold into the next, as ever.
+    private let minimumInterval: Double
     private var pendingJob: Job?
     private var isRunning = false
     private var worker: Task<Void, Never>?
@@ -24,11 +31,13 @@ public final class GeometryPipeline<Job: Sendable, Output: Sendable> {
     public init(
         compute: @escaping @Sendable (Job) -> Output,
         apply: @escaping @MainActor (Output) -> Void,
-        coalesce: ((Job, Job) -> Job)? = nil
+        coalesce: ((Job, Job) -> Job)? = nil,
+        minimumInterval: Double = 0
     ) {
         self.compute = compute
         self.apply = apply
         self.coalesce = coalesce
+        self.minimumInterval = minimumInterval
     }
 
     deinit { worker?.cancel() }
@@ -50,7 +59,14 @@ public final class GeometryPipeline<Job: Sendable, Output: Sendable> {
                 // Checked after the await — the danger is work finishing
                 // once the scene it was for is gone.
                 guard !Task.isCancelled else { break }
+                let applied = ContinuousClock.now
                 self?.apply(output)
+                // Paced: the worker rests out the interval (the main thread
+                // does not), and whatever arrived meanwhile goes next.
+                if let interval = self?.minimumInterval, interval > 0 {
+                    let rest = Duration.seconds(interval) - (ContinuousClock.now - applied)
+                    if rest > .zero { try? await Task.sleep(for: rest) }
+                }
             }
             self?.isRunning = false
         }

@@ -287,6 +287,16 @@ struct PlaygroundSpaceView: View {
             // to do, so this walks up from whatever was activated exactly as the
             // gesture chains do.
             AccessibilityActionRouter()
+
+            #if DEBUG
+            // `-frameLog 1`: frame pacing in the console (`FrameLog`).
+            if UserDefaults.standard.bool(forKey: "frameLog") {
+                FrameLogView(scene: { [appModel] in
+                    (appModel.activeModuleID ?? "home")
+                        + (appModel.surroundings == .deepSpace ? " (space)" : "")
+                })
+            }
+            #endif
         }
     }
 }

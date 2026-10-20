@@ -16,6 +16,20 @@ A running log of consequential decisions — architectural, physical, or product
 
 (The template sat stranded at line 309, mid-log between two 2026-07-29 entries, until 2026-08-01.)
 
+## 2026-10-20 — Frame pacing: every scene holds 90 Hz, and none arrives through a stutter
+
+**Decision:** The owner asked for "a constant FPS" ahead of an App Store release. The pass was measured, not guessed. A main-thread sample per scene, and a new DEBUG frame log (`-frameLog 1`) that names every dropped frame, found five causes, and each is fixed at its source.
+- **Attachments moving every frame.** The home's seven name labels rode the floating portal body, and a SwiftUI attachment that moves is laid out again every frame. They hang from the anchor now. Together with the next fix, the home went from 38 % busy to 7 %, and from 53 % to 10 % in Deep space.
+- **Materials set every frame.** The Light diorama repainted 32 beams and 7 spots on every frame. It now repaints a beam only when its colour changes, and the spots once.
+- **Scale written on every live dot.** Pendulums' strobe trail wrote up to 360 scales a frame. It writes a dot only when it has shrunk a 4 % step. Pendulums went from 35 % busy to 4 %.
+- **Meshes generated per update.** Field lines, magnet lines, a projectile's arc, an orbit's prediction and a held bob's ghost were each a new `MeshResource` on every update. They are written in place now (`LiveTube`, three meshes in turn). Re-meshing every frame of a drag is also paced to 30 Hz (`GeometryPipeline.minimumInterval`), because RealityKit lets only so many in-place writes be in flight. Electric Fields with moving charges and shells went from 99 % busy, with frames of 17–26 ms, to 10 % busy and none long.
+- **Text generated per reading.** A live number generated a text mesh for each new string, at up to 8 Hz, and dropped a frame each time. A line of text is now cached glyphs moved along by the font's advances (`GlyphRun`); kerning is the price.
+- **Scenes shown through their first frames.** Every lab and the home dropped frames of 30–250 ms just after mounting, which is exactly when they appeared and the opening began. A scene now waits at 0.5 % opacity, drawn but unseen, until 12 frames in a row run clean (`Settle`), then fades up. The opening's clock and its sound start then. Labs never actually faded in before; they do now, over 0.22 s.
+
+**Context:** All of this is measured in the simulator, where the GPU is the Mac's. The main-thread costs and the stalls transfer to the device; the absolute frame times do not. The device check is the authority.
+
+**Consequences:** `ARCHITECTURE.md`'s in-place-mesh exception now names four types and the two rules learned with them. A new live readout goes through `Callout` or `BackedLabel` and gets glyphs for free. A new tube re-meshed during a drag uses `LiveTube`, and if it updates every frame its pipeline takes a `minimumInterval`. `SettleTests`, and the reworked `BackedLabelTests`/`PeriodTagTests`, hold it.
+
 ## 2026-10-19 — The home's labs stand free on plinths; the circles go
 
 **Decision:** Nothing frames a lab in the home any more (owner's call: "the module circles really aren't doing it for me"). The glass pane and the champagne ring of every portal are deleted.

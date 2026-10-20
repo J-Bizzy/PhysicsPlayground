@@ -285,6 +285,8 @@ final class HubScene {
     private var openingTime: Double {
         openingFrozenAt ?? (time - openingStart)
     }
+    /// The opening's clock — for tests.
+    var openingClock: Double { openingTime }
 
     // MARK: The wordmark
 
@@ -377,7 +379,10 @@ final class HubScene {
         // Its name under the plinth's front edge: system type on glass, with
         // the lab's colour as a dot. A transparent proxy the label's size
         // stands with it, so the portal's target is measured against the
-        // label it covers.
+        // label it covers. It hangs from the anchor, not the floating body:
+        // a SwiftUI attachment that moves every frame is laid out again
+        // every frame (seven of them were a tenth of the home's main thread),
+        // and four millimetres of float is not worth that.
         let plinthLow = built.entity.findEntity(named: HubVignettes.stageName)?
             .visualBounds(relativeTo: body).min.y
             ?? -Float(PortalLayout.plinthDrop + PortalLayout.plinthRadius * 0.3)
@@ -396,7 +401,7 @@ final class HubScene {
         proxy.name = "portal-label-extent"
         proxy.components.set(OpacityComponent(opacity: 0))
         label.addChild(proxy)
-        body.addChild(label)
+        anchor.addChild(label)
 
         // The whole exhibit is the target — the plinth, the lab over its
         // whole motion and its name. `contentExtents` is the lab swept over
@@ -479,7 +484,8 @@ final class HubScene {
             // Reduce Motion, or a walk back from a lab: the portals fade in.
             openingPhase = .done
             swayOrigin = time
-            presence = 0
+            presence = Settle.hiddenOpacity
+            root.components.set(OpacityComponent(opacity: presence))
             return
         }
         openingPhase = .running
@@ -515,10 +521,8 @@ final class HubScene {
         root.addChild(shield)
         skipShield = shield
 
-        // Swell and bell, baked into one WAV whose bell is pinned to the landing.
-        if !frozen {
-            SoundPalette.play(.calibration, on: titleAnchor, volume: 0.55)
-        }
+        // The swell and bell start with the clock, once the scene has
+        // settled (`animate`); pinned for a still, there is neither.
         updateOpening()
     }
 
@@ -598,7 +602,10 @@ final class HubScene {
             finishOpening()
             return
         }
-        let light = Opening.particleOpacity(at: t)
+        // Never quite 0 while the clock holds, so the particles are drawn
+        // (and ready) before they are seen; see `Settle.hiddenOpacity`.
+        let light = openingClockStarted || openingFrozenAt != nil
+            ? Opening.particleOpacity(at: t) : Settle.hiddenOpacity
         particleRoot.isEnabled = light > 0.001
         particleRoot.components.set(OpacityComponent(opacity: light))
         if particleRoot.isEnabled {
@@ -682,12 +689,29 @@ final class HubScene {
 
     // MARK: Every frame
 
-    func animate(dt: Double) {
+    func animate(dt rawDt: Double) {
         // Clamped: the first event after the space presents can carry seconds
         // in one delta, which would spend the opening before anyone saw it.
-        let dt = min(dt, 1.0 / 30.0)
+        let dt = min(rawDt, 1.0 / 30.0)
         time += dt
-        fadePresence(dt: dt)
+        // Nothing shows until the scene has settled (`Settle`): the frames
+        // just after the build run long, and the opening's first particles —
+        // or the fade back in from a lab — stuttered through them. Until
+        // then the opening's clock holds at zero, where nothing is lit.
+        let arrived = settle.tick(dt: rawDt)
+        if openingPhase == .running, openingFrozenAt == nil, !openingClockStarted {
+            openingStart = time
+            if arrived {
+                openingClockStarted = true
+                // Swell and bell, baked into one WAV whose bell is pinned to
+                // the landing — so it starts with the clock, not the build.
+                SoundPalette.play(.calibration, on: titleAnchor, volume: 0.55)
+                #if DEBUG
+                LaunchTrace.mark("[frames] the opening's clock starts")
+                #endif
+            }
+        }
+        if arrived { fadePresence(dt: dt) }
         updateOpening()
 
         // Every portal runs its lab's physics, floats a few millimetres and
@@ -720,6 +744,11 @@ final class HubScene {
                 : HubTitleStyle.rake(time: time, phase: Double(index) * 1.3)
         }
     }
+
+    /// Whether the scene has taken in its build (`Settle`).
+    private var settle = Settle()
+    /// Whether the opening's clock has started from its hold at zero.
+    private var openingClockStarted = false
 
     /// How far the home has faded up, 0…1; the root dissolve that is the
     /// whole entrance under Reduce Motion, and the exit when a lab is chosen.

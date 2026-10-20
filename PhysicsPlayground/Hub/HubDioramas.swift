@@ -413,12 +413,19 @@ extension HubVignettes {
             bench.addChild(sleeve)
             return sleeve
         }
-        let spots = spectrumColours.map { _ -> ModelEntity in
-            let spot = ModelEntity(mesh: Primitives.sphere(radius: 0.0075), materials: [])
+        // Each spot is one wavelength's colour for good: painted once.
+        let spots = spectrumColours.map { nanometers -> ModelEntity in
+            let rgb = Spectrum.linearRGB(nanometers: nanometers)
+            let spot = ModelEntity(mesh: Primitives.sphere(radius: 0.0075),
+                                   materials: [Materials.unlit(OpticsRenderer.color(rgb), opacity: 0.85)])
             spot.isEnabled = false
             bench.addChild(spot)
             return spot
         }
+        // The colour each beam was last painted, so a frame repaints only
+        // a beam whose colour changed: a material set every frame on 32
+        // beams was most of this diorama's cost.
+        var painted = [SIMD3<Double>?](repeating: nil, count: beamCount)
 
         let screenPoint = layout.screenPoint, screenNormal = layout.screenNormal
         let period = 10.0
@@ -460,18 +467,19 @@ extension HubVignettes {
                     continue
                 }
                 let stroke = strokes[index]
-                let colour = OpticsRenderer.color(stroke.color)
                 stretch(cores[index], from: stroke.a, to: stroke.b, radius: 0.0032)
                 stretch(sleeves[index], from: stroke.a, to: stroke.b, radius: 0.0085)
-                cores[index].model?.materials = [Materials.unlit(colour)]
-                sleeves[index].model?.materials = [Materials.unlit(colour, opacity: 0.28)]
+                if painted[index] != stroke.color {
+                    painted[index] = stroke.color
+                    let colour = OpticsRenderer.color(stroke.color)
+                    cores[index].model?.materials = [Materials.unlit(colour)]
+                    sleeves[index].model?.materials = [Materials.unlit(colour, opacity: 0.28)]
+                }
             }
             for (index, spot) in spots.enumerated() {
                 guard let at = landed[index] else { spot.isEnabled = false; continue }
                 spot.isEnabled = true
                 spot.position = at + SIMD3<Float>(screenNormal) * 0.003
-                let rgb = Spectrum.linearRGB(nanometers: spectrumColours[index])
-                spot.model?.materials = [Materials.unlit(OpticsRenderer.color(rgb), opacity: 0.85)]
             }
         }
     }

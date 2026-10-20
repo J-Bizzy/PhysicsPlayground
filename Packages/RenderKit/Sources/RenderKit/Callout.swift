@@ -3,8 +3,10 @@
 //  RenderKit
 //
 //  A billboarded label tethered to a point by a dot and leader line.
-//  Text meshes are cached by (string, size) — per-frame generation is
-//  the classic way to tank a scene.
+//  One line is set from cached glyphs (`GlyphRun`), so a live reading
+//  moves glyphs instead of generating text; a wrapped paragraph's mesh is
+//  cached by (string, size, width) — per-frame generation is the classic
+//  way to tank a scene.
 //
 
 import QuartzCore
@@ -22,7 +24,10 @@ public final class Callout {
     private let dot = Entity()
     private let leader = Entity()
     private let labelPivot = Entity()
+    /// A wrapped paragraph, as one generated mesh.
     private var labelEntity: ModelEntity?
+    /// One line, from cached glyphs (`GlyphRun`): what a live number is.
+    private var run: GlyphRun?
 
     private let color: UIColor
     private let textSize: CGFloat
@@ -99,31 +104,50 @@ public final class Callout {
         }
         lastText = text
         labelEntity?.removeFromParent()
-        backingEntity?.removeFromParent()
+        labelEntity = nil
         guard !text.isEmpty else {
-            labelEntity = nil
+            run?.root.removeFromParent()
+            backingEntity?.removeFromParent()
             backingEntity = nil
             return true
         }
-        let mesh = Self.textMesh(text, size: textSize, wrapWidth: wrapWidth)
-        var material = UnlitMaterial(color: color)
-        material.blending = .opaque
-        let model = ModelEntity(mesh: mesh, materials: [material])
-        // Centre the glyph run on the pivot.
-        let bounds = mesh.bounds
-        model.position = [-(bounds.min.x + bounds.max.x) / 2,
-                          -(bounds.min.y + bounds.max.y) / 2, 0]
+        let bounds: BoundingBox
+        if wrapWidth > 0 {
+            // A paragraph does not tick: one generated mesh.
+            run?.root.removeFromParent()
+            let mesh = Self.textMesh(text, size: textSize, wrapWidth: wrapWidth)
+            var material = UnlitMaterial(color: color)
+            material.blending = .opaque
+            let model = ModelEntity(mesh: mesh, materials: [material])
+            // Centre the glyph run on the pivot.
+            bounds = mesh.bounds
+            model.position = [-(bounds.min.x + bounds.max.x) / 2,
+                              -(bounds.min.y + bounds.max.y) / 2, 0]
+            labelEntity = model
+        } else {
+            let run = self.run ?? GlyphRun(size: textSize, color: color)
+            self.run = run
+            bounds = run.set(text)
+        }
         if showsBacking {
             // A sibling of the centred glyphs, never a child — parenting to
             // the shifted model lands the plate off by the centring shift.
-            let plate = BackedLabel.backing(behind: bounds, size: textSize)
-            labelPivot.addChild(plate)
-            backingEntity = plate
+            if let plate = backingEntity {
+                BackedLabel.reshape(plate, behind: bounds, size: textSize)
+            } else {
+                let plate = BackedLabel.backing(behind: bounds, size: textSize)
+                labelPivot.addChild(plate)
+                backingEntity = plate
+            }
         } else {
+            backingEntity?.removeFromParent()
             backingEntity = nil
         }
-        labelPivot.addChild(model)
-        labelEntity = model
+        if let labelEntity {
+            labelPivot.addChild(labelEntity)
+        } else if let run, run.root.parent == nil {
+            labelPivot.addChild(run.root)
+        }
         publishAccessibility()
         return true
     }

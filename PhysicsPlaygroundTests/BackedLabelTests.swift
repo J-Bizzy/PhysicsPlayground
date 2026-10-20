@@ -15,24 +15,43 @@ import RenderKit
 @MainActor
 final class BackedLabelTests: XCTestCase {
 
-    func testThePlateWrapsTheGlyphs() {
+    /// A backed label is a plate and a glyph run (`GlyphRun`, since
+    /// 2026-10-20: one line set from cached glyphs, not a mesh per string).
+    private func parts(of label: BackedLabel) -> (plate: ModelEntity, run: Entity)? {
+        let children = label.root.children
+        guard children.count == 2,
+              let plate = children.first(where: { ($0 as? ModelEntity)?.model != nil }) as? ModelEntity,
+              let run = children.first(where: { $0 !== plate }) else { return nil }
+        return (plate, run)
+    }
+
+    func testThePlateWrapsTheGlyphs() throws {
         let label = BackedLabel(size: 0.02)
         label.setText("12.5 V", color: .white)
 
-        let models = label.root.children.compactMap { $0 as? ModelEntity }
-        XCTAssertEqual(models.count, 2, "a backed label is a plate and its glyphs")
-        guard models.count == 2 else { return }
-        let plate = models[0]
-        let glyphs = models[1]
-
-        let plateExtents = plate.model?.mesh.bounds.extents ?? .zero
-        let glyphExtents = glyphs.model?.mesh.bounds.extents ?? .zero
-        XCTAssertGreaterThan(plateExtents.x, glyphExtents.x,
+        let (plate, run) = try XCTUnwrap(parts(of: label), "a backed label is a plate and its glyphs")
+        let plateExtents = plate.visualBounds(relativeTo: label.root).extents
+        let glyphBounds = run.visualBounds(relativeTo: label.root)
+        XCTAssertGreaterThan(plateExtents.x, glyphBounds.extents.x,
                              "the plate must be wider than the text it carries")
-        XCTAssertGreaterThan(plateExtents.y, glyphExtents.y,
+        XCTAssertGreaterThan(plateExtents.y, glyphBounds.extents.y,
                              "the plate must be taller than the text it carries")
-        XCTAssertLessThan(plate.position.z, glyphs.position.z,
+        XCTAssertLessThan(plate.position.z, glyphBounds.min.z,
                           "darkness sits behind the light, never over it")
+    }
+
+    /// A new reading moves glyphs: nothing is generated for it, and the
+    /// run and the plate are the same entities before and after.
+    func testANewReadingReusesItsGlyphsAndPlate() throws {
+        let label = BackedLabel(size: 0.02)
+        label.setText("12.5 V", color: .white)
+        let before = try XCTUnwrap(parts(of: label))
+        // Past the 8 Hz limit, as a live reading would be.
+        Thread.sleep(forTimeInterval: 0.13)
+        label.setText("12.8 V", color: .white)
+        let after = try XCTUnwrap(parts(of: label))
+        XCTAssertTrue(before.plate === after.plate)
+        XCTAssertTrue(before.run === after.run)
     }
 
     func testTheBackingIsNeverATarget() {
@@ -65,18 +84,14 @@ final class BackedLabelTests: XCTestCase {
         let pivot = try XCTUnwrap(callout.root.children.first {
             $0.components[BillboardComponent.self] != nil
         }, "the callout lost its billboarded label pivot")
-        let models = pivot.children.compactMap { $0 as? ModelEntity }
-        XCTAssertEqual(models.count, 2, "a backed callout is a plate and its glyphs")
-        guard models.count == 2 else { return }
-        let plate = models[0]
-        let glyphs = models[1]
+        XCTAssertEqual(pivot.children.count, 2, "a backed callout is a plate and its glyphs")
+        let plate = try XCTUnwrap(pivot.children.first { ($0 as? ModelEntity)?.model != nil })
+        let run = try XCTUnwrap(pivot.children.first { $0 !== plate })
 
-        let bounds = try XCTUnwrap(glyphs.model).mesh.bounds
+        let bounds = run.visualBounds(relativeTo: pivot)
         // The glyph run's centre, in pivot space, must be the pivot…
-        XCTAssertEqual(glyphs.position.x + (bounds.min.x + bounds.max.x) / 2, 0,
-                       accuracy: 1e-5)
-        XCTAssertEqual(glyphs.position.y + (bounds.min.y + bounds.max.y) / 2, 0,
-                       accuracy: 1e-5)
+        XCTAssertEqual((bounds.min.x + bounds.max.x) / 2, 0, accuracy: 1e-5)
+        XCTAssertEqual((bounds.min.y + bounds.max.y) / 2, 0, accuracy: 1e-5)
         // …and the plate must sit exactly there, not off by the shift.
         XCTAssertEqual(plate.position.x, 0, accuracy: 1e-5,
                        "the plate is off the text by the centring shift — "

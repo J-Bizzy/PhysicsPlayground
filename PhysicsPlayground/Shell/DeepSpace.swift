@@ -34,8 +34,8 @@ struct DeepSpaceView: View {
             stage.build(showsSun: showsSun)
             content.add(stage.root)
             // `[weak stage]`: the subscription is held on the stage.
-            stage.subscription = content.subscribe(to: SceneEvents.Update.self) { [weak stage] _ in
-                stage?.tick()
+            stage.subscription = content.subscribe(to: SceneEvents.Update.self) { [weak stage] event in
+                stage?.tick(dt: event.deltaTime)
             }
         } update: { _ in
             stage.showsSun = showsSun
@@ -68,10 +68,14 @@ final class DeepSpaceStage {
         sun = root.findEntity(named: DeepSpace.sunName)
         sun?.isEnabled = showsSun
         self.showsSun = showsSun
-        root.components.set(OpacityComponent(opacity: 0))
+        root.components.set(OpacityComponent(opacity: Settle.hiddenOpacity))
     }
 
-    func tick() {
+    /// Waits for the scene to take in the sky (`Settle`), then fades up.
+    private var settle = Settle()
+
+    func tick(dt: Double) {
+        guard settle.tick(dt: dt) else { return }
         Fade.tick(root, visible: true, duration: DeepSpace.arrival)
         if let sun { Fade.tick(sun, visible: showsSun, duration: DeepSpace.sunFade) }
     }

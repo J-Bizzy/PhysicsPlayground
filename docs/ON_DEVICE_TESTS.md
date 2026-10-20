@@ -143,6 +143,19 @@ contradicts this section, this section is current.
 - [ ] **The cut test:** enter all seven labs in sequence; the room's
       brightness moves only at Orbital Mechanics, and ramps rather than steps.
 
+## ⟳ 2026-10-20 — frame pacing (judge on the device; the simulator's GPU is the Mac's)
+
+Run a Debug build from Xcode with `-frameLog 1` in the scheme's arguments and keep the console open. Every five seconds it prints each scene's median, 99th-percentile and worst frame. Every frame over two budgets is named with its time.
+
+- [ ] **Every lab at rest holds 90 Hz:** the steady lines read about 11.1 ms median with 0 long. In the simulator, every lab and the home in both surroundings do.
+- [ ] **Entering a lab fades it up, it does not pop.** The room stands alone for a moment (under half a second), then the lab fades up over about 0.2 s. No dropped frame is named after the lab appears.
+- [ ] **The opening plays clean.** After launch there is a short still beat, then the particles fade up. Any "dropped" lines come before "the opening's clock starts", never after.
+- [ ] **Dragging a charge with Field lines and Equipotentials on stays smooth.** The lines move with the charge every frame; their shape refreshes 30 times a second, which should be invisible.
+- [ ] **Dragging a magnet with Field lines on**, the same.
+- [ ] **A thrown ball's numbers (More › Numbers) change without a hitch.** The ball's flight never stutters as its speed and height tick over.
+- [ ] **The labels read as before:** "45° · 6.0 m/s", the period tag "T = 1.42 s", a compass reading. They are now set from cached letters without kerning. Judge whether any pair of letters looks spaced oddly.
+- [ ] **The home's names stay put while the plinths float.** They no longer bob 4 mm with the plinth, which should not be noticeable.
+
 ## The 2026-10-14 polish pass
 
 - [ ] **The bench labels.** Stand where you stand for the demo: every

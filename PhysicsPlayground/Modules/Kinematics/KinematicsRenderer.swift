@@ -591,52 +591,27 @@ final class KinematicsRenderer {
     }
 
     /// Both passes of the arc, built off-thread together so the casing
-    /// can never lag a frame behind the line it underwrites.
+    /// can never lag a frame behind the line it underwrites, and written
+    /// into each entity's mesh in place (`LiveTube`): dragging the bead
+    /// re-meshes the arc every frame.
     private nonisolated struct ArcTube: Sendable {
         var core = TubeBuffers()
         var casing = TubeBuffers()
     }
 
     private func applyArc(_ tube: ArcTube) {
-        if let mesh = TubeMesh.mesh(from: tube.core) {
-            arcEntity.model = ModelComponent(mesh: mesh, materials: [arcMaterial])
-        } else {
-            arcEntity.model = nil
-        }
-        if let casingMesh = TubeMesh.mesh(from: tube.casing) {
-            arcCasingEntity.model = ModelComponent(mesh: casingMesh,
-                                                   materials: [arcCasingMaterial])
-        } else {
-            arcCasingEntity.model = nil
-        }
+        LiveTube.apply(tube.core, to: arcEntity, material: arcMaterial)
+        LiveTube.apply(tube.casing, to: arcCasingEntity, material: arcCasingMaterial)
     }
 
     private func applyGhost(_ tube: ArcTube) {
-        if let mesh = TubeMesh.mesh(from: tube.core) {
-            ghostEntity.model = ModelComponent(mesh: mesh, materials: [ghostMaterial])
-        } else {
-            ghostEntity.model = nil
-        }
-        if let casingMesh = TubeMesh.mesh(from: tube.casing) {
-            ghostCasingEntity.model = ModelComponent(mesh: casingMesh,
-                                                     materials: [ghostCasingMaterial])
-        } else {
-            ghostCasingEntity.model = nil
-        }
+        LiveTube.apply(tube.core, to: ghostEntity, material: ghostMaterial)
+        LiveTube.apply(tube.casing, to: ghostCasingEntity, material: ghostCasingMaterial)
     }
 
     private func applyRecordedPaths(_ tube: ArcTube) {
-        if let mesh = TubeMesh.mesh(from: tube.core) {
-            pathEntity.model = ModelComponent(mesh: mesh, materials: [pathMaterial])
-        } else {
-            pathEntity.model = nil
-        }
-        if let casingMesh = TubeMesh.mesh(from: tube.casing) {
-            pathCasingEntity.model = ModelComponent(mesh: casingMesh,
-                                                    materials: [pathCasingMaterial])
-        } else {
-            pathCasingEntity.model = nil
-        }
+        LiveTube.apply(tube.core, to: pathEntity, material: pathMaterial)
+        LiveTube.apply(tube.casing, to: pathCasingEntity, material: pathCasingMaterial)
     }
 
     /// The recorded-path tube exists exactly while the room is scrubbed.

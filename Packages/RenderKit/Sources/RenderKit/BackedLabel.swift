@@ -25,6 +25,10 @@ public final class BackedLabel {
     private var lastText: String?
     private var lastColor: UIColor?
     private var lastTextTime: Double = 0
+    /// The glyphs and the plate, kept across changes (`GlyphRun`): a new
+    /// reading moves glyphs, it does not generate text.
+    private var run: GlyphRun?
+    private var card: ModelEntity?
 
     public init(size: CGFloat) {
         self.size = size
@@ -47,21 +51,24 @@ public final class BackedLabel {
         }
         lastText = text
         lastColor = color
-        // Snapshot first: `children` is live; removing while iterating
-        // skips every other element.
-        for child in Array(root.children) { child.removeFromParent() }
-        guard !text.isEmpty else { return true }
-
-        let mesh = Callout.textMesh(text, size: size)
-        var material = UnlitMaterial(color: color)
-        material.blending = .opaque
-        let glyphs = ModelEntity(mesh: mesh, materials: [material])
-        let bounds = mesh.bounds
-        glyphs.position = [-(bounds.min.x + bounds.max.x) / 2,
-                           -(bounds.min.y + bounds.max.y) / 2, 0]
-
-        root.addChild(Self.backing(behind: bounds, size: size))
-        root.addChild(glyphs)
+        guard !text.isEmpty else {
+            // Gone from the room, kept for the next reading.
+            card?.removeFromParent()
+            run?.root.removeFromParent()
+            return true
+        }
+        let run = self.run ?? GlyphRun(size: size, color: color)
+        self.run = run
+        run.setColor(color)
+        let bounds = run.set(text)
+        if let card {
+            Self.reshape(card, behind: bounds, size: size)
+        } else {
+            card = Self.backing(behind: bounds, size: size)
+        }
+        // The plate first, then the glyphs, as they always stood.
+        if let card, card.parent == nil { root.addChild(card) }
+        if run.root.parent == nil { root.addChild(run.root) }
         return true
     }
 
@@ -69,19 +76,28 @@ public final class BackedLabel {
     /// copy of the inset/corner arithmetic keeps every backing identical.
     static func backing(behind bounds: BoundingBox,
                         size: CGFloat) -> ModelEntity {
+        let material = Materials.unlit(UIColor(white: 0.02, alpha: 1), opacity: 0.58)
+        let card = ModelEntity(mesh: plateMesh(behind: bounds, size: size),
+                               materials: [material])
+        card.position.z = -Float(size) * 0.17
+        return card
+    }
+
+    /// Fits an existing plate to new text: a cached mesh swapped, nothing made.
+    static func reshape(_ card: ModelEntity, behind bounds: BoundingBox, size: CGFloat) {
+        let mesh = plateMesh(behind: bounds, size: size)
+        if card.model?.mesh !== mesh { card.model?.mesh = mesh }
+    }
+
+    private static func plateMesh(behind bounds: BoundingBox, size: CGFloat) -> MeshResource {
         let padX = Float(size) * 0.5
         let padY = Float(size) * 0.44
         let width = (bounds.max.x - bounds.min.x) + padX * 2
         let height = (bounds.max.y - bounds.min.y) + padY * 2
-        let material = Materials.unlit(UIColor(white: 0.02, alpha: 1), opacity: 0.58)
         // Pill for a one-line badge; radius capped so a wrapped
         // paragraph gets an honest corner, not a lozenge eating end words.
         let radius = min(height / 2, Float(size) * 1.2)
-        let card = ModelEntity(
-            mesh: plate(width: width, height: height, cornerRadius: radius),
-            materials: [material])
-        card.position.z = -Float(size) * 0.17
-        return card
+        return plate(width: width, height: height, cornerRadius: radius)
     }
 
     /// Plate meshes cached by dimensions quantised to 0.1 mm — raw Float

@@ -88,9 +88,12 @@ final class MagnetismRenderer {
         viewRoot.addChild(linesEntity)
         viewRoot.addChild(arrowHeads.root)
 
+        // At most 30 times a second while a magnet moves: each result is
+        // three tubes written in place (`GeometryPipeline.minimumInterval`).
         linesPipeline = GeometryPipeline(
             compute: { Self.computeLines($0) },
-            apply: { [weak self] in self?.applyLines($0) }
+            apply: { [weak self] in self?.applyLines($0) },
+            minimumInterval: 1.0 / 30
         )
     }
 
@@ -728,15 +731,11 @@ final class MagnetismRenderer {
     }
 
     private func applyLines(_ result: LinesResult) {
-        linesEntity.model = TubeMesh.mesh(from: result.core).map {
-            ModelComponent(mesh: $0, materials: [lineMaterial])
-        }
-        lineCasingEntity.model = TubeMesh.mesh(from: result.casing).map {
-            ModelComponent(mesh: $0, materials: [lineCasingMaterial])
-        }
-        lineGlowEntity.model = TubeMesh.mesh(from: result.glow).map {
-            ModelComponent(mesh: $0, materials: [lineGlowMaterial])
-        }
+        // Rewritten in place (`LiveTube`): a moving magnet re-meshes the
+        // lines every frame.
+        LiveTube.apply(result.core, to: linesEntity, material: lineMaterial)
+        LiveTube.apply(result.casing, to: lineCasingEntity, material: lineCasingMaterial)
+        LiveTube.apply(result.glow, to: lineGlowEntity, material: lineGlowMaterial)
         syncArrowHeads(points: result.arrowPoints,
                        directions: result.arrowDirections)
     }
