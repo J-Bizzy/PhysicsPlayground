@@ -42,6 +42,13 @@ struct AboutView: View {
                     .font(.footnote.monospacedDigit())
                     .foregroundStyle(.tertiary)
             }
+
+            // The real sky's source, credited as the catalogue asks.
+            Text("Stars from the Yale Bright Star Catalogue, 5th ed. (Hoffleit & Warren 1991), via CDS.")
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
             }
             .padding(28)
             .frame(maxWidth: .infinity)

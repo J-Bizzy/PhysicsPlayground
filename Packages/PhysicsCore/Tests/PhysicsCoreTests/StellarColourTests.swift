@@ -50,7 +50,7 @@ final class StellarColourTests: XCTestCase {
         XCTAssertGreaterThan(rigel.z, rigel.x, "Rigel is blue-white")
         for colour in [betelgeuse, rigel] {
             XCTAssertEqual(colour.max(), 1, accuracy: 1e-9)
-            XCTAssertGreaterThan(colour.min(), 0.6, "a star is a pale colour, not a lamp")
+            XCTAssertGreaterThan(colour.min(), 0.55, "a star is a pale colour, not a lamp")
         }
     }
 }

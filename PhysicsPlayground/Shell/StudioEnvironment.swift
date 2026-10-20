@@ -25,15 +25,20 @@ struct StudioEnvironmentView: View {
     static func makeEnvironment() -> Entity {
         let root = Entity()
 
-        // The night sky: an inside-out sphere far past every exhibit.
-        var sky = UnlitMaterial(color: .black)
-        if let texture = skyTexture() {
-            sky.color = .init(tint: .white, texture: .init(texture))
+        // The night sky: the real one once it is built (`Sky`), else an
+        // inside-out sphere with the procedural night.
+        if let resources = SkyResources.shared {
+            root.addChild(Sky.make(overRoom: false, resources: resources))
+        } else {
+            var sky = UnlitMaterial(color: .black)
+            if let texture = skyTexture() {
+                sky.color = .init(tint: .white, texture: .init(texture))
+            }
+            let dome = ModelEntity(mesh: Primitives.sphere(radius: 45), materials: [sky])
+            dome.scale = SIMD3(-1, 1, 1)   // view it from the inside
+            dome.position = [0, 1.4, 0]
+            root.addChild(dome)
         }
-        let dome = ModelEntity(mesh: Primitives.sphere(radius: 45), materials: [sky])
-        dome.scale = SIMD3(-1, 1, 1)   // view it from the inside
-        dome.position = [0, 1.4, 0]
-        root.addChild(dome)
 
         // The floor: a wide matte-charcoal disc at the real floor height,
         // so the user keeps their footing when the room disappears.

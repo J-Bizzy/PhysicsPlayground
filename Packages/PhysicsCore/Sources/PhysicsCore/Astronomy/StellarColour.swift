@@ -67,11 +67,13 @@ public enum StellarColour {
         SIMD3(0.0556434, -0.2040259, 1.0572252),
     ])
 
-    /// How much of a blackbody's chroma a star is drawn with. Real stars,
-    /// seen by eye, are only faintly coloured — the cones barely engage at
-    /// starlight — so a display that showed the full blackbody chroma would
-    /// paint a sky of fairground lights. Stated, not hidden: 0.35 of it.
-    public static let displayChroma = 0.35
+    /// How much of a blackbody's chroma a star is drawn with. Even at full
+    /// chroma a 3,600 K blackbody is only a light orange (Betelgeuse comes
+    /// out 255/195/130), and real stars, seen by eye, are paler still — the
+    /// cones barely engage at starlight. Stated, not hidden: 0.8 of it,
+    /// where Betelgeuse reads orange beside a blue-white Rigel; the first
+    /// stills at 0.35 and 0.5 left it beige.
+    public static let displayChroma = 0.8
 
     /// The gamma-encoded sRGB colour a star of temperature `t` is drawn
     /// in, brightest channel at 1.

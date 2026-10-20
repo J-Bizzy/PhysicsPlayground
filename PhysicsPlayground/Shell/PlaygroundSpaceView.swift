@@ -257,7 +257,11 @@ struct PlaygroundSpaceView: View {
                     applyDebugLaunchArguments()
                     #endif
                     guard !retreatForUITesting() else { return }
+                    // The sky is drawn off the main thread beside the props, and
+                    // never outlasts them.
+                    async let sky = SkyResources.prepare()
                     await PropCache.warmUp()
+                    _ = await sky
                     ready = true
                     #if DEBUG
                     LaunchTrace.mark(appModel.activeModuleID.map { "space ready, mounting \($0)" }
