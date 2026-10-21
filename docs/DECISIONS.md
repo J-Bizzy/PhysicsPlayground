@@ -16,6 +16,67 @@ A running log of consequential decisions — architectural, physical, or product
 
 (The template sat stranded at line 309, mid-log between two 2026-07-29 entries, until 2026-08-01.)
 
+## 2026-10-20 — "Birth of a System": the opening is a star system forming
+
+**Decision:** The opening is a star system forming, the owner's choice from three offered. It replaces the particle field of 2026-10-14, where charges fell through crossed fields, rippled as deep water and settled onto rims.
+- **Night falls.** Night and the real sky come down over the room, which stays a trace through them.
+- **A star ignites** ahead and a little right.
+- **Its dust disk shears.** The disk is 64 rings, each turning rigidly at its own Kepler rate Ω = √(GM/r³), so spokes that are straight at 1.5 s wind into r^−3/2 spirals. Real disks clear inside-out, and this one does too.
+- **Seven worlds form and fly.** Each condenses in a gap of its own, with a chime, and leaves on the one ellipse with the star at its focus whose far end is exactly over its plinth.
+- **The clock comes to rest on the landing.** A `TimeLapse` clock runs at real speed while the disk forms, rises to 6.5× while the worlds fly, and comes to rest at 5.4 s. That is exactly when every world reaches its far end, so each eases onto its plinth with no easing of its own. The bell strikes then.
+- **The worlds open into the labs.**
+
+**Context:**
+- **One GM, chosen for watching.** GM is 0.3795 m³/s² in simulated seconds: the disk's outer edge, 0.92 m out, turns 60° in the 1.5 s the disk takes to arrive. That is a solar-mass star with one metre standing for ten AU.
+- **The clock was swept, not picked.** Its knots were swept between two limits. A world may cross the room no faster than 6 cm a frame at 90 Hz. The first and longest flight must leave after the disk has formed.
+- **One stated impulse per world.** The plinths ring the wearer, so no single disk plane holds them all. Each world therefore takes one impulse at departure, from its circular speed onto its transfer: 10–55 % of its speed, turning its path by 4–23°. It is the least the geometry allows. Round any ring the impulse has two near-equal minima, and picking the lower alone flipped between them on a millimetre's change, so the plan takes the longest flight among minima within 5 %.
+- **Everything else is exact two-body motion.** The worlds are test particles: they feel the star, not one another.
+- **The fallback.** If the departure kink reads badly on the device, the fallback is a "torn disk", with each ring tilted to hold its own plinth.
+
+**Consequences:**
+- **Code.** `Hub/OpeningPlan.swift` is the physics, pure and solved once; `Hub/OpeningStage.swift` draws it; `Hub/Opening.swift` is the home's thin view of its timing.
+- **Tests.** `OpeningPlanTests` holds:
+  - the shear;
+  - the circular speeds;
+  - the impulse;
+  - energy and angular momentum on every transfer;
+  - the landing, to 1e-9 m;
+  - the pacing;
+  - a clearance of 0.6 m from the eyes.
+- **The sound is re-scored.** It now has an ignition bloom, a swell from the disk and a chime per world, pinned by test to that world's condensation. The bell lands at 5.4 s.
+- **A skip lands at once.** The home is there immediately; the stage and the sound fade out over a quarter-second.
+- **Deep space** brings no second night.
+- **The 2026-08-23 rule stands:** no dip to dark between labs. This plays once per cold launch, and a walk back from a lab never replays it.
+- **The trails taught `TrailRibbons` two things:** rotation, and writing fade and index buffers only when they change.
+
+## 2026-10-20 — The room or deep space; the room out of reach there
+
+**Decision:** Studio Mode, a procedural night over a charcoal floor reachable from a lab's More, is replaced by Deep space. The owner chose its shape: opt-in, the room by default.
+- **Where it's chosen.** A Deep space switch sits in More on the home and in every lab, and the choice is remembered (`AppSettings.surroundings`).
+- **What it is.** Full immersion, with:
+  - the real sky;
+  - the Sun where Pluto sees it on the sky's date (magnitude −19, a white-hot point in its own glare);
+  - a 3.6 m smoked-glass platform whose top is the floor;
+  - a dark pane marking the physics floor out to 30 m, where a ball is retired.
+- **Labs keep the system's lighting**, so a lab looks the same in both surroundings.
+- **Orbital Mechanics opens in space by itself** and puts the distant Sun away for its own, until the wearer chooses the room there. Its 0.85 dimming and 16 m shell are for that room.
+- **The room is out of reach in space.** `RoomModel.tangible` is the one answer every lab reads:
+  - Projectiles has no walls and no box;
+  - Light & Optics lands on no wall;
+  - Electric Fields clips its lines to nothing;
+  - the hands and the floor stay.
+
+**Context:** Two things went wrong on the way:
+- **Invisible walls.** Room sensing keeps running under full immersion, so in the old Studio Mode balls bounced off walls that were not drawn.
+- **A launch into a lab skipped `didSet`.** `-openModule` set the lab in `AppModel.init`, where observers do not fire. So a launch straight into a lab never adopted its atmosphere, and would have opened Orbital Mechanics on `.mixed`.
+
+**Consequences:**
+- **Arguments.** `-surroundings space|room` replaces `-studioMode`, and holds for one launch without writing the choice.
+- **Two draw-order rules learned:**
+  - An opaque mesh placed in a `ModelSortGroup` is drawn late, so Deep space's Milky Way stays out of the group.
+  - A transparent glow that writes depth cuts holes through whatever is drawn after it, so Orbital's Sun glow no longer writes depth.
+- **Tests.** `SurroundingsTests`, `DeepSpaceEnvironmentTests` and `RoomVisibilityTests` hold it.
+
 ## 2026-10-20 — Frame pacing: every scene holds 90 Hz, and none arrives through a stutter
 
 **Decision:** The owner asked for "a constant FPS" ahead of an App Store release. The pass was measured, not guessed. A main-thread sample per scene, and a new DEBUG frame log (`-frameLog 1`) that names every dropped frame, found five causes, and each is fixed at its source.
@@ -49,6 +110,25 @@ A running log of consequential decisions — architectural, physical, or product
 - **Birth of a System (planned) changes with this.** Its worlds will land on the plinths, not open into rims.
 - **Tests:** `HubDioramaTests` holds each plinth's size, height and tilt to the layout. It also holds each name under its plinth, that nothing frames a lab, and that the turn starts from rest without a jump. `OpeningTests` holds every particle to its plinth's rim and plane.
 
+
+## 2026-10-19 — The real sky: the Yale Bright Star Catalogue, drawn where and as it is
+
+**Decision:** The sky over deep space, and over the room in the opening, is the real one.
+- **Every naked-eye star.** It holds every star in the Yale Bright Star Catalogue, 5th revised edition (Hoffleit & Warren 1991; CDS V/50, public domain): 9,096 after the 14 entries with no position are skipped.
+- **The catalogue file.** It was downloaded with the owner's yes: `catalog.gz`, SHA-256 `3dc44b1e90be8fbe5bcc7656032560f51275f985c7e3f783c9028e1838ec7bed`. It is converted by `Tools/starcatalog.py` to a 145 KB binary; only that binary and the tool are committed.
+- **Where each star stands.** Each is at its J2000 place.
+- **Its colour.** The colour comes from its B−V: Ballesteros's temperature, Planck's law integrated against the CIE 1931 functions, then sRGB. It is drawn at 0.8 of the blackbody's chroma, because at 0.35 and 0.5 Betelgeuse read beige beside Rigel.
+- **Its brightness.** Flux is 10^(−0.4(m − 6.5)). Each star is a core at least 4.5′ across, about 2.6 device pixels, so a faint star never shimmers.
+- **The Milky Way** is a surface-brightness model in galactic coordinates — disc, bulge, Great Rift, Magellanic Clouds. It is documented as a model; its course is the real galactic plane.
+- **The house evening.** The sky is a winter evening at 40° N with Orion's belt rising straight ahead, 30° up.
+- **Credit.** About credits the catalogue.
+
+**Context:** The owner asked for a fully 3-D environment and picked deep space. Studio Mode's procedural starfield was a picture of a sky.
+
+**Consequences:**
+- **Code.** `PhysicsCore/Astronomy` holds the maths. `Shell/Sky.swift` builds the drawn sky once, off the main thread, beside the prop warm-up: one `LowLevelMesh` of quads into a 16 × 8 colour-and-brightness atlas, and the Milky Way on an inward dome.
+- **Stills.** `-skyLook orion|polaris|core|cygnus|zenith|sun` turns a target to stand ahead for a photograph.
+- **Tests.** `SkyResourcesTests` holds the catalogue and the drawing; the PhysicsCore tests hold the frames and the colours against published values.
 ## 2026-10-18 — The turntable turns and carries the circuit
 
 **Decision:** The stage under the floating circuit (B1a) becomes its handle.

@@ -38,8 +38,10 @@ thing that has it:
   how far out it stands is the launch speed.
 
 Everything else is behind **More** (the ⋯ beside the lab's name): the
-lab's switches and modes, its live numbers, room dimming, Studio Mode,
-Settings and Reset.
+lab's switches and modes, its live numbers, room dimming, Deep space,
+Settings and Reset. Deep space is also on the home's More: it stands you
+among the real stars on a glass platform instead of in your room, and the
+choice is remembered.
 
 ### How do I move the experiment?
 

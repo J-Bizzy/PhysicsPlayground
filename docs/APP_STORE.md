@@ -37,10 +37,11 @@ reason not to sitting in italics beside it. Deleted rather than annotated.*
 ## Promotional text (170 max, editable without review)
 
 ```
-Six physics labs that stand in your actual room. Throw a pendulum bob, wire a live circuit, reshape a planet's orbit by hand — with the real equations underneath.
+Seven physics labs that stand in your actual room. Throw a pendulum bob, wire a live circuit, reshape a planet's orbit by hand — with the real equations underneath.
 ```
-*162 characters.* The first draft came in at exactly 170 — the limit —
-which is not a margin. App Store Connect counts an em dash and a curly
+*164 characters.* ("Six" until 2026-10-21, a week after the seventh lab
+joined.) The first draft came in at exactly 170 — the limit — which is
+not a margin. App Store Connect counts an em dash and a curly
 apostrophe as one character each, but a paste that converts either can
 push a string over, so leave slack rather than discovering it in the web
 form. This field can be changed at any time without
@@ -50,9 +51,14 @@ pointing at whatever is newest.
 ## Keywords (100 max, comma-separated)
 
 ```
-stem,science,education,circuit,magnet,orbit,pendulum,gravity,simulator,lab,electricity,projectile,spatial
+stem,science,education,circuit,magnet,orbit,pendulum,gravity,simulator,lab,optics,projectile,spatial
 ```
-*99 characters.*
+*100 characters* — the limit, which an all-ASCII line can meet with
+no paste risk. It was 105 under a note that said 99 from 2026-09-02 to
+2026-10-21, which App Store Connect would have refused; `electricity`
+went for `optics` (the seventh lab had no word here, and `circuit`
+already reaches the electricity searches). `SellingCopyCriterionTests`
+measures it now.
 
 *`teacher,classroom` were in this line until 2026-09-01 and are out on
 purpose: the app has no SharePlay, no lesson plans, no multi-device
@@ -86,13 +92,11 @@ written from scratch in SI units with real constants, and uses the exact
 closed-form solution wherever one exists: Kepler orbits from true orbital
 elements, nodal analysis for circuits, the exact dipole field between
 two bar magnets, r = mv/qB for a charge in a magnetic field. More than
-400 tests run against the physics alone.
+500 tests run against the physics alone.
 
-Where something has to be deliberately unphysical for you to see it, the
-app says so on screen, next to the number. The magnetic field that visibly
-bends a half-gram ball is about a thousand times the strongest magnet ever
-built — and it tells you that, because a lab that hides its fictions is
-teaching the wrong thing.
+Where something must be unphysical for you to see it, the app says so.
+The field that visibly bends a half-gram ball is a thousand times the
+strongest magnet ever built, and the lab calls it fictional.
 
 THE SEVEN LABS
 
@@ -101,13 +105,10 @@ around them. Add parallel plates you carry by hand, switch on a uniform
 magnetic field, and send a charged ball circling through it — the
 cyclotron radius, drawn at full size in your room.
 
-Circuit Workshop — Build from racks of real parts: batteries, resistors,
-capacitors, inductors, motors, LEDs. Solved every frame. Probe it with a
-multimeter, push a resistor past its rating and watch it scorch, tune the
-AC source by hand, switch on the field layer and see the coil become a
-magnet — then zoom into the copper at the true drift velocity, which is
-millimetres per second and the single most common misconception in
-introductory electricity.
+Circuit Workshop — Wire real parts from a shelf: batteries, resistors,
+capacitors, inductors, motors, LEDs, solved every frame. Probe it with a
+multimeter, push a resistor past its rating until it scorches, and zoom
+into the copper at the true drift velocity — millimetres per second.
 
 Magnetism — Bar magnets that attract, repel and snap into alignment,
 their looping field closing on itself in real time. Carry a compass
@@ -134,6 +135,13 @@ becomes a ring with a bead at each end; pull one and the orbit reshapes
 under your hand. Split the star into a binary and watch every orbit answer
 at once.
 
+YOUR ROOM, OR DEEP SPACE
+
+Every lab stands in your room or, at a switch, among the real stars: all
+9,096 visible to the eye, at their true places and colours, the Milky Way
+across them, a glass platform at your feet. And the app opens on a solar
+system forming, its worlds flying real Kepler orbits to the labs.
+
 CONTROLS THAT ARE OBJECTS
 
 You change a value by handling the thing that has it. Pull a charge's
@@ -144,12 +152,10 @@ beside the lab's name.
 
 THE TIME CAPSULE
 
-Every lab remembers its last thirty seconds. Pause, and a small reel
-appears with the recording wound on it. Pinch the reel and a rail draws
-out like tape: drag the bead and the whole room runs backwards — the ball
-retraces its arc, the bounce un-happens — then walk around the frozen
-instant with its velocity and force arrows standing on it, step it one
-physics tick at a time, and resume from any moment you choose.
+Every lab remembers its last thirty seconds. Pause, pinch the reel that
+appears, and draw out the tape: the whole room runs backwards — the ball
+retraces its arc, the bounce un-happens. Walk around the frozen instant,
+step it one tick at a time, and resume from any moment.
 
 PRIVACY
 
@@ -158,9 +164,15 @@ kind. Nothing you do leaves your device.
 
 Requires visionOS 26.0 or later.
 ```
-*3,689 characters* of 4,000. Counted, not estimated (2026-10-14, after the
-controls paragraph was rewritten for the subtraction pass — 3,626 before
-that, and 3,758 before the capture-and-export paragraph left with its feature;
+*3,927 characters* of 4,000. Counted, not estimated (2026-10-21, after the
+room-or-deep-space paragraph joined and the Circuits, Time Capsule and
+fictional-field paragraphs were cut back to make room). **Recount after
+every edit:** Light & Optics' paragraph took it to 4,049 on 2026-10-14 —
+over the limit, under a note that still said 3,689 — and nothing caught
+it for a week; `SellingCopyCriterionTests` counts every field with a
+limit now. (3,689 after the controls paragraph was rewritten for the
+subtraction pass, 3,626 before that, and 3,758 before the
+capture-and-export paragraph left with its feature;
 2,937 before the Time Capsule paragraph and the new Projectiles and
 Circuits sentences).
 
@@ -254,7 +266,7 @@ The first two do almost all the work; most people never swipe past three.
 | 3 | **Electric Fields — lines + capacitor + B** | The densest "this is real physics" frame — field lines filling the room, the carried capacitor plates with their sign glyphs, the uniform B switched on. (Reframed 2026-08-05: the flux instrument this slot was built around left the app on 2026-08-03 — DECISIONS.md has the story.) Slightly busy, which is why it is third rather than first. |
 | 4 | **Orbital Mechanics — binary star** | Conceptually the best story (two suns, every orbit reshaped) and the weakest *simulator* frame: the orrery sits low, so two-thirds of the image is black. **Shoot this one on device**, standing closer and looking down. |
 | 5 | **Orbital Mechanics — the orbit ring** | Depth, for the person who has already decided to look: Earth's orbit as a ring in the room, apoapsis pulled out to 2.2× under a hand. The module's documented centrepiece. (Reframed 2026-08-05: the previous subject left the app on 2026-08-03 — DECISIONS.md has the story. If two Gravity frames read as repetitive against shot 4, the alternate is Magnetism's room-filling field lines — `-openModule magnetism`, defaults.) |
-| 6 | **Home Screen** | Shows the scope — seven portals standing around you, each looping its own physics, under the wordmark. A closer, not an opener: it is the least *spatial* frame, because nothing in it is an experiment. |
+| 6 | **Home Screen** | Shows the scope — seven labs in miniature on their plinths around you, each looping its own physics, under the wordmark. A closer, not an opener: it is the least *spatial* frame, because nothing in it is an experiment. |
 | 7 | **Time Capsule** — the reel with its tape out, a ball rewound mid-arc | The feature nothing else in the category has, photographed as the object it is: the reel, the rail drawn out of it, the recorded path hanging as a tube and the ball frozen part-way back along it. Added 2026-09-01 when the capsule started shipping on. |
 
 ## Staging commands
@@ -291,6 +303,12 @@ shot 8-hoops     -openModule kinematics     -kinHoops 1 -kinSolve 1
 shot 9-coil      -openModule circuits       -circCoil 1
 ```
 
+(Shot 10, "Birth of a System", is the opening pinned mid-flight in deep
+space — `shot 10-birth -hubIntro 4.6 -surroundings space`: seven worlds on
+curved Kepler arcs out from a new star. It is the most striking frame the
+app has made since 2026-10-20; if the set is re-ranked, it is a candidate
+for second.)
+
 (Shots 8 and 9 are the 2026-09-02 features — a hoop with both solved arcs
 through it and its angle callout; the coil's own field over the bench —
 and are optional: the store takes up to ten, and seven already carry the
@@ -312,10 +330,12 @@ staging simply did not work. This cost two rounds of confused screenshots.
       catches half-built geometry.
 - [ ] **Check the title bar is not truncating** — "Circuit Workshop" is
       the long one.
-- [ ] **Studio Mode (`-studioMode 1`) is a fallback, not a default.** It
-      replaces the room with a dark void, which photographs cleanly and
-      throws away the entire reason the app exists. Use it only if a
-      real-room shot is unreadable.
+- [ ] **Deep space (`-surroundings space`) is the second surroundings,
+      not the default.** It photographs cleanly and drops the room, which
+      is the reason most of the app exists — the labs that answer your
+      room (Projectiles' bounces, Light's spectrum on the wall) stay in
+      the room. Shoot it for the opening and for Orbital Mechanics, which
+      opens there by itself.
 
 ## Captions
 
@@ -356,15 +376,15 @@ In App Store Connect the record is: name from this file, bundle
 `ITSAppUsesNonExemptEncryption = false`, the two URLs above. Review
 notes, verbatim:
 
-> Physics Playground opens in an immersive space: a short particle
-> animation settles into seven portals around you (pinch anywhere to skip
-> it). visionOS will ask for World Sensing and Hand Tracking — both are
+> Physics Playground opens in an immersive space: a short animation of a
+> star system forming lands seven worlds on seven labs around you (pinch
+> anywhere to skip it). visionOS will ask for World Sensing and Hand Tracking — both are
 > needed for the labs to stand in the room and be grabbed; nothing is
-> collected or transmitted. To enter a lab, pinch its portal. In a lab,
+> collected or transmitted. To enter a lab, pinch it. In a lab,
 > handle the objects: pull from a well to make a new one, drag to move,
 > tap an object for its ring, and pull the handle on a ring to change the
 > object's value. The title bar holds Home, More (the lab's switches,
-> live numbers, room dimming, Studio Mode, Settings and Reset) and Pause.
+> live numbers, room dimming, Deep space, Settings and Reset) and Pause.
 > Pause any lab and pinch the reel that appears to rewind the last 30
 > seconds. No account, no purchase, no network.
 

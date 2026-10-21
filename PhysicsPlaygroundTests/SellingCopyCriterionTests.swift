@@ -30,6 +30,8 @@ final class SellingCopyCriterionTests: XCTestCase {
         "Electron View", // Circuits' 4× zoom floor (2026-10-14); the zoom and true speed stay
         "Physics box",  // folded into More (2026-10-14)
         "palette bead", // pause went to the title bar, the rest to More (2026-10-14)
+        "Studio Mode", "-studioMode", // Deep space replaced it (2026-10-20)
+        "particle animation", // the opening is a star system forming (2026-10-20)
     ]
 
     // Deliberately not on that list: "experiment" is ordinary English the
@@ -75,5 +77,33 @@ final class SellingCopyCriterionTests: XCTestCase {
         }
         XCTAssertEqual(scanned, surfaces.count,
                        "a negative criterion over unread files passes vacuously")
+    }
+
+    /// Every App Store field with a limit — a `## Name (N max…)` heading
+    /// over a fenced block — fits it. The description went to 4,049 of
+    /// 4,000 with Light & Optics' paragraph (2026-10-14) under a hand count
+    /// that still said 3,689, and App Store Connect is where it would have
+    /// been found.
+    func testEveryListingFieldFitsItsLimit() throws {
+        let url = try repositoryRoot().appendingPathComponent("docs/APP_STORE.md")
+        let text = try String(contentsOf: url, encoding: .utf8)
+        let limit = try Regex(#"^## [^\n]*\((\d+) max"#).anchorsMatchLineEndings()
+
+        var measured = 0
+        for match in text.matches(of: limit) {
+            guard let max = Int(match.output[1].substring ?? ""),
+                  let open = text.range(of: "```\n", range: match.range.upperBound..<text.endIndex),
+                  let close = text.range(of: "\n```", range: open.upperBound..<text.endIndex)
+            else {
+                XCTFail("\(match.output[0].substring ?? "") has no fenced value under it")
+                continue
+            }
+            let field = text[open.upperBound..<close.lowerBound]
+            XCTAssertLessThanOrEqual(field.count, max,
+                                     "\(match.output[0].substring ?? "") is \(field.count) characters")
+            measured += 1
+        }
+        // Name, subtitle, promotional text, keywords, description.
+        XCTAssertEqual(measured, 5, "the headings moved, and this is measuring the wrong fields")
     }
 }

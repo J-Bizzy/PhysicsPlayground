@@ -121,11 +121,11 @@ contradicts this section, this section is current.
       climbs. Pull "Double" from the upper well and flick it: the lower bob
       leaves a chaotic trail and wears NO period tag. Throw a bob sideways:
       a true 3-D orbit.
-- [ ] **9 · More and Studio Mode.** Pinch More: the lab's switches, its
-      live numbers, the room. Studio Mode: a night sky over a dark floor
-      with a soft pool of light, and nothing on it glowing.
-- [ ] **10 · Close.** Home: dissolve, and the seven portals stand around
-      you again under the wordmark.
+- [ ] **9 · More and Deep space.** Pinch More: the lab's switches, its
+      live numbers, the room. Deep space: the real night sky and a glass
+      platform under your feet, and nothing on it glowing.
+- [ ] **10 · Close.** Home: dissolve, and the seven labs stand on their
+      plinths around you again under the wordmark.
 - [ ] **Judgement calls, answered in writing:** the pink field lines
       through passthrough; whether 45 % recession is legible in your
       room; the reel's size and where it lands; whether More's panel
@@ -146,6 +146,11 @@ contradicts this section, this section is current.
 ## ⟳ 2026-10-20 — Deep space, and the room out of reach there
 
 - [ ] **Deep space from More**, on the home and in a lab. The room goes and the stars come up over about a second. The choice holds after a relaunch, and "Dim the room" greys out.
+- [ ] **The stars are crisp and still** — points, no shimmer as you move
+      your head, the faintest still visible as points. Orion is straight
+      ahead and a little up, its belt upright: **Betelgeuse** (upper left)
+      reads orange beside blue-white **Rigel** (lower right). The Milky Way
+      arches overhead, with the dark Great Rift in it.
 - [ ] **Standing on the platform is comfortable.** Look down: smoked glass with stars under it and a fine champagne edge 1.8 m out. Walk to the edge; passthrough breaks through at the system's boundary, as it should.
 - [ ] **Labs are lit the same in both surroundings.** Toggle Deep space in Pendulums: the bobs and the frame keep their shading.
 - [ ] **Orbital Mechanics opens in space by itself**, with no second Sun in the sky. Choose the room there: the room comes back at once, dimmed as before.

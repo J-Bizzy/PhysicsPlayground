@@ -23,7 +23,7 @@ solver is written from scratch in Swift and tested.
 | **Light & Optics** | A laser, a torch of white light, and mirrors, a prism, a lens and a glass bar you place anywhere and turn by hand. The light is traced exactly — Snell, Fresnel, each colour through the glass's real Sellmeier index — and lands on your actual walls: a spectrum from the prism, a beam trapped in the bar by total internal reflection. |
 | **Projectile Motion** | Throw anything. Real drag, real restitution, and bounces off *your* walls, floor, ceiling and table. Stand a hoop in the room and the launcher solves for it — both arcs, exactly — or arm it to drop as you fire, and the ball meets it in the air on every world. |
 | **Pendulums** | Full nonlinear swings, a Newton's cradle to break apart, a chaotic double pendulum, and a true 3-D orbit you throw a bob into above your own floor. |
-| **Orbital Mechanics** | An orrery you can walk into. Tap a planet and its orbit becomes a ring with beads at each end — pull one and the orbit reshapes under your hand. |
+| **Orbital Mechanics** | An orrery you can walk into, under the real sky — it opens in deep space. Tap a planet and its orbit becomes a ring with beads at each end — pull one and the orbit reshapes under your hand. |
 
 ## What is unusual about it
 
@@ -37,6 +37,18 @@ in one control language (`RenderKit/Controls`). Tests hold both lines:
 `PanelControlCriterionTests` keeps panels out of the labs themselves, and
 `ControlLanguageCriterionTests` fails the build on a second control
 style.
+
+**Your room, or deep space.** Every lab stands in your own room — or, at
+one switch in More, among the real stars: the 9,096 naked-eye stars of the
+Yale Bright Star Catalogue at their true places and colours, the Milky Way
+along the galactic plane, a glass platform at your feet. The physics
+carries on unchanged, and the room is out of reach there: a ball you throw
+flies on instead of bouncing off a wall you cannot see.
+
+**It opens on a solar system forming.** A star ignites ahead of you, its
+dust disk shears at Kepler's rates, and seven worlds fly exact transfer
+orbits to land on the seven labs as the bell strikes — physics to watch
+before you touch anything. Pinch to skip.
 
 **Pause is a place you can walk into.** Every lab records its last
 thirty seconds. Pause, pinch the reel that appears, and drag the tape

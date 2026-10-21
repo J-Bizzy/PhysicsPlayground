@@ -89,7 +89,23 @@ More.
 | **Turntable** | `CircuitsModel.Stage`, `CircuitsRenderer.stageRoot` | Circuit Workshop's floating circuit stands over a disc that is both its container and its handle (2026-10-18; ARCHITECTURE.md's one exception to "no tables"): the knurled rim turns the whole circuit, one to one, with a detent every 30° and a coast — the same knurl that says "this turns" on the shelf's crown — and the deck's outer band carries it. Its middle takes no hand. |
 | **Fan** | `DesignSystem/SpatialPicker` | A momentary N-way choice opened from a petal: Projectiles' ball fan and the hoop's Low/High arc. The current choice is lit. |
 | **Rail** | `RenderKit/SpatialTrackControl` | Only where a continuous quantity has to stand at its object: the Time Capsule's scrub, and an AC source's frequency under the part. The family's slider on glass. |
-| **More** | `Shell/LabMorePanel`, `ModuleDescriptor.more` | Everything secondary, as `MoreItem`s the shell draws in the family: display layers and modes (`toggle`), verbs (`action`, arming first when they throw work away), named choices (`choice`), a quantity with no object (`slider`), a set of things to add (`verbs`). A control that needs another stands under it, disabled until it is on. Below them the lab's live Values, then the room (Move, Studio Mode, dimming), Settings and Reset. |
+| **More** | `Shell/LabMorePanel`, `ModuleDescriptor.more` | Everything secondary, as `MoreItem`s the shell draws in the family: display layers and modes (`toggle`), verbs (`action`, arming first when they throw work away), named choices (`choice`), a quantity with no object (`slider`), a set of things to add (`verbs`). A control that needs another stands under it, disabled until it is on. Below them the lab's live Values, then the room (Move, Deep space, dimming), Settings and Reset. |
+
+## The sky (2026-10-19)
+
+One sky serves deep space and the opening's night over the room (`Shell/Sky.swift`, `PhysicsCore/Astronomy`).
+
+| Rule | Value | Why |
+|---|---|---|
+| Stars | The Yale Bright Star Catalogue, 9,096, at their J2000 places on a 45 m sphere | The real sky, not a picture of one |
+| Colour | Blackbody of the star's B−V temperature, at 0.8 of its chroma | At 0.35 and 0.5 Betelgeuse read beige |
+| Brightness | Flux 10^(−0.4(m − 6.5)), peak 0.2–1, 8 brightness rows × 16 temperature columns in one atlas | No vertex colours in an unlit material, so colour and brightness are cells |
+| Size | Core ≥ 4.5′ (≈ 2.6 device px), ≤ 18′ | Below the floor, a star shimmers as the head moves |
+| The Milky Way | A model in galactic (l, b) on a 46 m dome; opaque in space, a transparent glow over the room | Its course is the real galactic plane |
+| The house evening | 40° N, Orion's belt rising straight ahead 30° up | Orion over the wordmark, Polaris behind and left |
+| The Sun (deep space) | Where Pluto sees it on the sky's date: a 10′ white-hot core in a 3° glare | Magnitude −19, too small for a disc |
+| Draw order | One `ModelSortGroup`: the opening's night, the Milky Way (over the room only), the stars, the disk, the star's glow, the worlds' paths; deep space's Sun, its floor pane, its platform | Each transparent layer lies over what is beyond it; in space the opaque Milky Way stays out of the group so it is drawn first |
+| Nothing glows | No `LiveGlow` anywhere in the sky or deep space | A glow means a hand is on something |
 
 Retired on 2026-10-14: the switch bank (`SpatialLayerBank`), the folding tab
 (`SummonHandle`), standing banks of discs (the worlds, the clock), the
