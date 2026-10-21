@@ -51,6 +51,27 @@ struct PlaygroundSpaceView: View {
     }
 
     #if DEBUG
+    /// `-frameTour <seconds>`: walks every lab through the one door, back
+    /// to the home between each, that long in each place, round and round —
+    /// so `-frameLog` measures the doors as well as the rooms, which the
+    /// simulator cannot otherwise reach without a pinch. `-frameTourLabs
+    /// gravitylab,optics` walks only those.
+    private func runFrameTour() async {
+        let defaults = UserDefaults.standard
+        let dwell = defaults.double(forKey: "frameTour")
+        guard dwell > 0 else { return }
+        let only = defaults.string(forKey: "frameTourLabs")?.split(separator: ",").map(String.init)
+        let stops = (only ?? ModuleCatalog.allIDs).flatMap { [Optional($0), nil] }
+        while !Task.isCancelled {
+            for stop in stops {
+                try? await Task.sleep(for: .seconds(dwell))
+                guard !Task.isCancelled else { return }
+                LaunchTrace.mark("[frames] door to \(stop ?? "home")")
+                appModel.go(to: stop)
+            }
+        }
+    }
+
     /// The screenshot hooks that need a scene to have appeared.
     private func applyDebugLaunchArguments() {
         let defaults = UserDefaults.standard
@@ -272,6 +293,7 @@ struct PlaygroundSpaceView: View {
                     #if DEBUG
                     LaunchTrace.mark(appModel.activeModuleID.map { "space ready, mounting \($0)" }
                                      ?? "space ready, mounting the home")
+                    await runFrameTour()
                     #endif
                 }
                 .onDisappear {

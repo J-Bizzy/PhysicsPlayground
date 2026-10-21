@@ -6,7 +6,9 @@
 //  seven worlds and the paths they fly, and — in the room — the night it
 //  all happens in (in deep space the sky is already there). Built once;
 //  every frame after is a pure function of the opening's clock: transforms
-//  and opacities, written only when they change, and one trail commit.
+//  and opacities, written only when they change, and the paths at most
+//  thirty times a second (`trailInterval`), each led to its world between
+//  commits by a segment moved by its transform alone.
 //
 //  Sorted as one group so each transparent layer lies over what is beyond
 //  it: the night, then the Milky Way and the stars over the room, then the
@@ -14,6 +16,7 @@
 //
 
 import PhysicsCore
+import QuartzCore
 import RealityKit
 import RenderKit
 import UIKit
@@ -33,7 +36,14 @@ final class OpeningStage {
     private var annuli: [ModelEntity] = []
     private var worlds: [ModelEntity] = []
     private let trails: TrailRibbons?
-    private var trailsDrawn = false
+    /// One per world: a unit cylinder stretched from the head its path was
+    /// last written with to where the world is now.
+    private var leaders: [ModelEntity] = []
+    /// The opening's simulated time the paths were last written at, and
+    /// the wall time they were — the paths change only while it runs.
+    private var trailsSimTime: Double?
+    private var trailsWall = -Double.infinity
+    private var committedHeads: [SIMD3<Float>?] = []
     private var shown: [ObjectIdentifier: Float] = [:]
     private var lightLevel: Float = -1
     private var texturesApplied = -1
@@ -50,6 +60,13 @@ final class OpeningStage {
     static let dustStrength: Float = 0.7
     static let trailRadius: Float = 0.0035
     static let trailSamples = 40
+    /// How often the paths go to the renderer. Every frame left the main
+    /// thread waiting on it for 44 % of the flight (2026-10-21): each
+    /// `LowLevelMesh` write takes a payload from a pool the renderer
+    /// refills only as it draws, and three meshes in turn do not change how
+    /// many payloads a frame takes. Orbital Mechanics' trails run at the
+    /// same rate (`trailGrowInterval`).
+    static let trailInterval = 1.0 / 30
 
     /// - inSpace: deep space supplies its own sky, so there is no night.
     init(plan: OpeningPlan = .shared, inSpace: Bool) {
@@ -139,6 +156,18 @@ final class OpeningStage {
                     trails.setMaterial(Materials.fadedLine(Self.trailColour(name), ramp: ramp), slot: slot)
                 }
             }
+            // The leaders hang from the paths, so they share their fade; each
+            // is a path's head, the ramp's full opacity.
+            let segment = Primitives.cylinder(height: 1, radius: 1)
+            for world in plan.worlds {
+                let leader = ModelEntity(mesh: segment, materials: [Materials.unlit(Self.trailColour(world.name))])
+                leader.name = "opening-leader"
+                leader.components.set(ModelSortGroupComponent(group: group, order: 4))
+                leader.isEnabled = false
+                trails.entity.addChild(leader)
+                leaders.append(leader)
+            }
+            committedHeads = Array(repeating: nil, count: plan.worlds.count)
         }
     }
 
@@ -198,19 +227,43 @@ final class OpeningStage {
             let fade = Float(1 - OpeningPlan.ramp(t, from: OpeningPlan.landingTime,
                                                   over: OpeningPlan.worldOpen))
             setOpacity(trails.entity, fade)
-            if fade > 0.001 {
-                for index in plan.worlds.indices {
-                    let path = plan.trail(ofWorld: index, at: t, samples: Self.trailSamples)
-                    if path.points.count > 1 {
-                        trails.update(slot: index, points: path.points.map(SIMD3<Float>.init),
-                                      ages: path.ages.map(Float.init), radius: Self.trailRadius)
-                    } else {
-                        trails.clear(slot: index)
-                    }
+            if fade > 0.001 { updateTrails(trails, at: t) }
+        }
+    }
+
+    /// Rewrites the paths when the clock has moved and a commit is due, and
+    /// every frame leads each one on from its written head to its world.
+    private func updateTrails(_ trails: TrailRibbons, at t: Double) {
+        let sim = OpeningPlan.simTime(at: t)
+        let wall = CACurrentMediaTime()
+        if sim != trailsSimTime, wall - trailsWall >= Self.trailInterval {
+            trailsSimTime = sim
+            trailsWall = wall
+            for index in plan.worlds.indices {
+                let path = plan.trail(ofWorld: index, at: t, samples: Self.trailSamples)
+                if path.points.count > 1, let head = path.points.last {
+                    trails.update(slot: index, points: path.points.map(SIMD3<Float>.init),
+                                  ages: path.ages.map(Float.init), radius: Self.trailRadius)
+                    committedHeads[index] = SIMD3<Float>(head)
+                } else {
+                    trails.clear(slot: index)
+                    committedHeads[index] = nil
                 }
-                trails.commit()
-                trailsDrawn = true
             }
+            trails.commit()
+        }
+        for (index, leader) in leaders.enumerated() {
+            guard let from = committedHeads[index] else {
+                leader.isEnabled = false
+                continue
+            }
+            let span = SIMD3<Float>(plan.position(ofWorld: index, at: t)) - from
+            let length = simd_length(span)
+            leader.isEnabled = length > 0.0005
+            guard leader.isEnabled else { continue }
+            leader.position = from + span / 2
+            leader.orientation = VectorFieldArrows.rotationFromYAxis(to: span / length)
+            leader.scale = SIMD3(Self.trailRadius, length, Self.trailRadius)
         }
     }
 

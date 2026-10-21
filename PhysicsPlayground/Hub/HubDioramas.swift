@@ -343,6 +343,9 @@ extension HubVignettes {
 
     static let spectrumColours: [Double] = [420, 460, 500, 540, 580, 620, 660]
 
+    /// How often the optics diorama traces its light, per second.
+    static let dioramaTraceRate = 30.0
+
     static func opticsDiorama() -> Built {
         let diorama = Diorama()
         let bench = diorama.bench()
@@ -422,15 +425,24 @@ extension HubVignettes {
             bench.addChild(spot)
             return spot
         }
-        // The colour each beam was last painted, so a frame repaints only
-        // a beam whose colour changed: a material set every frame on 32
-        // beams was most of this diorama's cost.
-        var painted = [SIMD3<Double>?](repeating: nil, count: beamCount)
+        // The colour each beam was last painted — as drawn, after
+        // `OpticsRenderer.color` rounds it — so a frame repaints only a beam
+        // whose colour visibly changed: a material set every frame on 32
+        // beams was most of this diorama's cost, and comparing the unrounded
+        // sum repainted all of them every frame (2026-10-21).
+        var painted = [UIColor?](repeating: nil, count: beamCount)
+        var tracedAt = -Double.infinity
 
         let screenPoint = layout.screenPoint, screenNormal = layout.screenNormal
         let period = 10.0
         return fitStage(diorama, bench: bench, cycle: period) { time in
-            let rock = 0.07 * sin(2 * .pi * time / period)
+            // Thirty times a second, the prism with its light: it rocks
+            // 0.07 rad over ten seconds, under a hundredth of a degree a
+            // frame, and the trace was 6 % of the home's main thread.
+            let step = (time * dioramaTraceRate).rounded(.down) / dioramaTraceRate
+            guard step != tracedAt else { return }
+            tracedAt = step
+            let rock = 0.07 * sin(2 * .pi * step / period)
             let turn = simd_quatd(angle: rock, axis: SIMD3(0, 0, 1))
             prism.orientation = OpticsRenderer.single(turn)
             let element = OpticalElement(
@@ -469,9 +481,9 @@ extension HubVignettes {
                 let stroke = strokes[index]
                 stretch(cores[index], from: stroke.a, to: stroke.b, radius: 0.0032)
                 stretch(sleeves[index], from: stroke.a, to: stroke.b, radius: 0.0085)
-                if painted[index] != stroke.color {
-                    painted[index] = stroke.color
-                    let colour = OpticsRenderer.color(stroke.color)
+                let colour = OpticsRenderer.color(stroke.color)
+                if painted[index] != colour {
+                    painted[index] = colour
                     cores[index].model?.materials = [Materials.unlit(colour)]
                     sleeves[index].model?.materials = [Materials.unlit(colour, opacity: 0.28)]
                 }

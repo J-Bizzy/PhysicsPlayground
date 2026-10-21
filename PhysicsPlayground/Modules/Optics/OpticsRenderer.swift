@@ -54,6 +54,17 @@ final class OpticsRenderer {
 
     private var drawnVersion = -1
     private var drawnAngles = false
+    /// What each beam slot last wore, so a re-trace — every frame while a
+    /// piece is carried — sets materials only on the beams whose look
+    /// changed, not on all of them.
+    private struct BeamLook: Equatable {
+        var colour: UIColor
+        var level: Float
+        var inGlass: Bool
+    }
+    private var beamLooks: [Int: BeamLook] = [:]
+    /// The same for the landing spots: a colour and a level.
+    private var spotLooks: [Int: BeamLook] = [:]
 
     /// Core and glow radii, metres: a laser pointer's millimetre beam.
     private static let coreRadius: Float = 0.0011
@@ -151,6 +162,9 @@ final class OpticsRenderer {
             let colour = Self.color(stroke.color)
             slot.payload.core.scale = [Self.coreRadius, length, Self.coreRadius]
             slot.payload.glow.scale = [Self.glowRadius, length, Self.glowRadius]
+            let look = BeamLook(colour: colour, level: level, inGlass: stroke.inGlass)
+            guard beamLooks[index] != look else { continue }
+            beamLooks[index] = look
             slot.payload.core.model?.materials = [Materials.unlit(colour, opacity: level)]
             // Inside glass the glow is the light scattering in the piece; outside,
             // the haze a beam shows in a room.
@@ -170,9 +184,11 @@ final class OpticsRenderer {
             slot.entity.position = spot.point + spot.normal * 0.002
             slot.entity.orientation = rotation(from: [0, 0, 1], to: spot.normal)
             slot.entity.scale = SIMD3(repeating: Self.spotSize)
-            slot.payload.model?.materials = [
-                Self.spotMaterial(Self.color(spot.color), level: OpticsBeamLayout.level(spot.strength)),
-            ]
+            let look = BeamLook(colour: Self.color(spot.color),
+                                level: OpticsBeamLayout.level(spot.strength), inGlass: false)
+            guard spotLooks[index] != look else { continue }
+            spotLooks[index] = look
+            slot.payload.model?.materials = [Self.spotMaterial(look.colour, level: look.level)]
         }
 
         // Each surface's normal, where light met it: a short white line through

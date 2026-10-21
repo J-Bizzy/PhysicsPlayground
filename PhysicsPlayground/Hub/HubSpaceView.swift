@@ -547,25 +547,41 @@ final class HubScene {
             handedOver = true
             onHandOver?()
         }
+        // Written only when they change: for most of the opening the labs
+        // and their names stand at 0, and an opacity set on a lab reaches
+        // every entity in its diorama.
         let portalLight = Opening.portalOpacity(at: t)
         let labelLight = Opening.labelOpacity(at: t)
-        // The labs grow out of their worlds into place as they fade up; the
-        // wordmark rises the last few centimetres as it does.
-        let growth = SIMD3<Float>(repeating: Opening.portalScale(at: t))
-        for portal in portals {
-            portal.anchor.components.set(OpacityComponent(opacity: portalLight))
-            portal.label.components.set(OpacityComponent(opacity: labelLight))
-            portal.body.scale = growth
+        let scale = Opening.portalScale(at: t)
+        let arrival = (portal: portalLight, label: labelLight, scale: scale)
+        if shownArrival.map({ $0 != arrival }) ?? true {
+            shownArrival = arrival
+            // The labs grow out of their worlds into place as they fade up;
+            // the wordmark rises the last few centimetres as it does.
+            let growth = SIMD3<Float>(repeating: scale)
+            for portal in portals {
+                portal.anchor.components.set(OpacityComponent(opacity: portalLight))
+                portal.label.components.set(OpacityComponent(opacity: labelLight))
+                portal.body.scale = growth
+            }
+            moreSeat?.components.set(OpacityComponent(opacity: labelLight))
         }
         if livingTitle != nil {
             // The letters bring themselves in; only their footing fades.
-            titleRule?.components.set(OpacityComponent(opacity: labelLight))
+            if arrival.label != shownTitleLight {
+                shownTitleLight = arrival.label
+                titleRule?.components.set(OpacityComponent(opacity: labelLight))
+            }
         } else {
             titleAnchor.components.set(OpacityComponent(opacity: labelLight))
             titleAnchor.position = titlePosition + SIMD3(0, Opening.titleOffset(at: t), 0)
         }
-        moreSeat?.components.set(OpacityComponent(opacity: labelLight))
     }
+
+    /// What the labs, their names and the wordmark's footing were last
+    /// given while the opening brings them in.
+    private var shownArrival: (portal: Float, label: Float, scale: Float)?
+    private var shownTitleLight: Float?
 
     /// Any pinch: straight to the home. The home is there at once — labs,
     /// names, wordmark — and the opening's own things fade away behind it
@@ -612,6 +628,8 @@ final class HubScene {
         titleAnchor.position = titlePosition
         titleRule?.components.remove(OpacityComponent.self)
         moreSeat?.components.remove(OpacityComponent.self)
+        shownArrival = nil
+        shownTitleLight = nil
         // The opening has been seen — only now does it count against the session.
         onOpeningPlayed?()
     }

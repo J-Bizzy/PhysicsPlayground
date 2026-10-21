@@ -54,6 +54,26 @@ final class BackedLabelTests: XCTestCase {
         XCTAssertTrue(before.run === after.run)
     }
 
+    /// A reading whose width moves by a digit keeps the plate it has — a
+    /// new width was a mesh generated on the main thread, eight times a
+    /// second — and one that outgrows it gets a wider one, never a plate
+    /// narrower than its text.
+    func testALiveReadingKeepsItsPlateUntilItOutgrowsIt() throws {
+        let label = BackedLabel(size: 0.02)
+        label.setText("7.4 m/s", color: .white)
+        let first = try XCTUnwrap(parts(of: label)?.plate.model?.mesh)
+        Thread.sleep(forTimeInterval: 0.13)
+        label.setText("7.1 m/s", color: .white)
+        XCTAssertTrue(parts(of: label)?.plate.model?.mesh === first,
+                      "a digit's change of width made a new plate")
+        Thread.sleep(forTimeInterval: 0.13)
+        label.setText("17.1 m/s · 32°", color: .white)
+        let (plate, run) = try XCTUnwrap(parts(of: label))
+        XCTAssertFalse(plate.model?.mesh === first)
+        XCTAssertGreaterThan(plate.visualBounds(relativeTo: label.root).extents.x,
+                             run.visualBounds(relativeTo: label.root).extents.x)
+    }
+
     func testTheBackingIsNeverATarget() {
         let label = BackedLabel(size: 0.03)
         label.setText("3.3 V", color: .white)

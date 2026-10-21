@@ -83,17 +83,39 @@ public final class BackedLabel {
         return card
     }
 
-    /// Fits an existing plate to new text: a cached mesh swapped, nothing made.
+    /// Fits an existing plate to new text: a cached mesh swapped, nothing
+    /// made. A plate already as wide as the text and less than two steps
+    /// wider stays: a live reading's width moves with every digit, and
+    /// each new width was a mesh generated on the main thread — the long
+    /// frames of a ball in flight with its numbers on (2026-10-21).
     static func reshape(_ card: ModelEntity, behind bounds: BoundingBox, size: CGFloat) {
+        let needed = plateSize(behind: bounds, size: size)
+        if let current = card.model?.mesh.bounds.extents,
+           abs(current.y - needed.height) < 0.0002,
+           current.x >= needed.width - 0.0002,
+           current.x - needed.width < 2 * widthStep(size) {
+            return
+        }
         let mesh = plateMesh(behind: bounds, size: size)
         if card.model?.mesh !== mesh { card.model?.mesh = mesh }
     }
 
-    private static func plateMesh(behind bounds: BoundingBox, size: CGFloat) -> MeshResource {
+    /// The steps a plate's width is rounded up to, so the widths a live
+    /// reading runs through are a handful, each made once.
+    static func widthStep(_ size: CGFloat) -> Float { Float(size) * 0.25 }
+
+    private static func plateSize(behind bounds: BoundingBox,
+                                  size: CGFloat) -> (width: Float, height: Float) {
         let padX = Float(size) * 0.5
         let padY = Float(size) * 0.44
-        let width = (bounds.max.x - bounds.min.x) + padX * 2
-        let height = (bounds.max.y - bounds.min.y) + padY * 2
+        return ((bounds.max.x - bounds.min.x) + padX * 2,
+                (bounds.max.y - bounds.min.y) + padY * 2)
+    }
+
+    private static func plateMesh(behind bounds: BoundingBox, size: CGFloat) -> MeshResource {
+        let (needed, height) = plateSize(behind: bounds, size: size)
+        let step = widthStep(size)
+        let width = (needed / step).rounded(.up) * step
         // Pill for a one-line badge; radius capped so a wrapped
         // paragraph gets an honest corner, not a lozenge eating end words.
         let radius = min(height / 2, Float(size) * 1.2)
