@@ -248,6 +248,7 @@ struct KinematicsSpaceView: View {
             // stuttering through the long first frames after a mount.
             renderer.root.components.set(OpacityComponent(opacity: Settle.hiddenOpacity))
             var settle = Settle()
+            var lastFeed: RoomFeed?
             renderer.subscriptions.append(
                 content.subscribe(to: SceneEvents.Update.self) { [weak renderer] event in
                     // The lab's arrival and departure, on the shell's one flag.
@@ -259,14 +260,18 @@ struct KinematicsSpaceView: View {
                     // first: model coordinates render under `renderer.root`, which carries
                     // the lab-placement offset.
                     let placement = SIMD3<Double>(appModel.labPlacement.offset)
-                    if appModel.room.hasScannedRoom {
-                        // Detected walls backed by the room's boundary box, so a ball always
-                        // bounces at the room's edge, ceiling included. The bounds also feed
-                        // the containment clamp.
-                        model.roomWalls = appModel.room.collisionWalls
-                            .map { $0.translated(by: -placement) }
-                        model.roomBounds = appModel.room.bounds
-                            .translated(by: -placement)
+                    // What the room hands the model (`roomFeed`), written only when the
+                    // room or the placement changes. The first unscanned frame writes
+                    // nothing: the model opens on its own stand-in box, or a `-kinWalls`
+                    // seed, and keeps it until the room says otherwise.
+                    let feed = RoomFeed(tangible: appModel.room.tangible, placement: placement)
+                    if lastFeed == nil, feed.tangible == .unscanned {
+                        lastFeed = feed
+                    } else if feed != lastFeed {
+                        lastFeed = feed
+                        let fed = Self.roomFeed(feed.tangible, placement: placement)
+                        model.roomWalls = fed.walls
+                        model.roomBounds = fed.bounds
                     }
                     // Hands are things a ball bounces off: every tracked joint with its
                     // speed, in module space.
@@ -609,4 +614,33 @@ struct KinematicsSpaceView: View {
         return false
     }
 
+}
+
+// MARK: The room, as the model is handed it
+
+extension KinematicsSpaceView {
+    /// What of the room the model was last handed, and from where.
+    struct RoomFeed: Equatable {
+        var tangible: RoomModel.Tangible
+        var placement: SIMD3<Double>
+    }
+
+    /// The walls a ball bounces off and the box it is kept in, in module
+    /// space (the room less the lab's placement). In deep space there are
+    /// none: a ball flies on and is retired past `escapeRadius`. An
+    /// unscanned room is the stand-in box; a scanned one its detected
+    /// walls backed by its bounds, so a ball always bounces at the room's
+    /// edge, ceiling included.
+    static func roomFeed(_ tangible: RoomModel.Tangible, placement: SIMD3<Double>)
+    -> (walls: [RoomWalls.Wall], bounds: RoomBox?) {
+        switch tangible {
+        case .openSpace:
+            return ([], nil)
+        case .unscanned:
+            let box = RoomBox.unscanned.translated(by: -placement)
+            return (RoomWalls.box(of: box), box)
+        case .scanned(let walls, let bounds):
+            return (walls.map { $0.translated(by: -placement) }, bounds.translated(by: -placement))
+        }
+    }
 }

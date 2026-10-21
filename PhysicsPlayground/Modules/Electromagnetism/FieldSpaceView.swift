@@ -85,7 +85,7 @@ struct FieldSpaceView: View {
                         syncInstruments(renderer: renderer, dt: event.deltaTime)
                         syncBloom(renderer: renderer, dt: event.deltaTime)
                     }
-                    renderer?.tick(model, room: appModel.room.bounds)
+                    renderer?.tick(model, room: appModel.room.tangible.clipBox)
                     // The lab's placement: a pure display offset, safe because every grab
                     // moves a body by hand displacement.
                     renderer?.root.position = appModel.labPlacement.offset

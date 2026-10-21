@@ -143,6 +143,16 @@ contradicts this section, this section is current.
 - [ ] **The cut test:** enter all seven labs in sequence; the room's
       brightness moves only at Orbital Mechanics, and ramps rather than steps.
 
+## ⟳ 2026-10-20 — Deep space, and the room out of reach there
+
+- [ ] **Deep space from More**, on the home and in a lab. The room goes and the stars come up over about a second. The choice holds after a relaunch, and "Dim the room" greys out.
+- [ ] **Standing on the platform is comfortable.** Look down: smoked glass with stars under it and a fine champagne edge 1.8 m out. Walk to the edge; passthrough breaks through at the system's boundary, as it should.
+- [ ] **Labs are lit the same in both surroundings.** Toggle Deep space in Pendulums: the bobs and the frame keep their shading.
+- [ ] **Orbital Mechanics opens in space by itself**, with no second Sun in the sky. Choose the room there: the room comes back at once, dimmed as before.
+- [ ] **No invisible walls in space.** Throw a ball hard in Projectiles: it sails on and does not bounce off where your room's wall would be. Back in the room, it bounces there again.
+- [ ] **Light runs out in space.** The spectrum fans off into the stars instead of painting spots on a wall that is not there. It still lands on the floor.
+- [ ] **Field lines in space** run as far as they trace, unclipped by the room's box.
+
 ## ⟳ 2026-10-20 — frame pacing (judge on the device; the simulator's GPU is the Mac's)
 
 Run a Debug build from Xcode with `-frameLog 1` in the scheme's arguments and keep the console open. Every five seconds it prints each scene's median, 99th-percentile and worst frame. Every frame over two budgets is named with its time.

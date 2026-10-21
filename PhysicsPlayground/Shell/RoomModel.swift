@@ -38,6 +38,40 @@ final class RoomModel {
     /// it to decide whether to promise room-aware behaviour in the UI.
     private(set) var hasScannedRoom = false
 
+    // MARK: In reach
+
+    /// Whether the room stands round the wearer at all. False in deep space
+    /// (`AppModel.surroundings`): its walls, its furniture and the unscanned
+    /// stand-in box are out of reach there, so a ball flies on, light runs
+    /// out and field lines go where they go. The hands stay — they are the
+    /// wearer's, not the room's — and so does the floor's plane, which is
+    /// the physics' own.
+    var isShown = true
+
+    /// What of the room a lab can touch: the one answer the labs read.
+    enum Tangible: Equatable {
+        /// Deep space: no walls, no furniture, no box.
+        case openSpace
+        /// The room is there but unscanned: a lab stands a box in for it.
+        case unscanned
+        /// The walls and tables ARKit has found, with the bounds round them.
+        case scanned(walls: [RoomWalls.Wall], bounds: RoomBox)
+
+        /// What renderers clip against; nil where there is nothing to clip to.
+        var clipBox: RoomBox? {
+            switch self {
+            case .openSpace: nil
+            case .unscanned: .unscanned
+            case .scanned(_, let bounds): bounds
+            }
+        }
+    }
+
+    var tangible: Tangible {
+        guard isShown else { return .openSpace }
+        return hasScannedRoom ? .scanned(walls: collisionWalls, bounds: bounds) : .unscanned
+    }
+
     /// Why the room is not being sensed, when it is not. The cases stay
     /// distinct because each calls for a different sentence.
     enum Sensing: Equatable {

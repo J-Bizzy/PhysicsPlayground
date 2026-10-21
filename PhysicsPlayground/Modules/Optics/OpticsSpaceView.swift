@@ -150,15 +150,23 @@ struct OpticsSpaceView: View {
         )
     }
 
+    private func currentRoom() -> LightTracer.Room {
+        Self.room(for: appModel.room.tangible,
+                  placement: SIMD3<Double>(appModel.labPlacement.offset))
+    }
+
     /// The room the light lands in, in the lab's coordinates: the walls
     /// ARKit has found and the scanned bounds, and the floor. An unscanned
     /// room has no walls to land on — the light runs out instead of
-    /// painting a wall that is not there.
-    private func currentRoom() -> LightTracer.Room {
-        let placement = SIMD3<Double>(appModel.labPlacement.offset)
-        let walls = appModel.room.hasScannedRoom
-            ? appModel.room.collisionWalls.map { $0.translated(by: -placement) }
-            : []
+    /// painting a wall that is not there — and neither has deep space,
+    /// where the floor (the platform's plane) is all there is.
+    static func room(for tangible: RoomModel.Tangible, placement: SIMD3<Double>) -> LightTracer.Room {
+        let walls: [RoomWalls.Wall]
+        if case .scanned(let found, _) = tangible {
+            walls = found.map { $0.translated(by: -placement) }
+        } else {
+            walls = []
+        }
         return LightTracer.Room(walls: walls, floorY: OpticsModel.floorY - placement.y,
                                 maxSegment: 6)
     }

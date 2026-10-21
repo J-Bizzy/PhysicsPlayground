@@ -26,7 +26,7 @@ enum KinematicsModule {
                 AnyView(KinematicsSpaceView().environment(appModel.kinematicsModel))
             },
             readings: { readings(appModel: appModel) },
-            more: more(appModel.kinematicsModel),
+            more: more(appModel.kinematicsModel, roomInReach: { appModel.room.isShown }),
             timeScrub: .init(model: appModel.kinematicsModel),
             reset: { appModel.kinematicsModel.reset() }
         )
@@ -36,7 +36,8 @@ enum KinematicsModule {
     /// asked (2026-10-17), the world it happens on, its air, and the room's
     /// walls. Angle and speed are the aim bead; the ball is the fan over the
     /// launcher.
-    static func more(_ model: KinematicsModel) -> [MoreItem] {
+    static func more(_ model: KinematicsModel,
+                     roomInReach: @escaping () -> Bool = { true }) -> [MoreItem] {
         [
             // The prediction: the arc, its apex and landing, the vacuum ghost.
             .toggle(id: "trajectory", title: "Trajectory",
@@ -54,9 +55,11 @@ enum KinematicsModule {
                           format: gravityReadout,
                           read: { model.gravity },
                           write: { model.gravity = gravityDetent($0) })),
+            // Nothing to bounce off in deep space.
             .toggle(id: "walls", title: "Walls bounce", symbol: "square.dashed",
                     isOn: { model.respectRoomWalls },
-                    set: { model.respectRoomWalls = $0 }),
+                    set: { model.respectRoomWalls = $0 },
+                    isEnabled: roomInReach),
             .toggle(id: "air", title: "Air resistance", symbol: "wind",
                     isOn: { model.airResistance },
                     set: { model.airResistance = $0 }),

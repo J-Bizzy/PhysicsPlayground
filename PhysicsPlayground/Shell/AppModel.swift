@@ -144,6 +144,9 @@ final class AppModel {
     private func refreshImmersionStyle() {
         immersionStyle = surroundings == .deepSpace
             ? .full : (activeModule?.immersionStyle ?? .mixed)
+        // The room is out of reach in deep space (`RoomModel.tangible`).
+        let shown = surroundings == .room
+        if room.isShown != shown { room.isShown = shown }
     }
 
     /// The user's real room — bounds, walls, furniture. Shared by every

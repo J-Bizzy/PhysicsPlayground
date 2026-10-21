@@ -122,7 +122,8 @@ final class KinematicsModel {
     var handStrikes: [SphereStrike.Sphere] = []
     nonisolated static let swatSpeed = 1.2                    // m/s
     /// The room's box for the containment clamp — no ball ever ends a frame outside the room.
-    var roomBounds: RoomBox = .unscanned
+    /// Nil in deep space, where there is no room to be outside (`RoomModel.tangible`).
+    var roomBounds: RoomBox? = .unscanned
 
     init() {
         reset()
@@ -984,8 +985,7 @@ final class KinematicsModel {
 
     /// Invariant: a ball never ends a frame outside the room — whatever slips past the strike test is clamped back inside `roomBounds` with velocity reflected.
     private func contain(_ flight: inout Flight) {
-        guard respectRoomWalls else { return }
-        let box = roomBounds
+        guard respectRoomWalls, let box = roomBounds else { return }
         let r = flight.projectile.diameter / 2
         var position = flight.state.position
         var velocity = flight.state.velocity

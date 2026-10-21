@@ -226,7 +226,8 @@ final class FieldRenderer {
         SIMD3<Double>(viewRoot.convert(position: world, from: nil))
     }
 
-    func tick(_ model: FieldModel, room: RoomBox = .unscanned) {
+    /// `room` is what the lines are clipped to; nil (deep space) clips nothing.
+    func tick(_ model: FieldModel, room: RoomBox? = .unscanned) {
         self.model = model
         heldChargeID = model.heldChargeID
         syncProbeTrail(model)
@@ -264,7 +265,7 @@ final class FieldRenderer {
         capacitor: PlateField.Capacitor? = nil,
         slabCenter: SIMD3<Double> = .zero,
         magneticFieldOn: Bool = false,
-        room: RoomBox = .unscanned
+        room: RoomBox? = .unscanned
     ) {
         // Cheap path — runs every render.
         if let id = heldChargeID {
@@ -336,13 +337,15 @@ final class FieldRenderer {
         var region: FieldModel.SamplingRegion
         var wantLines: Bool
         /// The user's real room. Lines are clipped to it: a wall is a
-        /// conductor's boundary as far as this picture is concerned.
-        var room: RoomBox
+        /// conductor's boundary as far as this picture is concerned. Nil in
+        /// deep space, where nothing stops them.
+        var room: RoomBox?
         /// The calibrated plates, joining the same trace as the charges.
         var capacitor: PlateField.Capacitor?
     }
 
-    private var lastRoom: RoomBox?
+    /// The room the lines were last traced for; `.some(nil)` is deep space.
+    private var lastRoom: RoomBox??
 
     /// Re-aims the arrowhead pool at the given points, each cone rotated
     /// from its rest +y onto the line's local direction there.
@@ -866,7 +869,7 @@ final class FieldRenderer {
             // Clip to the room, then drop the crumbs: a two-point stub
             // left over from a clip carries no shape and only adds
             // overdraw.
-            let lines = job.room.clip(polylines: traced)
+            let lines = (job.room.map { $0.clip(polylines: traced) } ?? traced)
                 .filter { $0.count > 2 }
                 .map { $0.map(SIMD3<Float>.init) }
             result.tube = TubeMesh.buffers(lines: lines, radius: FieldRenderer.lineRadius)
