@@ -269,7 +269,7 @@ All hub motion ticks from `SceneEvents.Update` — never `RealityView`'s
 
 | State | Behaviour | Value |
 |---|---|---|
-| Opening | Particles fall and swirl (crossed-field cycloid), ripple (deep-water wave), and settle onto the plinths' knurled rims (critically damped); the labs fade up on them (`Hub/Opening.swift`) | ~3.1 s; any pinch skips |
+| Opening | "Birth of a System" (2026-10-20): night and real sky over the room; a star ignites; its dust disk shears (Ω = √(GM/r³) per ring); seven worlds condense and fly Kepler transfers to land on the plinths as the clock (`TimeLapse`) comes to rest; the labs grow out of them (`Hub/OpeningPlan.swift`, `Hub/OpeningStage.swift`). Sorted as one group: night < Milky Way < stars < disk < star glow < paths | ~6.3 s, bell at 5.4 s; any pinch skips (0.25 s fade, sound faded) |
 | Idle portal | The lab's own physics loops on its plinth, nothing framing it — the portal **is** the demo; the plinth swings slowly about its own axis so the lab shows its depth; each on its own phase (2026-10-19: the glass circles and rings went) | plinth 0.32 m, ±12° over 14 s |
 | Wordmark | Arrives by physics (Physics drops and bounces, Playground swings in, the dot lands last), then a travelling wave a few millimetres high and a glint every 9 s; a pinch hops a letter (`Hub/HubTitleMotion.swift`) | wave 3.5 mm, hop 7 cm |
 | Enter | The portal swells toward you and the home dissolves — an arrival, never a hard cut | scale 1.35, +0.25 m, 0.42 s |

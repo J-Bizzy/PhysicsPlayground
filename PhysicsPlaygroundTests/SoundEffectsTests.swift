@@ -112,4 +112,16 @@ final class SoundEffectsTests: XCTestCase {
         XCTAssertGreaterThan(rms(Array(gleam[Int(1.0 * rate)..<Int(1.2 * rate)])), 0.005,
                              "the gleam is gone within a second")
     }
+
+    /// The opening's chimes ring as its worlds finish condensing, and its
+    /// low bloom as its star ignites — `OpeningPlan`'s moments, not a copy
+    /// that could drift from them.
+    func testTheOpeningsChimesFollowItsWorlds() {
+        let plan = OpeningPlan.shared
+        XCTAssertEqual(SoundEffects.calibrationChimes.count, plan.worlds.count)
+        for (chime, world) in zip(SoundEffects.calibrationChimes, plan.worlds) {
+            XCTAssertEqual(chime, world.condenseEnd, accuracy: 0.006, world.name)
+        }
+        XCTAssertEqual(SoundEffects.calibrationIgnition, OpeningPlan.ignition, accuracy: 1e-9)
+    }
 }

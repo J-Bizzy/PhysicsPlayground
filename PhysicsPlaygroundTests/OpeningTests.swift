@@ -2,10 +2,10 @@
 //  OpeningTests.swift
 //  PhysicsPlaygroundTests
 //
-//  The opening is physics, so it is tested as physics: the swirl is
-//  a solution of m·a = q·v×B + m·g, the magnetic force does no work, the
-//  ripple obeys deep-water dispersion and comes to rest, the settle never
-//  overshoots, and every hand-over happens with the particles at rest.
+//  What the home reads of its opening: where the labs stand, and how they,
+//  their names and the wordmark arrive. The opening's physics — "Birth of
+//  a System" since 2026-10-20 — is `OpeningPlanTests`; the particle field
+//  it replaced, and its tests, are in the git history.
 //
 
 import XCTest
@@ -15,190 +15,6 @@ import simd
 final class OpeningTests: XCTestCase {
 
     private let portals = PortalLayout.portals(count: 7)
-    private var cloud: [Opening.Particle] { Opening.particles(for: portals) }
-
-    // MARK: The clock
-
-    func testTheOpeningRunsThreeToFourSeconds() {
-        XCTAssertGreaterThanOrEqual(Opening.duration, 3.0)
-        XCTAssertLessThanOrEqual(Opening.duration, 4.0)
-    }
-
-    /// The calibration bell is baked into its WAV at a fixed second; the
-    /// particles must land on it.
-    @MainActor
-    func testTheParticlesLandOnTheBell() {
-        XCTAssertEqual(Opening.landingTime, SoundPalette.calibrationLanding,
-                       accuracy: 1e-9)
-    }
-
-    // MARK: The swirl is crossed-field motion
-
-    /// The closed form satisfies the equation of motion: the acceleration
-    /// is the Lorentz force per unit mass plus gravity, a = ω(vy, −vx) − g ŷ.
-    func testTheSwirlIsASolutionOfTheLorentzEquation() {
-        let h = 1e-4
-        for charge in [1.0, -1.0] {
-            let omega = charge * Opening.cyclotronRate
-            for t in stride(from: 0.05, to: Opening.swirlDuration - 0.05, by: 0.07) {
-                let before = Opening.cycloid(time: t - h, charge: charge)
-                let now = Opening.cycloid(time: t, charge: charge)
-                let after = Opening.cycloid(time: t + h, charge: charge)
-                let a = (after - 2 * now + before) / (h * h)
-                let v = Opening.cycloidVelocity(time: t, charge: charge)
-                let expected = SIMD3(omega * v.y, -omega * v.x - Opening.g, 0)
-                XCTAssertEqual(a.x, expected.x, accuracy: 1e-3)
-                XCTAssertEqual(a.y, expected.y, accuracy: 1e-3)
-            }
-        }
-    }
-
-    /// A released charge first falls with exactly g: the field acts on
-    /// velocity, and there is none yet.
-    func testItFirstFallsWithG() {
-        let t = 1e-3
-        let drop = -Opening.cycloid(time: t, charge: 1).y
-        XCTAssertEqual(drop, 0.5 * Opening.g * t * t, accuracy: 1e-9)
-    }
-
-    /// The magnetic force does no work: kinetic energy per unit mass is
-    /// exactly what the fall released.
-    func testTheFieldDoesNoWork() {
-        for charge in [1.0, -1.0] {
-            for t in stride(from: 0, through: Opening.swirlDuration, by: 0.05) {
-                let v = Opening.cycloidVelocity(time: t, charge: charge)
-                let drop = -Opening.cycloid(time: t, charge: charge).y
-                XCTAssertEqual(0.5 * simd_length_squared(v), Opening.g * drop,
-                               accuracy: 1e-9)
-            }
-        }
-    }
-
-    /// One arch, rest to rest: after a cyclotron period the charge is
-    /// back at its height, at rest, one drift 2πg/ω² sideways — and the
-    /// two signs drift opposite ways.
-    func testOneArchEndsAtRestOneDriftAway() {
-        for charge in [1.0, -1.0] {
-            let end = Opening.cycloid(time: Opening.swirlDuration, charge: charge)
-            let v = Opening.cycloidVelocity(time: Opening.swirlDuration, charge: charge)
-            XCTAssertEqual(end.y, 0, accuracy: 1e-9)
-            XCTAssertEqual(simd_length(v), 0, accuracy: 1e-9)
-            XCTAssertEqual(end.x, -charge * Opening.driftPerArch, accuracy: 1e-9)
-        }
-    }
-
-    // MARK: The ripple is a deep-water wave
-
-    func testTheRippleObeysDeepWaterDispersion() {
-        XCTAssertEqual(Opening.waveFrequency * Opening.waveFrequency,
-                       Opening.g * Opening.waveNumber, accuracy: 1e-9)
-        XCTAssertLessThan(Opening.waveNumber * Opening.waveAmplitude, 0.3,
-                          "too steep for the linear solution to hold")
-    }
-
-    /// Surface particles move on circles whose radius is the local
-    /// amplitude, and the ripple starts and ends with them at rest.
-    func testTheRippleOrbitsAreCirclesThatBeginAndEndAtRest() {
-        let rest = SIMD3<Double>(0.2, 1.9, -1.3)
-        for elapsed in stride(from: 0, through: Opening.rippleDuration, by: 0.05) {
-            let offset = Opening.ripple(at: rest, elapsed: elapsed)
-            XCTAssertEqual(simd_length(offset),
-                           Opening.waveAmplitude * Opening.rippleEnvelope(elapsed),
-                           accuracy: 1e-12)
-        }
-        let h = 1e-5
-        for edge in [0.0, Opening.rippleDuration] {
-            let speed = simd_length(Opening.ripple(at: rest, elapsed: edge + h)
-                                    - Opening.ripple(at: rest, elapsed: edge - h)) / (2 * h)
-            XCTAssertLessThan(speed, 1e-3, "the ripple hands over in motion")
-        }
-    }
-
-    // MARK: The settle
-
-    /// Critically damped: the particle closes on its target monotonically
-    /// and lands within a millimetre at the bell.
-    func testTheSettleNeverOvershootsAndLands() {
-        for particle in cloud {
-            let from = Opening.afterSwirl(particle)
-            var last = Double.infinity
-            for elapsed in stride(from: 0, through: Opening.settleDuration, by: 0.02) {
-                let distance = simd_distance(
-                    Opening.settle(from: from, to: particle.target, elapsed: elapsed),
-                    particle.target)
-                XCTAssertLessThanOrEqual(distance, last + 1e-12)
-                last = distance
-            }
-            XCTAssertLessThan(simd_distance(
-                Opening.settle(from: from, to: particle.target,
-                               elapsed: Opening.settleDuration),
-                particle.target), 0.01)
-        }
-    }
-
-    // MARK: The hand-overs
-
-    /// Position is continuous across every phase boundary: nothing jumps.
-    func testNothingJumpsBetweenPhases() {
-        let h = 1e-6
-        for particle in cloud.prefix(24) {
-            for boundary in [Opening.swirlStart, Opening.rippleStart,
-                             Opening.settleStart] {
-                let before = Opening.position(of: particle, at: boundary - h)
-                let after = Opening.position(of: particle, at: boundary + h)
-                XCTAssertLessThan(simd_distance(before, after), 1e-4,
-                                  "a particle jumped at t = \(boundary)")
-            }
-        }
-    }
-
-    // MARK: The room
-
-    /// The cloud stays above the portals and out of the wearer's face.
-    func testTheCloudKeepsClearOfTheWearer() {
-        let head = SIMD3<Double>(0, 1.6, 0)
-        for particle in cloud {
-            for t in stride(from: 0, through: Opening.settleStart, by: 0.02) {
-                let p = Opening.position(of: particle, at: t)
-                XCTAssertGreaterThan(p.y, PortalLayout.height,
-                                     "a particle fell through the portal row")
-                XCTAssertGreaterThan(simd_distance(p, head), 0.6,
-                                     "a particle passed within 60 cm of the face")
-            }
-        }
-    }
-
-    /// Every particle ends on its own plinth's rim: on the circle of the
-    /// plinth's radius about its top centre, in the plinth's tilted plane.
-    func testEveryParticleLandsOnItsPlinthsRim() {
-        let tilt = PortalLayout.plinthTilt
-        for particle in cloud {
-            let portal = portals[particle.portal]
-            let offset = particle.target - PortalLayout.plinthCentre(of: portal)
-            XCTAssertEqual(simd_length(offset), PortalLayout.plinthRadius, accuracy: 1e-9)
-            let normal = SIMD3<Double>(0, cos(tilt), 0) + portal.toward * sin(tilt)
-            XCTAssertEqual(simd_dot(offset, normal), 0, accuracy: 1e-9,
-                           "a particle landed off the plinth's plane")
-            XCTAssertEqual(Opening.position(of: particle, at: Opening.duration),
-                           particle.target)
-        }
-        XCTAssertEqual(Set(cloud.map(\.portal)), Set(0..<7))
-    }
-
-    /// The plinth tips its top toward the wearer: the rim's front is lower
-    /// than its back, by the plinth's tilt (`HubDioramaTests` holds the
-    /// milled stage to the same plane).
-    func testThePlinthTipsTowardTheWearer() {
-        let portal = portals[3]
-        let front = PortalLayout.rimPoint(of: portal, angle: .pi / 2)
-        let back = PortalLayout.rimPoint(of: portal, angle: -.pi / 2)
-        XCTAssertLessThan(front.y, back.y)
-        XCTAssertEqual(asin((back.y - front.y) / (2 * PortalLayout.plinthRadius)),
-                       PortalLayout.plinthTilt, accuracy: 1e-9)
-        XCTAssertLessThan(simd_length(SIMD3(front.x, 0, front.z)),
-                          simd_length(SIMD3(back.x, 0, back.z)),
-                          "the front of the rim is not the side nearer the wearer")
-    }
 
     // MARK: The portals
 
@@ -219,20 +35,35 @@ final class OpeningTests: XCTestCase {
         }
     }
 
+    /// Every plinth's top centre stands the same drop below its portal.
+    func testEveryPlinthStandsAtOneHeight() {
+        for portal in portals {
+            XCTAssertEqual(PortalLayout.plinthCentre(of: portal).y,
+                           PortalLayout.height - PortalLayout.plinthDrop, accuracy: 1e-12)
+        }
+    }
+
     // MARK: Arriving
 
-    /// The portals grow the last few per cent into place as their glass
-    /// fades up — smaller before, monotonically larger, and exactly full
-    /// size by the time the opening hands over (or `finishOpening` would
-    /// snap them).
-    func testThePortalsGrowIntoPlaceAndFinishFullSize() {
-        XCTAssertEqual(Opening.portalScale(at: 0), 1 - Opening.portalGrowth, accuracy: 1e-6)
+    /// The labs fade up as their worlds land and are fully there before the
+    /// opening ends.
+    func testTheLabsComeUpAsTheWorldsLand() {
+        XCTAssertEqual(Opening.portalOpacity(at: Opening.landingTime - 0.5), 0)
+        XCTAssertGreaterThan(Opening.portalOpacity(at: Opening.landingTime), 0)
+        XCTAssertEqual(Opening.portalOpacity(at: Opening.duration), 1, accuracy: 1e-6)
+    }
+
+    /// A lab grows out of its world into place — smaller before,
+    /// monotonically larger, and exactly full size by the time the opening
+    /// hands over (or finishing it would snap them).
+    func testTheLabsGrowIntoPlaceAndFinishFullSize() {
+        XCTAssertEqual(Opening.portalScale(at: 0), 1 - OpeningPlan.labGrowth, accuracy: 1e-6)
         var previous: Float = 0
         for step in 0...400 {
             let t = Opening.duration * Double(step) / 400
             let scale = Opening.portalScale(at: t)
-            XCTAssertGreaterThanOrEqual(scale, previous - 1e-6, "a portal shrank at \(t) s")
-            XCTAssertLessThanOrEqual(scale, 1 + 1e-6, "a portal overshot at \(t) s")
+            XCTAssertGreaterThanOrEqual(scale, previous - 1e-6, "a lab shrank at \(t) s")
+            XCTAssertLessThanOrEqual(scale, 1 + 1e-6, "a lab overshot at \(t) s")
             previous = scale
         }
         XCTAssertEqual(Opening.portalScale(at: Opening.duration), 1, accuracy: 1e-6)
@@ -241,7 +72,7 @@ final class OpeningTests: XCTestCase {
     /// The wordmark rises into place as it fades up, and is exactly in
     /// place when the opening ends.
     func testTheWordmarkRisesIntoPlace() {
-        XCTAssertEqual(Opening.titleOffset(at: 0), -Opening.titleRiseDistance, accuracy: 1e-6)
+        XCTAssertEqual(Opening.titleOffset(at: 0), -OpeningPlan.titleRise, accuracy: 1e-6)
         var previous = -Float.infinity
         for step in 0...400 {
             let t = Opening.duration * Double(step) / 400
@@ -251,5 +82,13 @@ final class OpeningTests: XCTestCase {
             previous = offset
         }
         XCTAssertEqual(Opening.titleOffset(at: Opening.duration), 0, accuracy: 1e-6)
+    }
+
+    /// The labels come last, from the landing on.
+    func testTheNamesComeLast() {
+        XCTAssertEqual(Opening.labelOpacity(at: Opening.landingTime - 0.01), 0)
+        XCTAssertEqual(Opening.labelOpacity(at: Opening.duration), 1, accuracy: 1e-6)
+        XCTAssertTrue(Opening.isFinished(at: Opening.duration))
+        XCTAssertFalse(Opening.isFinished(at: Opening.duration - 0.01))
     }
 }

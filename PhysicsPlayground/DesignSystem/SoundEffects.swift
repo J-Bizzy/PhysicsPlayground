@@ -21,8 +21,14 @@ import Foundation
 nonisolated enum SoundEffects {
 
     /// When the opening's bell strikes, seconds into `calibration` —
-    /// `Opening.landingTime` is pinned to it by `OpeningTests`.
-    static let calibrationLanding = 2.65
+    /// `OpeningPlan.landingTime` is pinned to it by `OpeningPlanTests`.
+    static let calibrationLanding = 5.4
+    /// When the opening's star ignites.
+    static let calibrationIgnition = 0.8
+    /// When each of the opening's seven worlds has condensed, innermost
+    /// first — `OpeningPlan`'s, to the hundredth, pinned by test. Each is
+    /// a soft chime.
+    static let calibrationChimes: [Double] = [2.286, 3.285, 3.419, 3.717, 3.776, 3.898, 3.882]
 
     /// Every one-shot, by the name `SoundPalette.Sound` uses.
     static let names = ["pop", "whoosh", "thud", "chime", "boom",
@@ -148,15 +154,53 @@ nonisolated enum SoundEffects {
         return withRoom(dry, rate, size: 0.9, wet: 0.32, tail: 0.9)
     }
 
-    /// The opening: the score's first chord rising out of nothing — warm
-    /// saws behind a filter that opens as it swells, under an airy rise
-    /// — which lets go the instant the bell strikes at the landing.
+    /// The opening, "Birth of a System": a breath of air as the room
+    /// darkens; a low bloom as the star ignites; the score's first chord
+    /// rising out of the disk — warm saws behind a filter that opens as it
+    /// swells; a soft chime as each world condenses, climbing A major's
+    /// pentatonic; and the bell, the loudest moment, at the landing, where
+    /// everything else lets go.
     static func calibration(_ rate: Double) -> [Double] {
         let landing = calibrationLanding
-        let length = 4.8
+        let length = landing + 2.4
         var out = [Double](repeating: 0, count: Int(length * rate))
 
-        // The swell: A2 E3 B3 C♯4 through a low-pass opening 250 → 1,400 Hz.
+        // The night: seeded noise in a low band, rising with the dark and
+        // held under everything, cresting with the swell into the landing.
+        var noise = AmbientScore.SplitMix64(seed: 0xCA1B)
+        var air = AmbientScore.SVF()
+        for i in out.indices {
+            let t = Double(i) / rate
+            guard t < landing + 0.3 else { break }
+            let swell = pow(min(max((t - 1.5) / (landing - 1.5), 0), 1), 3)
+            if i & 15 == 0 {
+                air.tune(cutoff: 700 + 600 * min(t / 0.8, 1) + 3_000 * swell,
+                         sampleRate: rate, damping: 0.9)
+            }
+            let dark = 0.4 * sin(.pi / 2 * min(t / 0.8, 1))
+            let letGo = t < landing ? 1 : exp(-(t - landing) * 14)
+            out[i] += air.bandpass(noise.next() * 2 - 1) * 0.05 * (dark + swell) * letGo
+        }
+
+        // Ignition: an A1 struck soft and low, two FM operators blooming
+        // open and ringing down under the disk.
+        let ignition = calibrationIgnition
+        var carrier = 0.0, modulator = 0.0
+        let root = hz(33)
+        for i in Int(ignition * rate)..<out.count {
+            let t = Double(i) / rate - ignition
+            guard t < landing - ignition + 0.2 else { break }
+            let bloom = (1 - exp(-t * 6)) * exp(-t * 0.7)
+            let index = 2.2 * exp(-t * 1.8)
+            out[i] += sin(2 * .pi * carrier + index * sin(2 * .pi * modulator)) * 0.32 * bloom
+                * (t < landing - ignition ? 1 : exp(-(t - (landing - ignition)) * 20))
+            carrier += root / rate
+            modulator += 2 * root / rate
+        }
+
+        // The swell: A2 E3 B3 C♯4 from the disk's arrival, through a
+        // low-pass opening 250 → 1,400 Hz by the landing.
+        let swellStart = 1.5
         for (index, midi) in [45, 52, 59, 61].enumerated() {
             var saws = [-7.0, 6.0].map {
                 AmbientScore.Saw(frequency: hz(midi) * pow(2, $0 / 1200),
@@ -167,33 +211,26 @@ nonisolated enum SoundEffects {
             for i in out.indices {
                 let t = Double(i) / rate
                 guard t < landing + 0.6 else { break }
+                let open = min(max((t - swellStart) / (landing - swellStart), 0), 1)
                 if i & 15 == 0 {
-                    let open = min(t / landing, 1)
                     let cutoff = 250 + 1_150 * open * open
                     stage1.tune(cutoff: cutoff, sampleRate: rate, damping: 1.848)
                     stage2.tune(cutoff: cutoff, sampleRate: rate, damping: 0.765)
                 }
-                let rise = pow(min(t / landing, 1), 2.2)
+                let rise = pow(open, 2.2)
                 let letGo = t < landing ? 1 : exp(-(t - landing) * 9)
                 let v = (saws[0].next() + saws[1].next()) * 0.5
                 out[i] += stage2.lowpass(stage1.lowpass(v)) * gain * rise * letGo
             }
         }
 
-        // The air: seeded noise in a band rising 1.5 → 5 kHz, cresting
-        // into the landing.
-        var noise = AmbientScore.SplitMix64(seed: 0xCA1B)
-        var air = AmbientScore.SVF()
-        for i in out.indices {
-            let t = Double(i) / rate
-            guard t < landing + 0.3 else { break }
-            if i & 15 == 0 {
-                air.tune(cutoff: 1_500 + 3_500 * min(t / landing, 1),
-                         sampleRate: rate, damping: 0.9)
+        // The worlds: one soft chime each, A5 B5 C♯6 E6 F♯6 A6 B6.
+        for (at, midi) in zip(calibrationChimes, [81, 83, 85, 88, 90, 93, 95]) {
+            let chime = fmBell(rate, frequency: hz(midi), length: 1.2, ring: 2.6)
+            let start = Int(at * rate)
+            for i in chime.indices where start + i < out.count {
+                out[start + i] += chime[i] * 0.16
             }
-            let rise = pow(min(t / landing, 1), 3)
-            let letGo = t < landing ? 1 : exp(-(t - landing) * 14)
-            out[i] += air.bandpass(noise.next() * 2 - 1) * 0.05 * rise * letGo
         }
 
         // The bell: A4 under A5 and E6, struck at the landing.

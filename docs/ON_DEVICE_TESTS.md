@@ -39,9 +39,9 @@ contradicts this section, this section is current.
 
 - [ ] **0 · Arrival.** Cold launch goes STRAIGHT into the space: a beat
       of plain passthrough, then the room dims slightly and glowing
-      particles fall, swirl, ripple like a wave and settle into six
-      portals around you, each looping its own physics — about three
-      seconds. A pinch anywhere during it skips to the end. With Reduce
+      a star is born ahead of you and seven worlds fly out to land on
+      the seven plinths around you, each lab looping its own physics —
+      about six and a half seconds ("Birth of a System", 2026-10-20). A pinch anywhere during it skips to the end. With Reduce
       Motion on, the portals simply fade in. The end state IS the home:
       the wordmark, six short names, More.
 - [ ] **1 · Enter.** Pinch the Projectiles portal: dissolve through
@@ -159,7 +159,7 @@ Run a Debug build from Xcode with `-frameLog 1` in the scheme's arguments and ke
 
 - [ ] **Every lab at rest holds 90 Hz:** the steady lines read about 11.1 ms median with 0 long. In the simulator, every lab and the home in both surroundings do.
 - [ ] **Entering a lab fades it up, it does not pop.** The room stands alone for a moment (under half a second), then the lab fades up over about 0.2 s. No dropped frame is named after the lab appears.
-- [ ] **The opening plays clean.** After launch there is a short still beat, then the particles fade up. Any "dropped" lines come before "the opening's clock starts", never after.
+- [ ] **The opening plays clean.** After launch there is a short still beat, then the night falls. Any "dropped" lines come before "the opening's clock starts", never after.
 - [ ] **Dragging a charge with Field lines and Equipotentials on stays smooth.** The lines move with the charge every frame; their shape refreshes 30 times a second, which should be invisible.
 - [ ] **Dragging a magnet with Field lines on**, the same.
 - [ ] **A thrown ball's numbers (More › Numbers) change without a hitch.** The ball's flight never stutters as its speed and height tick over.
@@ -321,22 +321,28 @@ working session:
       one layer, the spectrum floating in front of it on another. Look
       around it: the parallax should separate them by depth.
 
-- [ ] **The opening plays once and ends as the home.** The room dims a
-      little; particles fall under gravity, swirl in a crossed field,
-      ripple like a wave and settle into seven portals in an arc around
-      you. It takes about three seconds and the bell lands as they
-      settle.
-- [ ] **A pinch skips it.** Pinch anywhere during the opening: the
-      portals are simply there.
-- [ ] **Reduce Motion:** no particles at all — the portals fade in.
+- [ ] **The opening plays once and ends as the home — "Birth of a System"
+      (2026-10-20).** The room darkens under a night of real stars (a trace
+      of the room stays); a star ignites ahead and a little right; its dust
+      disk fades up and its spokes wind into spiral arms; seven worlds
+      gather in gaps in the disk, each with a soft chime, and fly out one
+      by one on curved paths to land on the seven plinths as the bell
+      strikes. The labs grow out of them, the night lifts. About six and a
+      half seconds.
+- [ ] **Comfort.** The disk turning should not make you feel you are
+      moving (mild vection is the risk); nothing flies at your face (the
+      nearest path passes over a metre from your eyes); the room's trace is
+      enough to stay oriented.
+- [ ] **A pinch skips it.** Pinch anywhere during the opening: the labs,
+      their names and the wordmark are simply there, the star and worlds
+      fade away in a quarter-second, and the sound fades with them — it
+      does not play on.
+- [ ] **In Deep space** the opening plays over the sky that is already
+      there, with no second night.
+- [ ] **Reduce Motion:** no opening at all — the labs fade in.
 - [ ] **Each portal previews its physics in a loop** and its short name
       is legible from where you stand, all seven at a glance — system type
       on a glass capsule with the lab's colour as a dot.
-- [ ] **The particles are points of light**, not beads or tiles: soft
-      halos, no square around any of them, and the room's dimming intact
-      behind them. They line each plinth's knurled rim as the lab on it
-      grows the last few per cent into place, and the wordmark rises into
-      its spot.
 - [ ] **Each lab stands free on its plinth** (2026-10-19): no glass and no
       ring round it. The seven plinths are one size at one height, a row
       of milled turntables with a fine champagne knurl, not gear teeth.

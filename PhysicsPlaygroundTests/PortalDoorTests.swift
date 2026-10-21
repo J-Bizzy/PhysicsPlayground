@@ -77,7 +77,8 @@ final class PortalDoorTests: XCTestCase {
     // MARK: The opening
 
     /// A first arrival plays the opening, and any pinch skips it: the
-    /// shield that catches the pinch goes with it, and the particles too.
+    /// shield that catches the pinch goes with it at once, and the
+    /// opening's star, disk and worlds fade away behind the home.
     func testAnyPinchSkipsTheOpening() throws {
         let (scene, _) = builtScene(openingPlayed: false)
         XCTAssertTrue(scene.isOpening)
@@ -93,6 +94,36 @@ final class PortalDoorTests: XCTestCase {
         XCTAssertTrue(played, "a skipped opening must still count as seen")
         XCTAssertFalse(scene.root.children.contains { $0.name == HubScene.skipShieldName },
                        "the shield outlived the opening and would eat every pinch")
+        for _ in 0..<30 { scene.animate(dt: 1.0 / 90.0) }
+        XCTAssertNil(scene.root.findEntity(named: "opening"),
+                     "a skipped opening's star and worlds stayed in the room")
+    }
+
+    /// In the room the opening brings its own night; in deep space the sky
+    /// is already there and it brings none.
+    func testTheOpeningBringsANightOnlyToTheRoom() {
+        let room = HubScene()
+        room.build(modules: ModuleCatalog.all(appModel: AppModel()))
+        XCTAssertNotNil(room.root.findEntity(named: "opening-night"))
+        let space = HubScene()
+        space.inSpace = true
+        space.build(modules: ModuleCatalog.all(appModel: AppModel()))
+        XCTAssertNotNil(space.root.findEntity(named: "opening"))
+        XCTAssertNil(space.root.findEntity(named: "opening-night"))
+    }
+
+    /// The room's own dimming steps aside for the night and comes back as
+    /// it lifts — and comes back on a skip too.
+    func testTheNightHandsTheRoomBackToItsDimming() {
+        let scene = HubScene()
+        var fell = 0, handed = 0
+        scene.onNightFalls = { fell += 1 }
+        scene.onHandOver = { handed += 1 }
+        scene.build(modules: ModuleCatalog.all(appModel: AppModel()))
+        XCTAssertEqual(fell, 1)
+        XCTAssertEqual(handed, 0)
+        scene.skipOpening()
+        XCTAssertEqual(handed, 1)
     }
 
     /// Walking back from a lab is not an arrival.

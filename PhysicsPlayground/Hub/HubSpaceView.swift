@@ -1,8 +1,8 @@
 //  HubSpaceView.swift — the home: the labs standing around the wearer in miniature, each on its
 //  own plinth and running its lab's physics in a loop. A pinch on one (a "portal") enters that
-//  lab. The home is the end state of the opening (`Opening`): particles that fall, swirl and
-//  ripple, then settle onto the plinths' rims. Any pinch skips the opening; Reduce Motion fades
-//  the labs in instead.
+//  lab. The home is the end state of the opening, "Birth of a System" (`OpeningPlan`, drawn by
+//  `OpeningStage`): a star ignites, its disk shears, seven worlds condense and fly out on Kepler
+//  arcs to land on the plinths. Any pinch skips it; Reduce Motion fades the labs in instead.
 //  Secondary things — the flat lab list, Settings, About — are behind the one More.
 
 import SwiftUI
@@ -33,6 +33,12 @@ struct HubSpaceView: View {
             scene.openingAlreadyPlayed = appModel.hasPlayedArrival
             scene.onOpeningPlayed = { appModel.hasPlayedArrival = true }
             scene.onEnter = enter
+            // The opening's night stands in for the room's dimming while it
+            // plays, and hands back to it as it lifts. In deep space the sky
+            // is already there and there is nothing to dim.
+            scene.inSpace = appModel.surroundings == .deepSpace
+            scene.onNightFalls = { appModel.setDimming(0) }
+            scene.onHandOver = { appModel.setDimming(AppModel.homeDimming) }
             SoundPalette.warmUp()
             #if DEBUG
             let buildStarted = ContinuousClock.now
@@ -274,8 +280,23 @@ final class HubScene {
     private enum OpeningPhase { case pending, running, done }
     private var openingPhase: OpeningPhase = .pending
     private var openingStart = 0.0
-    private let particleRoot = Entity()
-    private var particles: [(entity: Entity, particle: Opening.Particle)] = []
+    /// "Birth of a System", while it plays (`OpeningStage`).
+    private var stage: OpeningStage?
+    /// A skipped opening's stage, fading away over `skipFade`.
+    private var leavingStage: OpeningStage?
+    private var leavingSince = 0.0
+    private static let skipFade = 0.25
+    /// The swell and bell, so a skip can let them go.
+    private var openingSound: AudioPlaybackController?
+    /// Whether the room's own dimming has taken over from the night.
+    private var handedOver = false
+    /// True in deep space, where the opening brings no night or sky of its
+    /// own. Set before `build`.
+    var inSpace = false
+    /// The night falls over the room: the house dimming steps aside for it.
+    var onNightFalls: (() -> Void)?
+    /// The night lifts: the house dimming takes over (also on a skip).
+    var onHandOver: (() -> Void)?
     private var skipShield: Entity?
 
     /// Whether the opening is playing — any pinch then skips it.
@@ -326,8 +347,8 @@ final class HubScene {
         root.children.removeAll()
         titleAnchor.children.removeAll()
         portals.removeAll()
-        particles.removeAll()
-        particleRoot.children.removeAll()
+        stage = nil
+        leavingStage = nil
 
         // Arc order: the two domains, left to right, as the flat catalog lists them.
         let byID = Dictionary(uniqueKeysWithValues: modules.map { ($0.id, $0) })
@@ -493,29 +514,15 @@ final class HubScene {
         titleArrives = true
         presence = 1
 
-        // The cloud: points of light, not beads — one soft glow sprite
-        // (a bright core in a fading halo), turned to face the wearer, in a
-        // warm and a cool tint for the two charges. Sizes vary a little, so
-        // the sheet has depth instead of reading as a printed pattern.
-        let mesh = Primitives.plane(width: Self.particleSpan, height: Self.particleSpan,
-                                    cornerRadius: 0)
-        let warm = UIColor(red: 1.0, green: 0.70, blue: 0.58, alpha: 1)
-        let cool = UIColor(red: 0.62, green: 0.80, blue: 1.0, alpha: 1)
-        let mask = Self.glowMask()
-        let positive = Self.particleMaterial(warm, mask: mask)
-        let negative = Self.particleMaterial(cool, mask: mask)
-        for (index, particle) in Opening.particles(for: layout).enumerated() {
-            let entity = ModelEntity(mesh: mesh,
-                                     materials: [particle.charge > 0 ? positive : negative])
-            entity.position = SIMD3<Float>(particle.start)
-            entity.components.set(BillboardComponent())
-            // A fixed, irregular spread of sizes (golden-ratio steps), 0.7–1.3×.
-            let spread = (Double(index) * 0.618_034).truncatingRemainder(dividingBy: 1)
-            entity.scale = SIMD3(repeating: Float(0.7 + 0.6 * spread))
-            particleRoot.addChild(entity)
-            particles.append((entity, particle))
+        // "Birth of a System" needs the seven plinths it lands on.
+        guard layout.count == OpeningPlan.shared.worlds.count else {
+            openingPhase = .done
+            return
         }
-        root.addChild(particleRoot)
+        let made = OpeningStage(inSpace: inSpace)
+        root.addChild(made.root)
+        stage = made
+        if !inSpace { onNightFalls?() }
 
         let shield = Self.makeSkipShield()
         root.addChild(shield)
@@ -526,74 +533,6 @@ final class HubScene {
         updateOpening()
     }
 
-    /// Each particle's sprite, metres across: its bright core is about a
-    /// fifth of that — a point of light at two metres — and the rest halo.
-    private static let particleSpan: Float = 0.05
-
-    /// How bright the glow is at each radius, centre (0) to edge (1):
-    /// a hot core, a soft halo, nothing at the sprite's edge.
-    private static let glowStops: [(at: CGFloat, level: CGFloat)] = [
-        (0, 1), (0.16, 0.85), (0.34, 0.22), (0.62, 0.06), (1, 0),
-    ]
-
-    /// Draws the glow's radial profile into a square image: `colour(level)`
-    /// at each stop, on an opaque ground of `colour(0)`.
-    private static func radialImage(size: Int, _ colour: (CGFloat) -> UIColor) -> CGImage? {
-        let format = UIGraphicsImageRendererFormat()
-        format.scale = 1
-        format.opaque = true
-        let renderer = UIGraphicsImageRenderer(size: CGSize(width: size, height: size),
-                                               format: format)
-        let image = renderer.image { context in
-            colour(0).setFill()
-            context.fill(CGRect(x: 0, y: 0, width: size, height: size))
-            let colours = glowStops.map { colour($0.level).cgColor } as CFArray
-            guard let gradient = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(),
-                                            colors: colours,
-                                            locations: glowStops.map(\.at)) else { return }
-            let centre = CGPoint(x: size / 2, y: size / 2)
-            context.cgContext.drawRadialGradient(
-                gradient, startCenter: centre, startRadius: 0,
-                endCenter: centre, endRadius: CGFloat(size) / 2, options: [])
-        }
-        return image.cgImage
-    }
-
-    /// The glow's shape as an opacity mask: white where it is lit, black
-    /// where it is not. RealityKit reads transparency from a mask like this,
-    /// not from a colour texture's alpha (which drew every particle as a
-    /// pale square).
-    private static func glowMask() -> TextureResource? {
-        guard let image = radialImage(size: 128, { UIColor(white: $0, alpha: 1) }) else { return nil }
-        return try? TextureResource(image: image, options: .init(semantic: .raw))
-    }
-
-    /// The particle's light: its tint, running white-hot at the core.
-    private static func particleMaterial(_ tint: UIColor, mask: TextureResource?) -> UnlitMaterial {
-        var material = UnlitMaterial(color: tint)
-        let hot = radialImage(size: 64) { level in
-            // White at the very centre, the tint everywhere the halo is.
-            let white = max(0, (level - 0.85) / 0.15)
-            var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
-            tint.getRed(&r, green: &g, blue: &b, alpha: &a)
-            return UIColor(red: r + (1 - r) * white, green: g + (1 - g) * white,
-                           blue: b + (1 - b) * white, alpha: 1)
-        }
-        if let hot, let colour = try? TextureResource(image: hot, options: .init(semantic: .color)) {
-            material.color = .init(tint: .white, texture: .init(colour))
-        }
-        if let mask {
-            material.blending = .transparent(opacity: .init(scale: 1, texture: .init(mask)))
-        } else {
-            material.blending = .transparent(opacity: .init(floatLiteral: 0.85))
-        }
-        // Light, not a surface: a sprite that wrote depth cut its whole square
-        // out of the room's dimming shell behind it (and out of its neighbours'
-        // halos), so each particle stood in a pale, undimmed tile.
-        material.writesDepth = false
-        return material
-    }
-
     /// Drives every curve of the opening, then clears it away and goes quiet.
     private func updateOpening() {
         guard openingPhase == .running else { return }
@@ -602,21 +541,16 @@ final class HubScene {
             finishOpening()
             return
         }
-        // Never quite 0 while the clock holds, so the particles are drawn
-        // (and ready) before they are seen; see `Settle.hiddenOpacity`.
-        let light = openingClockStarted || openingFrozenAt != nil
-            ? Opening.particleOpacity(at: t) : Settle.hiddenOpacity
-        particleRoot.isEnabled = light > 0.001
-        particleRoot.components.set(OpacityComponent(opacity: light))
-        if particleRoot.isEnabled {
-            for (entity, particle) in particles {
-                entity.position = SIMD3<Float>(Opening.position(of: particle, at: t))
-            }
+        stage?.update(at: t)
+        // The room's dimming takes over under the lifting night.
+        if !handedOver, t >= OpeningPlan.handOver {
+            handedOver = true
+            onHandOver?()
         }
         let portalLight = Opening.portalOpacity(at: t)
         let labelLight = Opening.labelOpacity(at: t)
-        // The portals grow the last few per cent into place as their glass
-        // comes up; the wordmark rises the last few centimetres as it does.
+        // The labs grow out of their worlds into place as they fade up; the
+        // wordmark rises the last few centimetres as it does.
         let growth = SIMD3<Float>(repeating: Opening.portalScale(at: t))
         for portal in portals {
             portal.anchor.components.set(OpacityComponent(opacity: portalLight))
@@ -633,20 +567,40 @@ final class HubScene {
         moreSeat?.components.set(OpacityComponent(opacity: labelLight))
     }
 
-    /// Any pinch: straight to the home.
+    /// Any pinch: straight to the home. The home is there at once — labs,
+    /// names, wordmark — and the opening's own things fade away behind it
+    /// over a quarter-second, its sound with them.
     func skipOpening() {
         guard openingPhase == .running else { return }
         openingFrozenAt = nil
-        finishOpening()
+        // The letters are simply there, not still falling into place.
+        titleArrives = false
+        if let sound = openingSound {
+            sound.fade(to: -60, duration: Self.skipFade * 0.8)
+            Task { @MainActor in
+                try? await Task.sleep(for: .seconds(Self.skipFade))
+                sound.stop()
+            }
+        }
+        openingSound = nil
+        finishOpening(fading: true)
     }
 
-    private func finishOpening() {
+    private func finishOpening(fading: Bool = false) {
         openingPhase = .done
         // The turn carries on from the landing; a skip before it starts it now.
         swayOrigin = min(time, openingStart + Opening.landingTime)
-        particleRoot.removeFromParent()
-        particleRoot.children.removeAll()
-        particles.removeAll()
+        if fading, let stage {
+            leavingStage = stage
+            leavingSince = time
+        } else {
+            stage?.root.removeFromParent()
+        }
+        stage = nil
+        if !handedOver {
+            handedOver = true
+            onHandOver?()
+        }
         skipShield?.removeFromParent()
         skipShield = nil
         for portal in portals {
@@ -695,7 +649,7 @@ final class HubScene {
         let dt = min(rawDt, 1.0 / 30.0)
         time += dt
         // Nothing shows until the scene has settled (`Settle`): the frames
-        // just after the build run long, and the opening's first particles —
+        // just after the build run long, and the opening's first light —
         // or the fade back in from a lab — stuttered through them. Until
         // then the opening's clock holds at zero, where nothing is lit.
         let arrived = settle.tick(dt: rawDt)
@@ -705,7 +659,7 @@ final class HubScene {
                 openingClockStarted = true
                 // Swell and bell, baked into one WAV whose bell is pinned to
                 // the landing — so it starts with the clock, not the build.
-                SoundPalette.play(.calibration, on: titleAnchor, volume: 0.55)
+                openingSound = SoundPalette.play(.calibration, on: titleAnchor, volume: 0.55)
                 #if DEBUG
                 LaunchTrace.mark("[frames] the opening's clock starts")
                 #endif
@@ -713,6 +667,15 @@ final class HubScene {
         }
         if arrived { fadePresence(dt: dt) }
         updateOpening()
+        if let leaving = leavingStage {
+            let left = Float(min((time - leavingSince) / Self.skipFade, 1))
+            if left >= 1 {
+                leaving.root.removeFromParent()
+                leavingStage = nil
+            } else {
+                leaving.root.components.set(OpacityComponent(opacity: 1 - left))
+            }
+        }
 
         // Every portal runs its lab's physics, floats a few millimetres and
         // turns slowly on its plinth, each on its own phase so they never

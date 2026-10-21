@@ -2,327 +2,36 @@
 //  Opening.swift
 //  Physics Playground — Hub
 //
-//  The opening, as pure functions of time (no RealityKit, so it is
-//  tested on numbers). About three seconds in which a field of glowing
-//  particles visibly obeys physics, then settles onto the plinths the
-//  labs stand on, which are the home screen:
-//
-//    1. GATHER   The room dims; the particles fade up at rest on a
-//                horizontal sheet above eye level.
-//    2. SWIRL    One system: uniform gravity crossed with a uniform
-//                horizontal magnetic field. A charge released from rest
-//                in crossed g and B traces an exact cycloid — it falls
-//                with acceleration g, the Lorentz force curls it, and
-//                after one cyclotron period it is at rest again at the
-//                height it started, displaced sideways by 2πg/ω².
-//                Positive and negative charges drift opposite ways, so
-//                the cloud parts in two crossing streams. The magnetic
-//                force does no work: ½v² = g·(drop), exactly.
-//    3. RIPPLE   Every particle is at rest on the sheet again, which is
-//                where the cycloid hands over. A deep-water gravity wave
-//                crosses the sheet — Airy's linear solution, surface
-//                particles on circles, the dispersion relation ω² = g·k
-//                with the same g — swelling and dying under a sin²
-//                envelope, so it, too, ends with everything at rest.
-//    4. SETTLE   Each particle is drawn onto its plinth's knurled rim by
-//                a critically damped spring (closed form, no overshoot),
-//                landing as the lab fades up on it.
-//
-//  Between phases nothing is eased: each hand-over happens at an instant
-//  when every particle is at rest, so position and velocity are both
-//  continuous. Any pinch skips to the end; under Reduce Motion there are
-//  no particles at all and the labs simply fade in.
+//  The opening's clock, as the rest of the home reads it: when the worlds
+//  land and the bell strikes, when the labs, their names and the wordmark
+//  arrive, and when it is over. The opening itself — "Birth of a System"
+//  (2026-10-20) — is `OpeningPlan` (the physics, solved once) drawn by
+//  `OpeningStage`. Until then it was a field of charged particles that
+//  fell through crossed fields, rippled as deep water and settled onto
+//  the portals' rims; the git history keeps it.
 //
 
 import Foundation
-import simd
 
-enum Opening {
-
-    // MARK: The clock
-
-    /// The particles fade up at rest.
-    static let gatherDuration = 0.25
-    static let swirlStart = gatherDuration
-    /// One cyclotron period: the cycloid's full arch, rest to rest.
-    static let swirlDuration = 0.9
-    static let rippleStart = swirlStart + swirlDuration
-    static let rippleDuration = 0.75
-    static let settleStart = rippleStart + rippleDuration
-    static let settleDuration = 0.75
-    /// The instant the particles land on the plinths' rims — and the bell strikes.
-    /// Pinned to `SoundPalette.calibrationLanding` by test.
-    static let landingTime = settleStart + settleDuration
-    /// The labs fade up on their plinths as the particles arrive.
-    static let portalFadeStart = landingTime - 0.4
-    static let portalFadeDuration = 0.5
-    /// The particles go out once they have drawn the rims.
-    static let particleFadeDuration = 0.35
-    /// The labels and the wordmark come last.
-    static let labelFadeStart = landingTime
-    static let labelFadeDuration = 0.4
-    /// When everything has landed and the per-frame path can go quiet.
-    static let duration = max(landingTime + particleFadeDuration,
-                              labelFadeStart + labelFadeDuration)
-
-    // MARK: The physics
-
-    /// Standard gravity, m/s² — the same g everywhere in the app.
+nonisolated enum Opening {
+    /// Standard gravity, m/s² — the same g everywhere in the app (the
+    /// wordmark's letters fall with it as they arrive).
     static let g = 9.80665
-    /// |ω| = |q|B/m, rad/s: one full arch in `swirlDuration`.
-    static let cyclotronRate = 2 * Double.pi / swirlDuration
-    /// How far one arch carries a charge sideways: the drift speed g/ω
-    /// times the period 2π/ω.
-    static var driftPerArch: Double { 2 * .pi * g / (cyclotronRate * cyclotronRate) }
-    /// How far below its start an arch dips at its lowest: 2g/ω².
-    static var archDepth: Double { 2 * g / (cyclotronRate * cyclotronRate) }
 
-    /// The ripple: a deep-water gravity wave across the sheet, travelling
-    /// away from the viewer (−z).
-    static let wavelength = 1.5
-    static var waveNumber: Double { 2 * .pi / wavelength }
-    /// ω² = g·k — deep water.
-    static var waveFrequency: Double { (g * waveNumber).squareRoot() }
-    /// Small against the wavelength (k·A ≈ 0.28), where the linear
-    /// solution holds.
-    static let waveAmplitude = 0.068
+    /// The instant the worlds reach their plinths — and the bell strikes.
+    /// Pinned to `SoundPalette.calibrationLanding` by test.
+    static let landingTime = OpeningPlan.landingTime
+    /// When everything has arrived and the per-frame path can go quiet.
+    static let duration = OpeningPlan.duration
 
-    /// The settling spring's rate, 1/s. Critically damped: the fastest
-    /// approach with no overshoot.
-    static let settleRate = 9.0
+    static func isFinished(at time: Double) -> Bool { OpeningPlan.isFinished(at: time) }
 
-    // MARK: One particle
-
-    struct Particle: Equatable {
-        /// Where it rests on the sheet when the opening begins.
-        let start: SIMD3<Double>
-        /// +1 or −1: which way the field curls it.
-        let charge: Double
-        /// Which portal it ends on, in arc order.
-        let portal: Int
-        /// The point on that portal's plinth rim it lands at.
-        let target: SIMD3<Double>
-    }
-
-    /// Displacement from rest after `time` in crossed fields: gravity −y,
-    /// B along +z, charge sign `charge`. From m·dv/dt = q·v×B + m·g with
-    /// v(0) = 0:
-    ///   vx = −(g/ω)(1 − cos ωt),   vy = −(g/ω) sin ωt,
-    ///   x  = −(g/ω)t + (g/ω²) sin ωt,   y = (g/ω²)(cos ωt − 1),
-    /// with ω signed by the charge.
-    static func cycloid(time: Double, charge: Double) -> SIMD3<Double> {
-        let omega = charge * cyclotronRate
-        let x = -(g / omega) * time + (g / (omega * omega)) * sin(omega * time)
-        let y = (g / (omega * omega)) * (cos(omega * time) - 1)
-        return SIMD3(x, y, 0)
-    }
-
-    /// The cycloid's velocity, for the energy check.
-    static func cycloidVelocity(time: Double, charge: Double) -> SIMD3<Double> {
-        let omega = charge * cyclotronRate
-        return SIMD3(-(g / omega) * (1 - cos(omega * time)),
-                     -(g / omega) * sin(omega * time),
-                     0)
-    }
-
-    /// Where a particle rests after its arch: exactly one drift sideways.
-    static func afterSwirl(_ particle: Particle) -> SIMD3<Double> {
-        particle.start + cycloid(time: swirlDuration, charge: particle.charge)
-    }
-
-    /// The ripple's envelope: zero, with zero slope, at both ends.
-    static func rippleEnvelope(_ elapsed: Double) -> Double {
-        let phase = min(max(elapsed / rippleDuration, 0), 1)
-        let s = sin(.pi * phase)
-        return s * s
-    }
-
-    /// Airy's surface orbit at a rest point, `elapsed` into the ripple.
-    /// The wave runs along −z, so ξ = −z is the distance travelled.
-    static func ripple(at rest: SIMD3<Double>, elapsed: Double) -> SIMD3<Double> {
-        let amplitude = waveAmplitude * rippleEnvelope(elapsed)
-        let phase = waveNumber * (-rest.z) - waveFrequency * elapsed
-        // ξ = ξ₀ − A sin θ, so z = z₀ + A sin θ; η = A cos θ.
-        return SIMD3(0, amplitude * cos(phase), amplitude * sin(phase))
-    }
-
-    /// A critically damped spring from rest at `from` toward `to`:
-    /// x(τ) = to + (from − to)(1 + Ωτ)e^(−Ωτ).
-    static func settle(from: SIMD3<Double>, to: SIMD3<Double>,
-                       elapsed: Double) -> SIMD3<Double> {
-        let tau = max(elapsed, 0)
-        let decay = (1 + settleRate * tau) * exp(-settleRate * tau)
-        return to + (from - to) * decay
-    }
-
-    /// Where `particle` is at `time` into the opening.
-    static func position(of particle: Particle, at time: Double) -> SIMD3<Double> {
-        switch time {
-        case ..<swirlStart:
-            return particle.start
-        case ..<rippleStart:
-            return particle.start + cycloid(time: time - swirlStart,
-                                            charge: particle.charge)
-        case ..<settleStart:
-            let rest = afterSwirl(particle)
-            return rest + ripple(at: rest, elapsed: time - rippleStart)
-        case ..<landingTime:
-            return settle(from: afterSwirl(particle), to: particle.target,
-                          elapsed: time - settleStart)
-        default:
-            return particle.target
-        }
-    }
-
-    // MARK: Light
-
-    /// 0 → 1 over [start, start + span], eased at both ends.
-    static func ramp(_ time: Double, from start: Double, over span: Double) -> Float {
-        let x = min(max((time - start) / max(span, 1e-6), 0), 1)
-        return Float(x * x * (3 - 2 * x))
-    }
-
-    static func particleOpacity(at time: Double) -> Float {
-        ramp(time, from: 0, over: gatherDuration)
-            * (1 - ramp(time, from: landingTime, over: particleFadeDuration))
-    }
-
-    static func portalOpacity(at time: Double) -> Float {
-        ramp(time, from: portalFadeStart, over: portalFadeDuration)
-    }
-
-    static func labelOpacity(at time: Double) -> Float {
-        ramp(time, from: labelFadeStart, over: labelFadeDuration)
-    }
-
-    // MARK: Arrival
-
-    /// 0 → 1 over [start, start + span] on a cubic ease-out: fast away,
-    /// soft into place — how a thing settles rather than how it switches on.
-    static func easeOut(_ time: Double, from start: Double, over span: Double) -> Float {
-        let x = min(max((time - start) / max(span, 1e-6), 0), 1)
-        return Float(1 - pow(1 - x, 3))
-    }
-
-    /// How much smaller a lab is when it begins to fade up.
-    static let portalGrowth: Float = 0.08
-
-    /// A lab's scale as it arrives: it grows the last few per cent into
-    /// place while it fades up, and is exactly 1 once that is done.
-    static func portalScale(at time: Double) -> Float {
-        1 - portalGrowth * (1 - easeOut(time, from: portalFadeStart, over: portalFadeDuration))
-    }
-
-    /// How far below its place the wordmark starts, metres.
-    static let titleRiseDistance: Float = 0.035
-
-    /// The wordmark's offset as it arrives: it rises into place while it
-    /// fades up, and is exactly 0 once that is done.
-    static func titleOffset(at time: Double) -> Float {
-        -titleRiseDistance * (1 - easeOut(time, from: labelFadeStart, over: labelFadeDuration))
-    }
-
-    static func isFinished(at time: Double) -> Bool { time >= duration }
-
-    // MARK: The cloud
-
-    /// The sheet's height above the floor: above eye level, so the arches
-    /// dip toward the wearer's eyes and the labs are below it.
-    static let sheetHeight = 1.95
-
-    /// The particles for these portals: `perPortal` each, deterministic.
-    /// Left-hand portals take positive charges (they drift −x), right-hand
-    /// ones negative; each particle starts one drift upstream of its
-    /// portal, so the arch delivers it overhead and the two streams cross.
-    static func particles(for portals: [PortalLayout.Portal],
-                          perPortal: Int = 30) -> [Particle] {
-        var state: UInt64 = 0x5DEECE66D
-        func random() -> Double {
-            state = state &* 6364136223846793005 &+ 1442695040888963407
-            return Double(state >> 11) / Double(UInt64.max >> 11)
-        }
-        var out: [Particle] = []
-        for (index, portal) in portals.enumerated() {
-            let charge: Double = portal.position.x < 0 ? 1 : -1
-            for slot in 0..<perPortal {
-                // Wide enough that neighbouring portals' particles meet, so
-                // the sheet the wave crosses is one sheet, not a cluster per portal.
-                let start = SIMD3(
-                    portal.position.x + charge * driftPerArch + (random() - 0.5) * 0.62,
-                    sheetHeight + (random() - 0.5) * 0.10,
-                    portal.position.z + (random() - 0.5) * 0.60)
-                let angle = 2 * Double.pi * Double(slot) / Double(perPortal)
-                let target = PortalLayout.rimPoint(of: portal, angle: angle)
-                out.append(Particle(start: start, charge: charge,
-                                    portal: index, target: target))
-            }
-        }
-        return out
-    }
-}
-
-/// Where the labs stand: one arc at eye level around the wearer, each lab
-/// in miniature on its own plinth, facing them. Pure geometry, so it is
-/// tested on numbers.
-enum PortalLayout {
-    struct Portal: Equatable {
-        /// The portal's centre, in the space's coordinates.
-        let position: SIMD3<Double>
-        /// Rotation about +y that turns the portal's face to the wearer.
-        let yaw: Double
-        /// The portal's own right, horizontal.
-        let right: SIMD3<Double>
-        /// Horizontal, from the portal toward the wearer: its front.
-        let toward: SIMD3<Double>
-    }
-
-    /// Far enough that seven fit the field of view with a turn of the head,
-    /// near enough to read a lab 30 cm across.
-    static let radius = 1.75
-    /// Eye height for a standing wearer, a little low for a seated one.
-    static let height = 1.35
-    /// Between neighbouring portals, degrees.
-    static let step = 20.0
-
-    /// The plinth every lab stands on — a miniature of Circuit Workshop's
-    /// turntable, the same size and height in every portal, so seven
-    /// differently shaped labs read as one row of exhibits. Metres, to the
-    /// knurled rim, which is what the particles draw.
-    static let plinthRadius = 0.16
-    /// How far the plinth's top centre stands below the portal's centre:
-    /// every lab rises from the same height.
-    static let plinthDrop = 0.10
-    /// How far every plinth is turned toward the wearer: enough that its
-    /// top reads as a surface from a standing eye, little enough that a
-    /// cable still hangs plumb to it. `HubVignettes.stageTilt` is this.
-    static let plinthTilt = 10 * Double.pi / 180
-
-    static func portals(count: Int) -> [Portal] {
-        (0..<count).map { index in
-            let degrees = (Double(index) - Double(count - 1) / 2) * step
-            let azimuth = degrees * .pi / 180
-            let position = SIMD3(radius * sin(azimuth), height, -radius * cos(azimuth))
-            return Portal(position: position,
-                          yaw: -azimuth,
-                          right: SIMD3(cos(azimuth), 0, sin(azimuth)),
-                          toward: SIMD3(-sin(azimuth), 0, cos(azimuth)))
-        }
-    }
-
-    /// The point `angle` round a portal's plinth rim, in the space's
-    /// coordinates: 0 at the portal's right, π/2 at its front. The plinth
-    /// is tilted about the portal's right, so its front edge dips.
-    static func rimPoint(of portal: Portal, angle: Double) -> SIMD3<Double> {
-        let side = plinthRadius * cos(angle)
-        let front = plinthRadius * sin(angle)
-        return portal.position
-            + portal.right * side
-            + portal.toward * (front * cos(plinthTilt))
-            + SIMD3(0, -plinthDrop - front * sin(plinthTilt), 0)
-    }
-
-    /// The plinth's top centre, in the space's coordinates.
-    static func plinthCentre(of portal: Portal) -> SIMD3<Double> {
-        portal.position + SIMD3(0, -plinthDrop, 0)
-    }
+    /// The labs on their plinths fade up as the worlds land.
+    static func portalOpacity(at time: Double) -> Float { OpeningPlan.labOpacity(at: time) }
+    /// …growing out of their worlds into place, exactly 1 once arrived.
+    static func portalScale(at time: Double) -> Float { OpeningPlan.labScale(at: time) }
+    /// The labels, the More and the wordmark's footing come last.
+    static func labelOpacity(at time: Double) -> Float { OpeningPlan.labelOpacity(at: time) }
+    /// The machined wordmark rises the last few centimetres as it fades up.
+    static func titleOffset(at time: Double) -> Float { OpeningPlan.titleOffset(at: time) }
 }

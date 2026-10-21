@@ -222,13 +222,16 @@ enum SoundPalette {
 
     /// Plays `sound` spatially from `entity` (which should already sit at
     /// the source position). volume 0…1 → −28…0 dB.
-    static func play(_ sound: Sound, on entity: Entity, volume: Double = 1) {
-        guard let resource = resources[sound] else { return }
+    /// Returns the playback, for the one caller that must stop it early
+    /// (a skipped opening fades its swell out rather than let it play on).
+    @discardableResult
+    static func play(_ sound: Sound, on entity: Entity, volume: Double = 1) -> AudioPlaybackController? {
+        guard let resource = resources[sound] else { return nil }
         let effective = min(max(volume * masterVolume, 0), 1)
-        guard effective > 0.001 else { return }
+        guard effective > 0.001 else { return nil }
         let decibels = -28.0 * (1 - effective)
         entity.components.set(SpatialAudioComponent(gain: Audio.Decibel(decibels)))
-        entity.playAudio(resource)
+        return entity.playAudio(resource)
     }
 
     // MARK: Synthesis
@@ -237,8 +240,9 @@ enum SoundPalette {
 
     /// Cache names carry the recipe's version: bump it whenever
     /// `SoundEffects` changes a sound, or nobody who has launched before
-    /// will hear the change. Version 2 is the 2026-10-14 re-voicing.
-    private nonisolated static let oneShotVersion = 2
+    /// will hear the change. Version 2 is the 2026-10-14 re-voicing; 3, the
+    /// opening re-scored for "Birth of a System" (2026-10-20).
+    private nonisolated static let oneShotVersion = 3
 
     private nonisolated static func writeIfNeeded(_ sound: Sound) throws -> URL {
         let directory = try soundsDirectory()

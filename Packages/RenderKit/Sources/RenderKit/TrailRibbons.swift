@@ -17,6 +17,15 @@
 //  `__REALITYKIT_WAITING_ON_RENDERER__` and none idle. So a frame's changes
 //  are staged per slot and `commit()` writes each buffer once.
 //
+//  ROTATION, for trails that are wholly rewritten every frame (the opening's
+//  worlds, 2026-10-20): even one mesh written every frame left the main
+//  thread waiting on the renderer for half of it, because the frame just
+//  drawn still holds the buffers. With `rotation` 3 each commit writes every
+//  live trail into the next of three meshes and hands the entity that one.
+//  Head-only updates become full rewrites there; Orbital Mechanics, whose
+//  trails mostly move only their heads and commit at most 30 times a
+//  second, keeps one mesh.
+//
 //  Vertex buffer 0 carries position and normal; buffer 1 carries uv0, whose u
 //  is the point's age (0 at the tail, 1 at the body) — a material with an
 //  opacity ramp along u fades the tail to nothing.
@@ -48,7 +57,21 @@ public final class TrailRibbons {
         case clear
     }
 
-    private let mesh: LowLevelMesh
+    private let meshes: [LowLevelMesh]
+    private let resources: [MeshResource]
+    /// The mesh the next commit writes; with one mesh, always that one.
+    private var current = 0
+    private var mesh: LowLevelMesh { meshes[current] }
+    /// Every live slot's last full path, for a rotating ribbon's rewrite.
+    private var lastFull: [Int: (points: [SIMD3<Float>], ages: [Float], radius: Float)] = [:]
+    /// What each mesh's fade and index buffers already hold, per slot: a
+    /// buffer is written only where it would change. Every write is a
+    /// payload the renderer must take, and it takes only so many a frame —
+    /// the opening's trails, rewriting all three buffers every frame, left
+    /// the main thread waiting on it most of the time, though only their
+    /// positions ever changed.
+    private var writtenRings: [[Int]]
+    private var writtenAges: [[[Float]]]
     private var ringCounts: [Int]
     private var bounds: [BoundingBox]
     private var pending: [Int: Pending] = [:]
@@ -58,7 +81,9 @@ public final class TrailRibbons {
     private var indicesPerSlot: Int { (capacity - 1) * sides * 6 }
 
     /// Fails only if the GPU refuses the buffers; a caller then draws nothing.
-    public init?(slots: Int, capacity: Int, sides: Int = 5) {
+    /// - rotation: how many meshes take turns; more than 1 rewrites every
+    ///   live trail on every commit, and never waits on the renderer.
+    public init?(slots: Int, capacity: Int, sides: Int = 5, rotation: Int = 1) {
         self.slots = max(slots, 1)
         self.capacity = max(capacity, 2)
         self.sides = max(sides, 3)
@@ -76,13 +101,22 @@ public final class TrailRibbons {
             .init(bufferIndex: 0, bufferStride: MemoryLayout<Vertex>.stride),
             .init(bufferIndex: 1, bufferStride: MemoryLayout<Fade>.stride),
         ]
-        guard let mesh = try? LowLevelMesh(descriptor: descriptor),
-              let resource = try? MeshResource(from: mesh) else { return nil }
-        self.mesh = mesh
+        var meshes: [LowLevelMesh] = []
+        var resources: [MeshResource] = []
+        for _ in 0..<max(rotation, 1) {
+            guard let mesh = try? LowLevelMesh(descriptor: descriptor),
+                  let resource = try? MeshResource(from: mesh) else { return nil }
+            meshes.append(mesh)
+            resources.append(resource)
+        }
+        self.meshes = meshes
+        self.resources = resources
         ringCounts = Array(repeating: 0, count: self.slots)
+        writtenRings = Array(repeating: Array(repeating: 0, count: self.slots), count: meshes.count)
+        writtenAges = Array(repeating: Array(repeating: [], count: self.slots), count: meshes.count)
         bounds = Array(repeating: BoundingBox(), count: self.slots)
         materials = Array(repeating: UnlitMaterial(color: .white), count: self.slots)
-        entity.model = ModelComponent(mesh: resource, materials: materials)
+        entity.model = ModelComponent(mesh: resources[0], materials: materials)
         entity.isEnabled = false
     }
 
@@ -136,8 +170,29 @@ public final class TrailRibbons {
     /// the fade buffer and the index buffer once each, at most.
     public func commit() {
         guard !pending.isEmpty else { return }
-        let staged = pending
+        var staged = pending
         pending.removeAll()
+
+        // Rotating: the next mesh holds nothing current, so every live slot
+        // is written whole into it.
+        if meshes.count > 1 {
+            for (slot, work) in staged {
+                switch work {
+                case .clear: lastFull[slot] = nil
+                case .full(let points, let ages, let radius), .head(let points, let ages, let radius):
+                    lastFull[slot] = (points, ages, radius)
+                }
+            }
+            staged = [:]
+            for slot in 0..<slots {
+                if let path = lastFull[slot] {
+                    staged[slot] = .full(points: path.points, ages: path.ages, radius: path.radius)
+                } else {
+                    staged[slot] = .clear
+                }
+            }
+            current = (current + 1) % meshes.count
+        }
 
         // Resolve each slot's work: a head move on a slot whose ring count
         // has changed is a full rewrite.
@@ -194,26 +249,39 @@ public final class TrailRibbons {
                     bounds[work.slot] = BoundingBox(min: lower, max: upper)
                 }
             }
-            mesh.withUnsafeMutableBytes(bufferIndex: 1) { raw in
-                let fades = raw.bindMemory(to: Fade.self)
-                for work in fulls + heads where ringCounts[work.slot] >= 2 {
-                    let base = work.slot * verticesPerSlot
-                    for ring in 0..<ringCounts[work.slot] {
-                        let age = ring < work.ages.count ? work.ages[ring] : 1
-                        for s in 0..<sides {
-                            fades[base + ring * sides + s] = Fade(u: age, v: Float(s) / Float(sides))
+            // Ages only where they differ from what this mesh holds.
+            let refaded = (fulls + heads).filter { work in
+                ringCounts[work.slot] >= 2
+                    && (writtenRings[current][work.slot] != ringCounts[work.slot]
+                        || writtenAges[current][work.slot] != Array(work.ages.prefix(ringCounts[work.slot])))
+            }
+            if !refaded.isEmpty {
+                mesh.withUnsafeMutableBytes(bufferIndex: 1) { raw in
+                    let fades = raw.bindMemory(to: Fade.self)
+                    for work in refaded {
+                        let base = work.slot * verticesPerSlot
+                        for ring in 0..<ringCounts[work.slot] {
+                            let age = ring < work.ages.count ? work.ages[ring] : 1
+                            for s in 0..<sides {
+                                fades[base + ring * sides + s] = Fade(u: age, v: Float(s) / Float(sides))
+                            }
                         }
+                        writtenAges[current][work.slot] = Array(work.ages.prefix(ringCounts[work.slot]))
                     }
                 }
             }
         }
-        let rewired = fulls.filter { ringCounts[$0.slot] >= 2 }
+        // Indices only where this mesh's ring count for the slot changed.
+        let rewired = fulls.filter {
+            ringCounts[$0.slot] >= 2 && writtenRings[current][$0.slot] != ringCounts[$0.slot]
+        }
         if !rewired.isEmpty {
             mesh.withUnsafeMutableIndices { raw in
                 let indices = raw.bindMemory(to: UInt32.self)
                 for work in rewired {
                     var cursor = work.slot * indicesPerSlot
                     let vertexBase = UInt32(work.slot * verticesPerSlot)
+                    writtenRings[current][work.slot] = ringCounts[work.slot]
                     for ring in 0..<(ringCounts[work.slot] - 1) {
                         let a = vertexBase + UInt32(ring * sides)
                         let b = a + UInt32(sides)
@@ -238,6 +306,7 @@ public final class TrailRibbons {
                 materialIndex: slot, bounds: bounds[slot]))
         }
         mesh.parts.replaceAll(parts)
+        if meshes.count > 1 { entity.model?.mesh = resources[current] }
         entity.isEnabled = !parts.isEmpty
     }
 
