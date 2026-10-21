@@ -29,9 +29,8 @@ enum SoundPalette {
         /// Grab acknowledgement; `releaseTick` answers a set-down and closes
         /// a ring (open keeps its pop, so the pair reads unfold/fold).
         case grabTick, releaseTick
-        /// The opening's swell. Its bell time and `Opening.landingTime` are
-        /// pinned to each other in `OpeningTests` — they must not drift.
-        case calibration
+        /// The home's arrival: one soft tone as the last lab settles.
+        case arrival
         /// Steel on steel: Newton's cradle (it borrowed `pop` until 2026-10-14).
         case clack
         /// The launcher's pneumatic thump (it borrowed `pop` too).
@@ -39,9 +38,6 @@ enum SoundPalette {
         /// A remarkable moment, through `Remark` and nowhere else.
         case gleam
     }
-
-    /// When `calibration`'s bell strikes, seconds into the file — must match `Opening.landingTime`.
-    nonisolated static let calibrationLanding = SoundEffects.calibrationLanding
 
     private static var resources: [Sound: AudioFileResource] = [:]
     private static var warmed = false
@@ -241,8 +237,9 @@ enum SoundPalette {
     /// Cache names carry the recipe's version: bump it whenever
     /// `SoundEffects` changes a sound, or nobody who has launched before
     /// will hear the change. Version 2 is the 2026-10-14 re-voicing; 3, the
-    /// opening re-scored for "Birth of a System" (2026-10-20).
-    private nonisolated static let oneShotVersion = 3
+    /// opening re-scored for "Birth of a System" (2026-10-20); 4, the
+    /// arrival's one soft tone (2026-10-21).
+    private nonisolated static let oneShotVersion = 4
 
     private nonisolated static func writeIfNeeded(_ sound: Sound) throws -> URL {
         let directory = try soundsDirectory()

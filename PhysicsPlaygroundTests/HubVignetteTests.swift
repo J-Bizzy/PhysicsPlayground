@@ -92,13 +92,17 @@ final class HubVignetteTests: XCTestCase {
     }
 
     /// And none of them is a sliver on the other axis: only composition can
-    /// make the shapes consistent.
+    /// make the shapes consistent. Measured on the lab alone since the
+    /// plinths went (2026-10-21): the tilted disc under every lab stood
+    /// about a fifth of the square tall by itself, and the lowest lab — the
+    /// light bench, a prism on its stand between a torch and a screen —
+    /// stands 0.41 of it without one.
     func testNoMiniatureIsAStreak() {
         for id in Self.ids {
             let extents = HubVignettes.make(for: id).contentExtents
             let shortest = min(extents.x, extents.y)
             XCTAssertGreaterThan(
-                shortest, Self.side * 0.45,
+                shortest, Self.side * 0.38,
                 "\(id) fills \(extents.x) x \(extents.y) of its square — "
                 + "too flat to sit beside the others")
         }

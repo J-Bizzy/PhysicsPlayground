@@ -4,9 +4,10 @@
 //
 //  The way into a lab: a pinch on a portal. The old door (carry an
 //  exhibit to a pad, then press Load) was rebuilt four times; this one has
-//  one step, so these assert that one step and the opening in front of it:
-//  every portal enters its own lab, every portal is aimable, the opening
-//  can always be skipped, and a walk back from a lab does not replay it.
+//  one step, so these assert that one step and the arrival in front of it:
+//  every portal enters its own lab, every portal is aimable — even while
+//  the labs are still rising — and a walk back from a lab does not replay
+//  the arrival.
 //
 
 import XCTest
@@ -74,86 +75,64 @@ final class PortalDoorTests: XCTestCase {
         }
     }
 
-    // MARK: The opening
+    // MARK: The arrival
 
-    /// A first arrival plays the opening, and any pinch skips it: the
-    /// shield that catches the pinch goes with it at once, and the
-    /// opening's star, disk and worlds fade away behind the home.
-    func testAnyPinchSkipsTheOpening() throws {
+    /// A first arrival brings the labs up with nothing else in the room:
+    /// no star, no night, no wall that eats a pinch (the opening's, until
+    /// 2026-10-21).
+    func testTheArrivalBringsOnlyTheLabs() {
         let (scene, _) = builtScene(openingPlayed: false)
         XCTAssertTrue(scene.isOpening)
-        let shield = try XCTUnwrap(scene.root.children.first {
-            $0.name == HubScene.skipShieldName })
-        XCTAssertNil(scene.moduleID(for: shield),
-                     "a pinch on the shield must skip, never enter a lab")
-
-        var played = false
-        scene.onOpeningPlayed = { played = true }
-        scene.skipOpening()
-        XCTAssertFalse(scene.isOpening)
-        XCTAssertTrue(played, "a skipped opening must still count as seen")
-        XCTAssertFalse(scene.root.children.contains { $0.name == HubScene.skipShieldName },
-                       "the shield outlived the opening and would eat every pinch")
-        for _ in 0..<30 { scene.animate(dt: 1.0 / 90.0) }
-        XCTAssertNil(scene.root.findEntity(named: "opening"),
-                     "a skipped opening's star and worlds stayed in the room")
-    }
-
-    /// In the room the opening brings its own night; in deep space the sky
-    /// is already there and it brings none.
-    func testTheOpeningBringsANightOnlyToTheRoom() {
-        let room = HubScene()
-        room.build(modules: ModuleCatalog.all(appModel: AppModel()))
-        XCTAssertNotNil(room.root.findEntity(named: "opening-night"))
-        let space = HubScene()
-        space.inSpace = true
-        space.build(modules: ModuleCatalog.all(appModel: AppModel()))
-        XCTAssertNotNil(space.root.findEntity(named: "opening"))
-        XCTAssertNil(space.root.findEntity(named: "opening-night"))
-    }
-
-    /// The room's own dimming steps aside for the night and comes back as
-    /// it lifts — and comes back on a skip too.
-    func testTheNightHandsTheRoomBackToItsDimming() {
-        let scene = HubScene()
-        var fell = 0, handed = 0
-        scene.onNightFalls = { fell += 1 }
-        scene.onHandOver = { handed += 1 }
-        scene.build(modules: ModuleCatalog.all(appModel: AppModel()))
-        XCTAssertEqual(fell, 1)
-        XCTAssertEqual(handed, 0)
-        scene.skipOpening()
-        XCTAssertEqual(handed, 1)
+        for name in ["opening", "opening-night", "opening-skip"] {
+            XCTAssertNil(scene.root.findEntity(named: name), "\(name) is back")
+        }
     }
 
     /// Walking back from a lab is not an arrival.
-    func testAWalkBackDoesNotReplayTheOpening() {
+    func testAWalkBackDoesNotReplayTheArrival() {
         let (scene, _) = builtScene(openingPlayed: true)
         XCTAssertFalse(scene.isOpening)
-        XCTAssertFalse(scene.root.children.contains { $0.name == HubScene.skipShieldName })
     }
 
-    /// The opening runs to its end on its own and leaves nothing behind.
-    func testTheOpeningEndsOnItsOwn() {
+    /// The arrival runs to its end on its own, counts as seen, and leaves
+    /// every lab exactly in its place at its size.
+    func testTheArrivalEndsOnItsOwnWithEveryLabInPlace() throws {
         let (scene, _) = builtScene(openingPlayed: false)
         var played = false
         scene.onOpeningPlayed = { played = true }
         var elapsed = 0.0
-        while elapsed < Opening.duration + 0.5 {
+        // The clean frames that settle the scene, then the arrival.
+        while elapsed < 0.2 + Opening.duration + 0.5 {
             scene.animate(dt: 1.0 / 90.0)
             elapsed += 1.0 / 90.0
         }
         XCTAssertFalse(scene.isOpening)
         XCTAssertTrue(played)
-        XCTAssertFalse(scene.root.children.contains { $0.name == HubScene.skipShieldName })
+        for id in scene.portalIDs {
+            let anchor = try XCTUnwrap(scene.portal(id))
+            XCTAssertNil(anchor.components[OpacityComponent.self], "\(id) is still fading")
+            let body = try XCTUnwrap(anchor.findEntity(named: "portal-body"))
+            XCTAssertEqual(body.scale, .one, "\(id) is not at its size")
+            XCTAssertLessThan(abs(body.position.y), 0.005, "\(id) is not in its place")
+        }
     }
 
-    /// Entering is refused while the opening plays — the pinch skips it
-    /// first — and allowed after.
-    func testEnteringWaitsForTheOpening() {
+    /// While they arrive the labs start low and small, the leftmost ahead.
+    func testTheLabsRiseIntoPlace() throws {
         let (scene, _) = builtScene(openingPlayed: false)
-        XCTAssertFalse(scene.beginEnterTransition(id: "circuits"))
-        scene.skipOpening()
+        // Settled, then a few frames in.
+        for _ in 0..<(Settle.cleanFrames + 12) { scene.animate(dt: 1.0 / 90.0) }
+        let first = try XCTUnwrap(scene.portal(scene.portalIDs[0])?.findEntity(named: "portal-body"))
+        let last = try XCTUnwrap(scene.portal(scene.portalIDs[6])?.findEntity(named: "portal-body"))
+        XCTAssertLessThan(first.position.y, -0.005, "the first lab is not rising")
+        XCTAssertLessThan(first.scale.x, 1)
+        XCTAssertLessThan(last.position.y, first.position.y, "the last lab is ahead of the first")
+    }
+
+    /// A pinch on a lab enters it at once, even while the labs are rising.
+    func testEnteringNeverWaits() {
+        let (scene, _) = builtScene(openingPlayed: false)
+        XCTAssertTrue(scene.isOpening)
         XCTAssertTrue(scene.beginEnterTransition(id: "circuits"))
     }
 }

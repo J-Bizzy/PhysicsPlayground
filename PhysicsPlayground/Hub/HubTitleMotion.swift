@@ -15,7 +15,7 @@
 //    AT REST     a gentle travelling wave rolls along both lines; each
 //                letter rises and falls with it and tilts with its slope.
 //    THE GLINT   a highlight runs along the line, letter by letter —
-//                first as the opening's bell strikes, then on a slow
+//                first once the letters are down, then on a slow
 //                repeat.
 //    A TAP       hops the letter: thrown up, it falls and bounces like
 //                the drop.
@@ -118,13 +118,13 @@ enum HubTitleMotion {
 
     // MARK: The arrival's clock
 
-    /// Seconds after the opening starts that the first "Physics" letter is
-    /// let go: timed so the line lands across the opening's bell.
-    static let dropStart = Opening.landingTime - 0.55
+    /// Seconds after the home's arrival starts that the first "Physics"
+    /// letter is let go: the line lands as the labs rise into place.
+    static let dropStart = Opening.titleStart
     /// Between successive "Physics" letters.
     static let dropStagger = 0.055
     /// When the first "Playground" letter is let go, and between them.
-    static let swingStart = Opening.landingTime - 0.30
+    static let swingStart = Opening.titleStart + 0.25
     static let swingStagger = 0.045
     /// How long a letter takes to fade up once it is let go.
     static let fadeIn = 0.12

@@ -45,11 +45,6 @@ along the galactic plane, a glass platform at your feet. The physics
 carries on unchanged, and the room is out of reach there: a ball you throw
 flies on instead of bouncing off a wall you cannot see.
 
-**It opens on a solar system forming.** A star ignites ahead of you, its
-dust disk shears at Kepler's rates, and seven worlds fly exact transfer
-orbits to land on the seven labs as the bell strikes — physics to watch
-before you touch anything. Pinch to skip.
-
 **Pause is a place you can walk into.** Every lab records its last
 thirty seconds. Pause, pinch the reel that appears, and drag the tape
 back: the whole room runs backwards onto recorded frames, the ball

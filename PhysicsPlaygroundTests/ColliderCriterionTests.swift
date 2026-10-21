@@ -255,14 +255,47 @@ final class ColliderCriterionTests: XCTestCase {
 
     // MARK: The home and the shell
 
-    /// The first surface every user sees. Measured after the opening: its
-    /// skip shield is a deliberate wall of target, there only while it
-    /// plays (`PortalDoorTests` holds that it goes).
+    /// The first surface every user sees. Each lab moves — the magnet
+    /// through its coil, the cradle's balls, the slow turn — and its target
+    /// covers the whole motion, as the plinth under it did until 2026-10-21:
+    /// so a portal is measured against everything it drew over its longest
+    /// loop, not one pose. Everything else in the home is measured as it
+    /// stands.
     func testHomeCollidersFit() {
         let scene = HubScene()
         scene.openingAlreadyPlayed = true
         scene.build(modules: ModuleCatalog.all(appModel: AppModel()))
-        assertCollidersFit(scene.root, "Home")
+        let ids = scene.portalIDs
+        for child in scene.root.children where !ids.contains(child.name) {
+            assertCollidersFit(child, "Home")
+        }
+
+        // Twelve seconds, past the longest loop (the light bench's ten), a
+        // pose every quarter-second.
+        var swept: [String: BoundingBox] = [:]
+        for _ in 0..<48 {
+            for _ in 0..<8 { scene.animate(dt: 1.0 / 30.0) }
+            for id in ids {
+                guard let anchor = scene.portal(id) else { continue }
+                let bounds = anchor.visualBounds(relativeTo: anchor)
+                swept[id] = swept[id].map { $0.union(bounds) } ?? bounds
+            }
+        }
+        for id in ids {
+            guard let anchor = scene.portal(id),
+                  let shape = anchor.components[CollisionComponent.self]?.shapes.first,
+                  let visual = swept[id] else {
+                XCTFail("Home/\(id) has no target to measure")
+                continue
+            }
+            for (axis, v, c) in [("x", visual.extents.x, shape.bounds.extents.x),
+                                 ("y", visual.extents.y, shape.bounds.extents.y),
+                                 ("z", visual.extents.z, shape.bounds.extents.z)] {
+                let allowed = max(v * proportionalMargin, v + flatMargin)
+                XCTAssertLessThanOrEqual(c, allowed + 1e-4,
+                                         "Home/\(id) [\(axis)]: target \(c) m over a lab that sweeps \(v) m")
+            }
+        }
     }
 
     /// Does this collider shield the thing next to it? A target derived

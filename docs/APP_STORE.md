@@ -139,8 +139,7 @@ YOUR ROOM, OR DEEP SPACE
 
 Every lab stands in your room or, at a switch, among the real stars: all
 9,096 visible to the eye, at their true places and colours, the Milky Way
-across them, a glass platform at your feet. And the app opens on a solar
-system forming, its worlds flying real Kepler orbits to the labs.
+across them, a glass platform at your feet.
 
 CONTROLS THAT ARE OBJECTS
 
@@ -164,9 +163,10 @@ kind. Nothing you do leaves your device.
 
 Requires visionOS 26.0 or later.
 ```
-*3,927 characters* of 4,000. Counted, not estimated (2026-10-21, after the
-room-or-deep-space paragraph joined and the Circuits, Time Capsule and
-fictional-field paragraphs were cut back to make room). **Recount after
+*3,832 characters* of 4,000. Counted, not estimated (2026-10-21, when the
+sentence about the opening left with the opening; 3,927 before that, once
+the room-or-deep-space paragraph had joined and the Circuits, Time Capsule
+and fictional-field paragraphs were cut back to make room). **Recount after
 every edit:** Light & Optics' paragraph took it to 4,049 on 2026-10-14 —
 over the limit, under a note that still said 3,689 — and nothing caught
 it for a week; `SellingCopyCriterionTests` counts every field with a
@@ -266,7 +266,7 @@ The first two do almost all the work; most people never swipe past three.
 | 3 | **Electric Fields — lines + capacitor + B** | The densest "this is real physics" frame — field lines filling the room, the carried capacitor plates with their sign glyphs, the uniform B switched on. (Reframed 2026-08-05: the flux instrument this slot was built around left the app on 2026-08-03 — DECISIONS.md has the story.) Slightly busy, which is why it is third rather than first. |
 | 4 | **Orbital Mechanics — binary star** | Conceptually the best story (two suns, every orbit reshaped) and the weakest *simulator* frame: the orrery sits low, so two-thirds of the image is black. **Shoot this one on device**, standing closer and looking down. |
 | 5 | **Orbital Mechanics — the orbit ring** | Depth, for the person who has already decided to look: Earth's orbit as a ring in the room, apoapsis pulled out to 2.2× under a hand. The module's documented centrepiece. (Reframed 2026-08-05: the previous subject left the app on 2026-08-03 — DECISIONS.md has the story. If two Gravity frames read as repetitive against shot 4, the alternate is Magnetism's room-filling field lines — `-openModule magnetism`, defaults.) |
-| 6 | **Home Screen** | Shows the scope — seven labs in miniature on their plinths around you, each looping its own physics, under the wordmark. A closer, not an opener: it is the least *spatial* frame, because nothing in it is an experiment. |
+| 6 | **Home Screen** | Shows the scope — seven labs in miniature floating around you, each looping its own physics, under the wordmark. A closer, not an opener: it is the least *spatial* frame, because nothing in it is an experiment. |
 | 7 | **Time Capsule** — the reel with its tape out, a ball rewound mid-arc | The feature nothing else in the category has, photographed as the object it is: the reel, the rail drawn out of it, the recorded path hanging as a tube and the ball frozen part-way back along it. Added 2026-09-01 when the capsule started shipping on. |
 
 ## Staging commands
@@ -303,12 +303,6 @@ shot 8-hoops     -openModule kinematics     -kinHoops 1 -kinSolve 1
 shot 9-coil      -openModule circuits       -circCoil 1
 ```
 
-(Shot 10, "Birth of a System", is the opening pinned mid-flight in deep
-space — `shot 10-birth -hubIntro 4.6 -surroundings space`: seven worlds on
-curved Kepler arcs out from a new star. It is the most striking frame the
-app has made since 2026-10-20; if the set is re-ranked, it is a candidate
-for second.)
-
 (Shots 8 and 9 are the 2026-09-02 features — a hoop with both solved arcs
 through it and its angle callout; the coil's own field over the bench —
 and are optional: the store takes up to ten, and seven already carry the
@@ -334,7 +328,7 @@ staging simply did not work. This cost two rounds of confused screenshots.
       not the default.** It photographs cleanly and drops the room, which
       is the reason most of the app exists — the labs that answer your
       room (Projectiles' bounces, Light's spectrum on the wall) stay in
-      the room. Shoot it for the opening and for Orbital Mechanics, which
+      the room. Shoot it for the home and for Orbital Mechanics, which
       opens there by itself.
 
 ## Captions
@@ -376,9 +370,8 @@ In App Store Connect the record is: name from this file, bundle
 `ITSAppUsesNonExemptEncryption = false`, the two URLs above. Review
 notes, verbatim:
 
-> Physics Playground opens in an immersive space: a short animation of a
-> star system forming lands seven worlds on seven labs around you (pinch
-> anywhere to skip it). visionOS will ask for World Sensing and Hand Tracking — both are
+> Physics Playground opens in an immersive space: seven labs rise into
+> place around you in miniature. visionOS will ask for World Sensing and Hand Tracking — both are
 > needed for the labs to stand in the room and be grabbed; nothing is
 > collected or transmitted. To enter a lab, pinch it. In a lab,
 > handle the objects: pull from a well to make a new one, drag to move,

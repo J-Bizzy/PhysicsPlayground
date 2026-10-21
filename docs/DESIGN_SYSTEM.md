@@ -93,7 +93,7 @@ More.
 
 ## The sky (2026-10-19)
 
-One sky serves deep space and the opening's night over the room (`Shell/Sky.swift`, `PhysicsCore/Astronomy`).
+One sky serves deep space (`Shell/Sky.swift`, `PhysicsCore/Astronomy`). It served the opening's night over the room too, until the opening went on 2026-10-21.
 
 | Rule | Value | Why |
 |---|---|---|
@@ -104,7 +104,7 @@ One sky serves deep space and the opening's night over the room (`Shell/Sky.swif
 | The Milky Way | A model in galactic (l, b) on a 46 m dome; opaque in space, a transparent glow over the room | Its course is the real galactic plane |
 | The house evening | 40° N, Orion's belt rising straight ahead 30° up | Orion over the wordmark, Polaris behind and left |
 | The Sun (deep space) | Where Pluto sees it on the sky's date: a 10′ white-hot core in a 3° glare | Magnitude −19, too small for a disc |
-| Draw order | One `ModelSortGroup`: the opening's night, the Milky Way (over the room only), the stars, the disk, the star's glow, the worlds' paths; deep space's Sun, its floor pane, its platform | Each transparent layer lies over what is beyond it; in space the opaque Milky Way stays out of the group so it is drawn first |
+| Draw order | One `ModelSortGroup`: the stars, then deep space's Sun, its floor pane, its platform (`Sky.make(overRoom:)` still sorts a transparent Milky Way first, for a sky over the room) | Each transparent layer lies over what is beyond it; in space the opaque Milky Way stays out of the group so it is drawn first |
 | Nothing glows | No `LiveGlow` anywhere in the sky or deep space | A glow means a hand is on something |
 
 Retired on 2026-10-14: the switch bank (`SpatialLayerBank`), the folding tab
@@ -236,8 +236,8 @@ field it draws carries the warning.)
   nameplate, not an intro. (`hasSeenWordmark` and the one-shot behaviour were
   deleted on 2026-07-29.)
 - **Voice (2026-10-14).** The app's own: SF Pro Rounded Semibold, title
-  case, soft white solids standing 3 cm off a glass plaque the shape of every
-  panel, the i's dot a particle of champagne light (`Hub/HubTitleGlyphs`,
+  case, soft white solids standing free (their glass plaque went on
+  2026-10-21, owner's call), the i's dot a particle of champagne light (`Hub/HubTitleGlyphs`,
   milled by `Tools/hubwordmark.py`). Both lines share one type size, centred.
   The machined plaque below is the fallback, drawn only when the
   `HubWordmark_*` assets are missing.
@@ -285,8 +285,8 @@ All hub motion ticks from `SceneEvents.Update` — never `RealityView`'s
 
 | State | Behaviour | Value |
 |---|---|---|
-| Opening | "Birth of a System" (2026-10-20): night and real sky over the room; a star ignites; its dust disk shears (Ω = √(GM/r³) per ring); seven worlds condense and fly Kepler transfers to land on the plinths as the clock (`TimeLapse`) comes to rest; the labs grow out of them (`Hub/OpeningPlan.swift`, `Hub/OpeningStage.swift`). Sorted as one group: night < Milky Way < stars < disk < star glow < paths | ~6.3 s, bell at 5.4 s; any pinch skips (0.25 s fade, sound faded) |
-| Idle portal | The lab's own physics loops on its plinth, nothing framing it — the portal **is** the demo; the plinth swings slowly about its own axis so the lab shows its depth; each on its own phase (2026-10-19: the glass circles and rings went) | plinth 0.32 m, ±12° over 14 s |
+| Arrival | The labs rise into place one after another, left to right: each 6 cm up into its spot as it fades up and grows from 90 %, eased out with no overshoot; its name comes up as it settles; one soft tone (A4 and its octave) as the last comes to rest; the wordmark's letters fall and swing in (`Hub/Opening.swift`). No opening before it — "Birth of a System" went on 2026-10-21, owner's call. A walk back, or Reduce Motion, fades the home in | 0.1 s apart, 0.6 s each, all in by 1.2 s, done by 1.5 s |
+| Idle portal | The lab's own physics loops in the air, nothing framing it and nothing under it — the portal **is** the demo; it swings slowly about its own axis so the lab shows its depth; each on its own phase (the glass circles and rings went on 2026-10-19, the plinths on 2026-10-21) | footprint 0.32 m, ±12° over 14 s |
 | Wordmark | Arrives by physics (Physics drops and bounces, Playground swings in, the dot lands last), then a travelling wave a few millimetres high and a glint every 9 s; a pinch hops a letter (`Hub/HubTitleMotion.swift`) | wave 3.5 mm, hop 7 cm |
 | Enter | The portal swells toward you and the home dissolves — an arrival, never a hard cut | scale 1.35, +0.25 m, 0.42 s |
 | Live | `LiveGlow` fades up around what the hand takes and out when it lets go | 0.15 s |
@@ -295,7 +295,7 @@ All hub motion ticks from `SceneEvents.Update` — never `RealityView`'s
 
 **Reduce motion** follows the **system** setting only — `accessibilityReduceMotion`.
 The in-app duplicate was deleted; there is no `reduceMotion` in `AppSettings`.
-Under stillness there is no opening — the portals fade in — the previews
+Under stillness there is no arrival — the portals fade in — the previews
 park at their rest pose, and the wordmark's letters hold still.
 
 *(Until 2026-08-03 this paragraph described the setting as app-wide while it

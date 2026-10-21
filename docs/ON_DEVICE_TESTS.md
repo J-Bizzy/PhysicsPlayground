@@ -38,12 +38,11 @@ The older sections below stay as history and detail — where one of them
 contradicts this section, this section is current.
 
 - [ ] **0 · Arrival.** Cold launch goes STRAIGHT into the space: a beat
-      of plain passthrough, then the room dims slightly and glowing
-      a star is born ahead of you and seven worlds fly out to land on
-      the seven plinths around you, each lab looping its own physics —
-      about six and a half seconds ("Birth of a System", 2026-10-20). A pinch anywhere during it skips to the end. With Reduce
-      Motion on, the portals simply fade in. The end state IS the home:
-      the wordmark, six short names, More.
+      of plain passthrough, then the seven labs rise into place around
+      you one after another, left to right, each looping its own physics,
+      with one soft tone as the last settles — about a second and a half
+      (2026-10-21). With Reduce Motion on, the labs simply fade in. The
+      end state IS the home: the wordmark, seven short names, More.
 - [ ] **1 · Enter.** Pinch the Projectiles portal: dissolve through
       passthrough, the lab fades up with the room ramping (not snapping)
       to 0.35, quiet: a ball waiting at your left hand (no welcome shot
@@ -124,8 +123,8 @@ contradicts this section, this section is current.
 - [ ] **9 · More and Deep space.** Pinch More: the lab's switches, its
       live numbers, the room. Deep space: the real night sky and a glass
       platform under your feet, and nothing on it glowing.
-- [ ] **10 · Close.** Home: dissolve, and the seven labs stand on their
-      plinths around you again under the wordmark.
+- [ ] **10 · Close.** Home: dissolve, and the seven labs float around
+      you again under the wordmark.
 - [ ] **Judgement calls, answered in writing:** the pink field lines
       through passthrough; whether 45 % recession is legible in your
       room; the reel's size and where it lands; whether More's panel
@@ -164,12 +163,12 @@ Run a Debug build from Xcode with `-frameLog 1` in the scheme's arguments and ke
 
 - [ ] **Every lab at rest holds 90 Hz:** the steady lines read about 11.1 ms median with 0 long. In the simulator, every lab and the home in both surroundings do.
 - [ ] **Entering a lab fades it up, it does not pop.** The room stands alone for a moment (under half a second), then the lab fades up over about 0.2 s. No dropped frame is named after the lab appears.
-- [ ] **The opening plays clean.** After launch there is a short still beat, then the night falls. Any "dropped" lines come before "the opening's clock starts", never after.
+- [ ] **The arrival plays clean.** After launch there is a short still beat, then the labs rise. Any "dropped" lines come before "the arrival's clock starts", never after.
 - [ ] **Dragging a charge with Field lines and Equipotentials on stays smooth.** The lines move with the charge every frame; their shape refreshes 30 times a second, which should be invisible.
 - [ ] **Dragging a magnet with Field lines on**, the same.
 - [ ] **A thrown ball's numbers (More › Numbers) change without a hitch.** The ball's flight never stutters as its speed and height tick over.
 - [ ] **The labels read as before:** "45° · 6.0 m/s", the period tag "T = 1.42 s", a compass reading. They are now set from cached letters without kerning. Judge whether any pair of letters looks spaced oddly.
-- [ ] **The home's names stay put while the plinths float.** They no longer bob 4 mm with the plinth, which should not be noticeable.
+- [ ] **The home's names stay put while the labs float.** They no longer bob 4 mm with the lab, which should not be noticeable.
 
 ## The 2026-10-14 polish pass
 
@@ -326,46 +325,42 @@ working session:
       one layer, the spectrum floating in front of it on another. Look
       around it: the parallax should separate them by depth.
 
-- [ ] **The opening plays once and ends as the home — "Birth of a System"
-      (2026-10-20).** The room darkens under a night of real stars (a trace
-      of the room stays); a star ignites ahead and a little right; its dust
-      disk fades up and its spokes wind into spiral arms; seven worlds
-      gather in gaps in the disk, each with a soft chime, and fly out one
-      by one on curved paths to land on the seven plinths as the bell
-      strikes. The labs grow out of them, the night lifts. About six and a
-      half seconds.
-- [ ] **Comfort.** The disk turning should not make you feel you are
-      moving (mild vection is the risk); nothing flies at your face (the
-      nearest path passes over a metre from your eyes); the room's trace is
-      enough to stay oriented.
-- [ ] **A pinch skips it.** Pinch anywhere during the opening: the labs,
-      their names and the wordmark are simply there, the star and worlds
-      fade away in a quarter-second, and the sound fades with them — it
-      does not play on.
-- [ ] **In Deep space** the opening plays over the sky that is already
-      there, with no second night.
-- [ ] **Reduce Motion:** no opening at all — the labs fade in.
+- [ ] **The labs rise into place, once, and that is the home**
+      (2026-10-21; "Birth of a System" is gone, owner's call). One after
+      another, left to right, about a tenth of a second apart, each lab
+      comes up a few centimetres into its place as it fades up and grows
+      to its size. It eases in and stops without bouncing past its spot,
+      and its name comes up under it. One soft tone, a single warm note,
+      sounds as the last one settles; the wordmark's letters fall and
+      swing in at the same time. About a second and a half, with nothing
+      else in the room: no night, no star. Judge: smooth, and short
+      enough that it never feels like waiting?
+- [ ] **A pinch on a lab while they are still rising enters it** at once.
+- [ ] **Walking back from a lab** does not replay it: the home fades in.
+- [ ] **In Deep space** the labs rise the same way, over the sky.
+- [ ] **Reduce Motion:** no rise — the labs fade in, and no tone.
 - [ ] **Each portal previews its physics in a loop** and its short name
       is legible from where you stand, all seven at a glance — system type
       on a glass capsule with the lab's colour as a dot.
-- [ ] **Each lab stands free on its plinth** (2026-10-19): no glass and no
-      ring round it. The seven plinths are one size at one height, a row
-      of milled turntables with a fine champagne knurl, not gear teeth.
-      Each swings slowly back and forth so you see round the lab, never in
-      step with its neighbours. Walk up to one: it is an object, not a
-      picture. Its name hangs just under the plinth's front edge.
+- [ ] **Each lab floats free** (2026-10-21): no glass, no ring and no
+      plinth under it. The seven are one size at one height, a row. Each
+      swings slowly back and forth so you see round it, never in step
+      with its neighbours. Walk up to one: it is an object, not a
+      picture. The names hang in one level row under the labs. Judge:
+      does a lab read as floating on purpose, or as missing its base?
 - [ ] **At rest the portals float** a few millimetres, never in step —
       felt rather than seen. Under Reduce Motion they hang still.
 - [ ] **The wordmark is the app's own type** (2026-10-14): rounded white
-      letters standing a few centimetres off a glass plaque the shape of
-      every panel, the i's dot a point of champagne light. Walk round it:
-      the letters are solids with soft rounded edges, with no spike, nick
-      or hole anywhere, and they hold white against a bright wall. Judge:
+      letters standing free — their glass plaque went on 2026-10-21 — the
+      i's dot a point of champagne light. Walk round it: the letters are
+      solids with soft rounded edges, with no spike, nick or hole
+      anywhere. **Against a bright white wall, are they still legible?**
+      The plaque was what kept them so; if they wash out, say so. Judge:
       does it read as the same app as the labs' title bars?
 - [ ] **The wordmark arrives by physics.** "Physics" drops in letter by
-      letter and bounces to rest across the bell; "Playground" swings in
+      letter and bounces to rest as the labs rise; "Playground" swings in
       from its top edges like hung signs and settles; the i's dot drops
-      onto its stem last. The plaque fades up with the portals' labels.
+      onto its stem last.
       Then a slow wave rolls through both lines and a glint brightens the
       letters every few seconds. Judge: playful, or too much for a title?
 - [ ] **Pinch a letter**: it hops and bounces back to exactly its place,

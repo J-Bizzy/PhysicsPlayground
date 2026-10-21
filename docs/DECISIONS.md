@@ -16,6 +16,35 @@ A running log of consequential decisions — architectural, physical, or product
 
 (The template sat stranded at line 309, mid-log between two 2026-07-29 entries, until 2026-08-01.)
 
+## 2026-10-21 — No opening: the labs rise into place, float free, and the wordmark stands alone
+
+**Decision:** Three changes to the home, all the owner's call.
+- **"Birth of a System" is gone.** It is not replaced by another opening. The owner: "the level of quality is just not what I'm looking for". What plays instead is the home arriving (`Hub/Opening.swift`, about 1.5 s). The seven labs rise into place one after another, left to right, about 0.1 s apart. Each lab:
+  - rises 6 cm into its spot over 0.6 s;
+  - fades up over the first 60 % of that;
+  - grows from 90 % to full size, eased out with no overshoot.
+
+  Each name comes up as its lab settles. One soft tone, A4 with its octave, sounds as the last lab comes to rest; the owner chose it over a chime per lab and over silence. The wordmark's letters fall and swing in as they always did, retimed to the labs.
+- **The plinths go.** The labs float. The stage stays as a point, so every lab keeps its size and place. Nothing is drawn there, and `HubStage.usdz` and its builder are deleted. The names hang in one row where the plinths' front edges were.
+- **The wordmark's glass plaque goes.** The letters stand on nothing, and More keeps its seat.
+
+**Context:**
+- **No skip, no night.** The arrival is short enough to need neither. A pinch enters a lab at once, even while the labs are rising, and the room keeps the home's dimming from the first frame.
+- **Removed with the opening:**
+  - `OpeningPlan`, `OpeningStage` and their tests;
+  - the night sphere, the skip wall and the dimming hand-over;
+  - the six-second score, which became `.arrival`, one tone (one-shot version 4);
+  - `PhysicsCore`'s `TimeLapse`, which only the opening used.
+
+  `KeplerOrbit` stays, because Deep space's distant Sun uses it. The launch no longer waits on the opening's planet textures and trail fade; the orrery and Orbital Mechanics load those themselves.
+- **The 2026-10-20 entry below** is the record of what the opening was and why it was built that way.
+
+**Consequences:**
+- **The home is the first thing a wearer sees,** with no performance in front of it, and an arrival that cannot be skipped because it is over almost at once.
+- **The labs float as the labs themselves do,** so the front door no longer stands on anything. ARCHITECTURE.md's front-door exception says so.
+- **White letters with no plaque can wash out against a bright white wall.** ON_DEVICE_TESTS.md has the check.
+- **`SellingCopyCriterionTests`** bans "Birth of a System", "solar system forming" and "plinth" from the selling copy.
+
 ## 2026-10-20 — "Birth of a System": the opening is a star system forming
 
 **Decision:** The opening is a star system forming, the owner's choice from three offered. It replaces the particle field of 2026-10-14, where charges fell through crossed fields, rippled as deep water and settled onto rims.

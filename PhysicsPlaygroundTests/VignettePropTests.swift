@@ -3,11 +3,11 @@
 //  Physics Playground — app tests
 //
 //  The props the home's dioramas load, against the numbers the Swift side
-//  places them by. The stage and the cradle are placed at their AUTHORED
-//  size and origin (`HubVignettes.placed`), not recentred, so a Blender
-//  script that drifts from `HubDioramas` would stand a lab off its stage
-//  or hang the balls off their rails — and still load without a word. The
-//  exporter maps Blender (x, y, z) → RealityKit (x, z, −y).
+//  places them by. The cradle is placed at its AUTHORED size and origin
+//  (`HubVignettes.placed`), not recentred, so a Blender script that drifts
+//  from `HubDioramas` would stand it off its stage or hang the balls off
+//  their rails — and still load without a word. The exporter maps Blender
+//  (x, y, z) → RealityKit (x, z, −y).
 //
 
 import XCTest
@@ -29,22 +29,12 @@ final class VignettePropTests: XCTestCase {
     /// and also completely silent — so the only way a dropped file gets
     /// noticed is here.
     func testEveryPropTheDioramasAskForExists() throws {
-        for name in ["HubStage", "HubCradle", "PickupCoil", "LauncherBarrel",
+        for name in ["HubCradle", "PickupCoil", "LauncherBarrel",
                      "CircuitBattery", "CircuitBulb", "CircuitSwitch"] {
             let box = try bounds(of: name)
             XCTAssertGreaterThan(min(box.extents.x, min(box.extents.y, box.extents.z)), 0,
                                  "\(name) has no thickness on some axis")
         }
-    }
-
-    /// The stage is a disc `stageRadius` across, its top face at y = 0.
-    func testTheStageIsTheDioramasStage() throws {
-        let box = try bounds(of: "HubStage")
-        let radius = HubVignettes.stageRadius
-        XCTAssertEqual(box.extents.x, 2 * radius, accuracy: 0.001)
-        XCTAssertEqual(box.extents.z, 2 * radius, accuracy: 0.001)
-        XCTAssertEqual(box.max.y, 0, accuracy: 0.001, "the stage's top is not at y = 0")
-        XCTAssertLessThan(box.extents.y, 0.02, "the stage is a plinth, not a drum")
     }
 
     /// The cradle's rails stand where the balls hang from, and the frame

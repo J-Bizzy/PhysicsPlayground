@@ -122,17 +122,19 @@ final class HubTitleMotionTests: XCTestCase {
 
     // MARK: The arrival's clock
 
-    /// "Physics" lands across the bell, and both lines are at rest within a
-    /// couple of seconds of it.
-    func testTheTitleArrivesAroundTheBellAndSettles() {
+    /// "Physics" lands while the labs rise into place, and both lines are
+    /// at rest within a couple of seconds of their arriving — the first
+    /// glint after the letters are down.
+    func testTheTitleArrivesWithTheLabsAndSettles() {
         let firstLanding = HubTitleMotion.dropRelease(0)
             + (2 * HubTitleMotion.dropHeight / g).squareRoot()
         let lastLanding = HubTitleMotion.dropRelease(6)
             + (2 * HubTitleMotion.dropHeight / g).squareRoot()
-        XCTAssertLessThan(firstLanding, Opening.landingTime)
-        XCTAssertGreaterThan(lastLanding, Opening.landingTime)
+        XCTAssertGreaterThan(firstLanding, 0.2)
+        XCTAssertLessThan(lastLanding, Opening.labsArrived)
         let swingDone = HubTitleMotion.swingSettles(after: HubTitleMotion.swingRelease(9))
-        XCTAssertLessThan(swingDone - Opening.landingTime, 2.2)
+        XCTAssertLessThan(swingDone - Opening.labsArrived, 2.2)
+        XCTAssertGreaterThan(Opening.firstGlint, lastLanding)
     }
 }
 

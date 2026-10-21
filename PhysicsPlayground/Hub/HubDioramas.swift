@@ -4,7 +4,7 @@
 //
 //  Each portal holds its lab in miniature: the lab's own apparatus, built
 //  from the parts the lab itself draws (its wells' previews, its milled
-//  props, its tracer and its solver), standing on one shared stage and
+//  props, its tracer and its solver), fitted to one shared stage and
 //  moved by the lab's real physics. Not an emblem of the lab — the lab,
 //  small:
 //    • Pendulums — Newton's cradle, the lab's opening scene, its end balls
@@ -21,13 +21,13 @@
 //    • Orbital Mechanics — an orrery: the four inner planets on their real
 //      ellipses, perihelia and period ratios, on arms from the Sun's post.
 //
-//  THE STAGE (`Tools/hubdioramas.py`, a miniature of Circuit Workshop's
-//  turntable) is the plinth each lab stands on in the home, with nothing
-//  round it: the home scales and places every one by its stage
-//  (`PortalLayout.plinthRadius`, `plinthDrop`), so seven differently shaped
-//  labs read as one row of exhibits. Diorama space is metres, y up, the
-//  stage's top at y = 0; a lab built at its own size hangs off a `bench`
-//  scaled into it.
+//  THE STAGE is where a lab stands, and nothing is drawn there: the home
+//  scales and places every lab by its stage (`PortalLayout.footprintRadius`,
+//  `footprintDrop`), so seven differently shaped labs float as one row of
+//  exhibits. It was a milled plinth, a miniature of Circuit Workshop's
+//  turntable, until 2026-10-21 (owner's call: the labs float). Diorama
+//  space is metres, y up, the stage at y = 0; a lab built at its own size
+//  hangs off a `bench` scaled into it.
 //
 
 import Foundation
@@ -44,12 +44,11 @@ extension HubVignettes {
     /// The stage entity's name, so a test can find it in any portal.
     static let stageName = "diorama-stage"
 
-    /// The stage's radius in diorama space, as `hubdioramas.py` mills it.
+    /// The stage's radius in diorama space: what a lab's footprint fills.
     static let stageRadius: Float = 0.100
-    /// How far every stage is turned toward the reader — the plinth's tilt
-    /// in the home (`PortalLayout.plinthTilt`), where the opening's
-    /// particles land on its rim.
-    static let stageTilt = Float(PortalLayout.plinthTilt)
+    /// How far every stage is turned toward the reader — the footprint's
+    /// tilt in the home (`PortalLayout.footprintTilt`).
+    static let stageTilt = Float(PortalLayout.footprintTilt)
     /// The stage's share of the common square's width.
     static let stageShare: Float = 0.92
     /// What share of the stage's radius a lab's footprint fills.
@@ -87,16 +86,12 @@ extension HubVignettes {
         }
     }
 
-    static func stage() -> Entity {
-        if let milled = placed("HubStage") { return milled }
-        let disc = ModelEntity(mesh: Primitives.cylinder(height: 0.010, radius: stageRadius),
-                               materials: [Materials.graphite()])
-        disc.position.y = -0.005
-        return disc
-    }
+    /// The stage: a point, its top at y = 0, `stageRadius` across in the
+    /// home's measure — nothing drawn.
+    static func stage() -> Entity { Entity() }
 
-    /// A milled prop at its authored size and origin — the stage and the
-    /// cradle are placed by their numbers, not recentred like `prop`.
+    /// A milled prop at its authored size and origin — the cradle is
+    /// placed by its numbers, not recentred like `prop`.
     static func placed(_ name: String) -> Entity? {
         PropCache.prototype(named: name)?.clone(recursive: true)
     }

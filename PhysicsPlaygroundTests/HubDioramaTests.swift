@@ -9,8 +9,9 @@
 //  both colours and is dark when the magnet stops; the orrery keeps
 //  Kepler's third law and solves Kepler's equation; and every lab's stage
 //  is the same size in its portal, which is what makes them one set. In the
-//  home nothing frames them: each stands on its plinth, every plinth one
-//  size at one height with its name under it, turning slowly.
+//  home nothing frames them and nothing stands under them: each floats,
+//  scaled to one footprint at one height with its name under it, turning
+//  slowly.
 //
 
 import XCTest
@@ -124,14 +125,17 @@ final class HubDioramaTests: XCTestCase {
     // MARK: The set
 
     /// Every lab's stage is the same size in its portal, whatever stands on
-    /// it: the one thing that makes seven exhibits a row.
+    /// it: the one thing that makes seven exhibits a row. Nothing is drawn
+    /// there, so it is measured by where it puts its radius.
     func testEveryStageIsTheSameSizeInItsPortal() throws {
         var widths: [String: Float] = [:]
         for id in ModuleCatalog.allIDs {
             let built = HubVignettes.make(for: id)
             let stage = try XCTUnwrap(built.entity.findEntity(named: HubVignettes.stageName),
                                       "\(id) stands on no stage")
-            widths[id] = stage.visualBounds(relativeTo: built.entity).extents.x
+            widths[id] = simd_distance(stage.convert(position: .zero, to: built.entity),
+                                       stage.convert(position: [HubVignettes.stageRadius, 0, 0],
+                                                     to: built.entity))
         }
         let reference = try XCTUnwrap(widths.values.first)
         for (id, width) in widths {
@@ -148,59 +152,67 @@ final class HubDioramaTests: XCTestCase {
         return scene
     }
 
-    /// Every lab stands on a plinth of `PortalLayout.plinthRadius` whose top
-    /// centre and tilt are the layout's — one size, one height, the row is
-    /// the frame, and the opening's particles land on its rim.
-    func testEveryLabStandsOnOnePlinthAtOneHeight() throws {
+    /// Every lab is scaled to a footprint of `PortalLayout.footprintRadius`
+    /// whose centre and tilt are the layout's — one size, one height, and
+    /// the row is the frame.
+    func testEveryLabFillsOneFootprintAtOneHeight() throws {
         let scene = home()
         let layout = PortalLayout.portals(count: scene.portalIDs.count)
         for (id, slot) in zip(scene.portalIDs, layout) {
             let anchor = try XCTUnwrap(scene.portal(id))
             let stage = try XCTUnwrap(anchor.findEntity(named: HubVignettes.stageName),
-                                      "\(id) stands on no plinth")
+                                      "\(id) has no footprint")
             let centre = stage.convert(position: .zero, to: nil)
             let edge = stage.convert(position: [HubVignettes.stageRadius, 0, 0], to: nil)
-            XCTAssertEqual(simd_distance(centre, edge), Float(PortalLayout.plinthRadius),
-                           accuracy: 1e-4, "\(id)'s plinth is another size")
-            let expected = SIMD3<Float>(PortalLayout.plinthCentre(of: slot))
+            XCTAssertEqual(simd_distance(centre, edge), Float(PortalLayout.footprintRadius),
+                           accuracy: 1e-4, "\(id) is another size")
+            let expected = SIMD3<Float>(PortalLayout.footprintCentre(of: slot))
             XCTAssertLessThan(simd_distance(centre, expected), 1e-4,
-                              "\(id)'s plinth is not where the particles land")
-            // And in the plane they land in: tipped toward the wearer by the tilt.
-            let tilt = PortalLayout.plinthTilt
+                              "\(id) floats somewhere else")
+            // Tipped toward the wearer by the tilt.
+            let tilt = PortalLayout.footprintTilt
             let normal = SIMD3<Float>(SIMD3<Double>(0, cos(tilt), 0) + slot.toward * sin(tilt))
             XCTAssertGreaterThan(simd_dot(stage.convert(direction: [0, 1, 0], to: nil), normal),
-                                 1 - 1e-5, "\(id)'s plinth is tipped another way")
+                                 1 - 1e-5, "\(id) is tipped another way")
         }
     }
 
-    /// Nothing frames a lab any more: no glass pane, no ring.
-    func testNothingFramesALab() throws {
+    /// Nothing frames a lab and nothing stands under it: no glass pane, no
+    /// ring, no plinth — the stage is a point, nothing drawn.
+    func testNothingFramesALabOrStandsUnderIt() throws {
         let scene = home()
         for id in scene.portalIDs {
             let anchor = try XCTUnwrap(scene.portal(id))
             for name in ["portal-pane", "portal-rim", HubScene.vignetteSquareName] {
                 XCTAssertNil(anchor.findEntity(named: name), "\(id) still has a \(name)")
             }
+            let stage = try XCTUnwrap(anchor.findEntity(named: HubVignettes.stageName))
+            XCTAssertTrue(stage.children.isEmpty, "\(id) stands on something")
+            XCTAssertNil(stage.components[ModelComponent.self], "\(id) stands on something")
         }
+        XCTAssertNil(PropCache.prototype(named: "HubStage"), "the plinth is still in the bundle")
     }
 
-    /// A lab's name hangs under its plinth, clear of it.
-    func testTheNameHangsUnderThePlinth() throws {
+    /// A lab's name hangs under it, clear of it, and every name on one row.
+    func testTheNamesHangUnderTheirLabsInOneRow() throws {
         let scene = home()
+        var rows: [Float] = []
         for id in scene.portalIDs {
             let anchor = try XCTUnwrap(scene.portal(id))
-            let stage = try XCTUnwrap(anchor.findEntity(named: HubVignettes.stageName))
+            let body = try XCTUnwrap(anchor.findEntity(named: "portal-body"))
             let label = try XCTUnwrap(anchor.findEntity(named: "portal-label-extent"))
-            let plinth = stage.visualBounds(relativeTo: nil)
-            let name = label.visualBounds(relativeTo: nil)
-            XCTAssertLessThan(name.max.y, plinth.min.y, "\(id)'s name overlaps its plinth")
-            XCTAssertGreaterThan(name.max.y, plinth.min.y - 0.05, "\(id)'s name hangs far below it")
+            let lab = body.visualBounds(relativeTo: anchor)
+            let name = label.visualBounds(relativeTo: anchor)
+            XCTAssertLessThan(name.max.y, lab.min.y, "\(id)'s name overlaps it")
+            XCTAssertGreaterThan(name.max.y, lab.min.y - 0.08, "\(id)'s name hangs far below it")
+            rows.append(name.max.y)
         }
+        XCTAssertLessThan((rows.max() ?? 0) - (rows.min() ?? 0), 1e-4, "the names are not one row")
     }
 
     /// The turn starts from rest, builds without a jump, and never passes
     /// ±12° — a turntable easing back and forth, not a spin.
-    func testThePlinthsTurnGentlyFromRest() {
+    func testTheLabsTurnGentlyFromRest() {
         for phase in [0.0, 0.73, 2.19, 4.38] {
             XCTAssertEqual(HubScene.swayAngle(elapsed: -1, phase: phase), 0)
             XCTAssertEqual(HubScene.swayAngle(elapsed: 0, phase: phase), 0, accuracy: 1e-6)

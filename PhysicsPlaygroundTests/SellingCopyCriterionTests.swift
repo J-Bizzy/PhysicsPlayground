@@ -32,6 +32,8 @@ final class SellingCopyCriterionTests: XCTestCase {
         "palette bead", // pause went to the title bar, the rest to More (2026-10-14)
         "Studio Mode", "-studioMode", // Deep space replaced it (2026-10-20)
         "particle animation", // the opening is a star system forming (2026-10-20)
+        "Birth of a System", "solar system forming", // that opening, gone too (2026-10-21)
+        "plinth",       // the labs float (2026-10-21)
     ]
 
     // Deliberately not on that list: "experiment" is ordinary English the

@@ -50,13 +50,13 @@ final class SettleTests: XCTestCase {
         XCTAssertTrue(settle.tick(dt: 0.02))
     }
 
-    /// The home's opening holds its clock at zero until the scene settles:
-    /// nothing has been lit yet, and the particles wait drawn but unseen.
-    func testTheOpeningWaitsForTheSceneToSettle() {
+    /// The home's arrival holds its clock at zero until the scene settles:
+    /// the labs wait drawn but unseen, at the start of their rise.
+    func testTheArrivalWaitsForTheSceneToSettle() {
         let scene = HubScene()
         scene.build(modules: ModuleCatalog.all(appModel: AppModel()))
         XCTAssertTrue(scene.isOpening)
-        // Long frames, as a mount brings: the opening does not move.
+        // Long frames, as a mount brings: the arrival does not move.
         for _ in 0..<5 { scene.animate(dt: 0.1) }
         XCTAssertEqual(scene.openingClock, 0, accuracy: 1e-9)
         // Clean frames settle it, and the clock runs from then.

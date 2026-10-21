@@ -1,9 +1,8 @@
-//  HubSpaceView.swift — the home: the labs standing around the wearer in miniature, each on its
-//  own plinth and running its lab's physics in a loop. A pinch on one (a "portal") enters that
-//  lab. The home is the end state of the opening, "Birth of a System" (`OpeningPlan`, drawn by
-//  `OpeningStage`): a star ignites, its disk shears, seven worlds condense and fly out on Kepler
-//  arcs to land on the plinths. Any pinch skips it; Reduce Motion fades the labs in instead.
-//  Secondary things — the flat lab list, Settings, About — are behind the one More.
+//  HubSpaceView.swift — the home: the labs floating around the wearer in miniature, each running
+//  its lab's physics in a loop. A pinch on one (a "portal") enters that lab. On a launch they
+//  arrive (`Opening`): one after another, left to right, each rises into its place as it fades
+//  up, and one soft tone sounds as the last settles; a walk back, or Reduce Motion, fades them in.
+//  Secondary things — Deep space, the flat lab list, Settings, About — are behind the one More.
 
 import SwiftUI
 import RealityKit
@@ -18,27 +17,21 @@ struct HubSpaceView: View {
     var body: some View {
         RealityView { content, attachments in
             let modules = ModuleCatalog.all(appModel: appModel)
-            // Stillness first: `build` ends by starting the opening — the
+            // Stillness first: `build` ends by starting the arrival — the
             // decision must exist before the decider.
             scene.stillness = systemReduceMotion
             #if DEBUG
-            // `-hubIntro <seconds>` pins the opening at that instant for a
+            // `-hubIntro <seconds>` pins the arrival at that instant for a
             // screenshot (a large value shows the end state, the home).
             // `double(forKey:)` coerces the argument domain's string.
             let frozen = UserDefaults.standard.double(forKey: "hubIntro")
             if frozen > 0 { scene.openingFrozenAt = frozen }
             #endif
-            // Once per session; marked played when the opening finishes, since
+            // Once per session; marked played when the arrival finishes, since
             // this closure can run for a view the system discards while presenting.
             scene.openingAlreadyPlayed = appModel.hasPlayedArrival
             scene.onOpeningPlayed = { appModel.hasPlayedArrival = true }
             scene.onEnter = enter
-            // The opening's night stands in for the room's dimming while it
-            // plays, and hands back to it as it lifts. In deep space the sky
-            // is already there and there is nothing to dim.
-            scene.inSpace = appModel.surroundings == .deepSpace
-            scene.onNightFalls = { appModel.setDimming(0) }
-            scene.onHandOver = { appModel.setDimming(AppModel.homeDimming) }
             SoundPalette.warmUp()
             #if DEBUG
             let buildStarted = ContinuousClock.now
@@ -107,11 +100,6 @@ struct HubSpaceView: View {
             TapGesture()
                 .targetedToAnyEntity()
                 .onEnded { value in
-                    // Any pinch during the opening skips to its end.
-                    if scene.isOpening {
-                        scene.skipOpening()
-                        return
-                    }
                     // A pinch on a letter of the wordmark hops it.
                     if scene.hopTitleLetter(value.entity) { return }
                     guard let id = scene.moduleID(for: value.entity) else { return }
@@ -236,8 +224,8 @@ private struct PortalLabel: View {
     }
 }
 
-/// The home's entity graph: the portals, the wordmark, the More seat, and
-/// the opening while it plays.
+/// The home's entity graph: the portals, the wordmark and the More seat,
+/// and how they arrive.
 @MainActor
 @Observable
 final class HubScene {
@@ -246,13 +234,13 @@ final class HubScene {
     /// Held for the same reason `subscription` is — see `HubSpaceView.onDisappear`.
     var accessibilitySubscriptions: [EventSubscription] = []
 
-    /// True stills all idle motion and replaces the opening with a fade.
+    /// True stills all idle motion and replaces the arrival with a fade.
     var stillness = false
-    /// `-hubIntro <seconds>` pins the opening clock here.
+    /// `-hubIntro <seconds>` pins the arrival's clock here.
     var openingFrozenAt: Double?
-    /// True when this session has seen the opening — set before `build`.
+    /// True when this session has seen the arrival — set before `build`.
     var openingAlreadyPlayed = false
-    /// Fired the frame the opening completes; the view marks the session.
+    /// Fired the frame the arrival completes; the view marks the session.
     var onOpeningPlayed: (() -> Void)?
     /// Opens a lab. Set by the view; reached from a pinch and from VoiceOver.
     var onEnter: ((String) -> Void)?
@@ -267,46 +255,32 @@ final class HubScene {
         let animate: (Double) -> Void
         /// Each preview runs on its own phase, so the loops never pulse together.
         let phase: Double
-        /// The lab on its plinth, turned slowly about `swayAxis` — the
-        /// plinth's own normal, through its top centre.
+        /// The lab, turned slowly about `swayAxis` — its footprint's own
+        /// normal, through its centre.
         let sway: Entity
         let swayAxis: SIMD3<Float>
     }
     private var portals: [Portal] = []
     private var time = 0.0
 
-    // MARK: The opening
+    // MARK: The arrival
 
     private enum OpeningPhase { case pending, running, done }
     private var openingPhase: OpeningPhase = .pending
     private var openingStart = 0.0
-    /// "Birth of a System", while it plays (`OpeningStage`).
-    private var stage: OpeningStage?
-    /// A skipped opening's stage, fading away over `skipFade`.
-    private var leavingStage: OpeningStage?
-    private var leavingSince = 0.0
-    private static let skipFade = 0.25
-    /// The swell and bell, so a skip can let them go.
-    private var openingSound: AudioPlaybackController?
-    /// Whether the room's own dimming has taken over from the night.
-    private var handedOver = false
-    /// True in deep space, where the opening brings no night or sky of its
-    /// own. Set before `build`.
-    var inSpace = false
-    /// The night falls over the room: the house dimming steps aside for it.
-    var onNightFalls: (() -> Void)?
-    /// The night lifts: the house dimming takes over (also on a skip).
-    var onHandOver: (() -> Void)?
-    private var skipShield: Entity?
+    /// Whether this arrival's one tone has sounded.
+    private var tonePlayed = false
+    /// How far below its place each lab stands while it rises, metres.
+    private var lifts: [Float] = []
 
-    /// Whether the opening is playing — any pinch then skips it.
+    /// Whether the labs are arriving.
     var isOpening: Bool { openingPhase == .running }
 
-    /// The opening's clock: pinned for a screenshot, else real time.
+    /// The arrival's clock: pinned for a screenshot, else real time.
     private var openingTime: Double {
         openingFrozenAt ?? (time - openingStart)
     }
-    /// The opening's clock — for tests.
+    /// The arrival's clock — for tests.
     var openingClock: Double { openingTime }
 
     // MARK: The wordmark
@@ -320,17 +294,18 @@ final class HubScene {
     private static let titleWidth: Float = 0.52
     /// The living wordmark's leading, as a fraction of a line's height.
     private static let livingLeading: Float = 0.08
-    /// The glass round the living wordmark, metres either side and above/below.
-    private static let plaquePadding = SIMD2<Float>(0.075, 0.055)
+    /// From the living wordmark's lowest line to where the More's air
+    /// begins, metres — where its glass plaque ended until 2026-10-21.
+    private static let livingFooting: Float = 0.055
     private var titleLines: [Entity] = []
     /// The wordmark's letters on hinges (`HubTitleGlyphs`), when the
     /// per-letter assets are bundled; nil means the still milled lines.
     private var livingTitle: HubTitleGlyphs?
-    /// What the lockup stands on — the glass plaque, or the machined lines'
-    /// rule — faded on its own while the letters arrive.
+    /// The machined lines' rule, when they stand in, faded on its own while
+    /// the home arrives; the living letters stand on nothing.
     private var titleRule: Entity?
-    /// Whether the letters arrive with this opening (false on a walk back
-    /// or under Reduce Motion, where they are simply there).
+    /// Whether the letters arrive this time (false on a walk back or under
+    /// Reduce Motion, where they are simply there).
     private var titleArrives = false
     /// Where the More stands: under the wordmark's footing.
     private var moreSeatPosition = SIMD3<Float>(0, 1.80, -2.13)
@@ -347,8 +322,7 @@ final class HubScene {
         root.children.removeAll()
         titleAnchor.children.removeAll()
         portals.removeAll()
-        stage = nil
-        leavingStage = nil
+        titleRule = nil
 
         // Arc order: the two domains, left to right, as the flat catalog lists them.
         let byID = Dictionary(uniqueKeysWithValues: modules.map { ($0.id, $0) })
@@ -358,8 +332,11 @@ final class HubScene {
         for (index, (module, slot)) in zip(ordered, layout).enumerated() {
             buildPortal(module, at: slot, phase: Double(index) * 0.73)
         }
+        lifts = Array(repeating: 0, count: portals.count)
+        shownArrivals = Array(repeating: (-1, -1, -1), count: portals.count)
+        shownFooting = -1
         buildBubbleTitle()
-        beginOpening(layout: layout)
+        beginOpening()
     }
 
     private func buildPortal(_ module: ModuleDescriptor, at slot: PortalLayout.Portal,
@@ -374,46 +351,45 @@ final class HubScene {
 
         // The lab in miniature, looping its own physics: what the portal says
         // it does. Nothing frames it (2026-10-19, owner's call — the glass
-        // circles and their rings read as badges): it stands on its plinth,
-        // and every plinth is the same size at the same height, so the row
-        // is the frame. The plinth's top centre is the pivot it turns on.
+        // circles and their rings read as badges) and nothing stands under
+        // it (2026-10-21, owner's call — the plinths went): it floats, every
+        // lab scaled to one footprint at one height, so the row is the
+        // frame. The footprint's centre is the pivot it turns on.
         let built = HubVignettes.make(for: module.id)
         // `fit`'s invisible square, a pose-independent box to measure by;
-        // placed by its plinth, the lab needs none, and here it would only
-        // stretch the bounds the target is measured against.
+        // placed by its footprint, the lab needs none, and here it would
+        // only stretch the bounds the target is measured against.
         built.entity.findEntity(named: Self.vignetteSquareName)?.removeFromParent()
         let pivot = Entity()
-        pivot.name = "portal-plinth"
-        pivot.position = [0, -Float(PortalLayout.plinthDrop), 0]
+        pivot.name = "portal-pivot"
+        pivot.position = [0, -Float(PortalLayout.footprintDrop), 0]
         body.addChild(pivot)
         pivot.addChild(built.entity)
         var axis = SIMD3<Float>(0, 1, 0)
         if let stage = built.entity.findEntity(named: HubVignettes.stageName) {
             let centre = stage.convert(position: .zero, to: built.entity)
             let edge = stage.convert(position: [HubVignettes.stageRadius, 0, 0], to: built.entity)
-            let scale = Float(PortalLayout.plinthRadius) / max(simd_distance(centre, edge), 1e-6)
+            let scale = Float(PortalLayout.footprintRadius) / max(simd_distance(centre, edge), 1e-6)
             built.entity.scale = SIMD3(repeating: scale)
             built.entity.position -= stage.position(relativeTo: pivot)
             axis = simd_normalize(stage.convert(direction: [0, 1, 0], to: pivot))
         }
 
-        // Its name under the plinth's front edge: system type on glass, with
-        // the lab's colour as a dot. A transparent proxy the label's size
-        // stands with it, so the portal's target is measured against the
-        // label it covers. It hangs from the anchor, not the floating body:
-        // a SwiftUI attachment that moves every frame is laid out again
-        // every frame (seven of them were a tenth of the home's main thread),
-        // and four millimetres of float is not worth that.
-        let plinthLow = built.entity.findEntity(named: HubVignettes.stageName)?
-            .visualBounds(relativeTo: body).min.y
-            ?? -Float(PortalLayout.plinthDrop + PortalLayout.plinthRadius * 0.3)
+        // Its name under it: system type on glass, with the lab's colour as
+        // a dot, every name on one row — where the plinths' front edges were,
+        // so the row stays level however each lab is shaped. A transparent
+        // proxy the label's size stands with it, so the portal's target is
+        // measured against the label it covers. It hangs from the anchor,
+        // not the floating body: a SwiftUI attachment that moves every frame
+        // is laid out again every frame (seven of them were a tenth of the
+        // home's main thread), and four millimetres of float is not worth that.
         let title = module.shortTitle ?? module.title
         let labelSize = PortalLabel.size(for: title)
         let label = Entity()
         label.name = "portal-label"
-        let labelTop = plinthLow - Self.labelGap
+        let labelTop = Self.footprintLow - Self.labelGap
         label.position = [0, labelTop - labelSize.y / 2,
-                          Float(PortalLayout.plinthRadius) * Self.labelForward]
+                          Float(PortalLayout.footprintRadius) * Self.labelForward]
         label.addChild(ControlAttachment.entity(
             PortalLabel(title: title, accent: module.accent), name: "portal-label-text"))
         let proxy = ModelEntity(
@@ -424,20 +400,22 @@ final class HubScene {
         label.addChild(proxy)
         anchor.addChild(label)
 
-        // The whole exhibit is the target — the plinth, the lab over its
-        // whole motion and its name. `contentExtents` is the lab swept over
-        // its cycle and centred on the miniature's origin.
-        let radius = Float(PortalLayout.plinthRadius)
-        let origin = built.entity.position(relativeTo: body).y
-        let contentTop = origin + built.entity.scale.y * built.contentExtents.y / 2
-        let top = max(contentTop, pivot.position.y + 0.08) + 0.01
+        // The whole exhibit is the target — the lab over its whole motion and
+        // its name, and nothing more: with no plinth under it, a target the
+        // plinth's size stood twice as deep as some labs. `contentExtents`
+        // is the lab swept over its cycle and centred on the miniature's
+        // origin.
+        let origin = built.entity.position(relativeTo: body)
+        let content = built.entity.scale * built.contentExtents
+        let top = max(origin.y + content.y / 2, pivot.position.y + 0.08) + 0.01
         let bottom = labelTop - labelSize.y
-        let width = max(2 * radius + 0.02, labelSize.x)
-        let depth = 2 * radius + 0.02
+        let width = max(2 * abs(origin.x) + content.x + 0.02, labelSize.x)
+        let back = origin.z - content.z / 2 - 0.01
+        let front = max(origin.z + content.z / 2 + 0.01, label.position.z)
         anchor.components.set(InputTargetComponent())
         anchor.components.set(CollisionComponent(shapes: [
-            Primitives.collisionBox(size: [width, top - bottom, depth],
-                                    offset: [0, (top + bottom) / 2, 0]),
+            Primitives.collisionBox(size: [width, top - bottom, front - back],
+                                    offset: [0, (top + bottom) / 2, (front + back) / 2]),
         ]))
         anchor.components.set(HoverEffectComponent())
         SpatialActions.attach(
@@ -452,23 +430,28 @@ final class HubScene {
 
     /// `HubVignettes.fit`'s invisible square.
     static let vignetteSquareName = "vignette-square"
-    /// From the plinth's lowest point to its name's top edge.
-    private static let labelGap: Float = 0.02
-    /// How far forward the name hangs, as a share of the plinth's radius:
-    /// under its front edge, where a museum puts a plinth's label.
+    /// The footprint's front edge, below the portal's centre: the footprint
+    /// tipped toward the wearer drops its front by r·sin(tilt). The names'
+    /// row hangs from here.
+    static let footprintLow = -Float(PortalLayout.footprintDrop
+                                     + PortalLayout.footprintRadius * sin(PortalLayout.footprintTilt))
+    /// From the footprint's front edge to a name's top edge.
+    private static let labelGap: Float = 0.035
+    /// How far forward the name hangs, as a share of the footprint's radius:
+    /// under the lab's front, where a museum puts an exhibit's label.
     private static let labelForward: Float = 0.75
 
-    /// The slow turn: each plinth swings ±12° about its own axis over 14 s,
-    /// so the lab on it shows its depth — the turntable's turn, never a
-    /// spin, and never under stillness. It builds over `swayRise` once the
-    /// labs have landed, so nothing jumps.
+    /// The slow turn: each lab swings ±12° about its own axis over 14 s, so
+    /// it shows its depth — a turntable's turn, never a spin, and never
+    /// under stillness. It builds over `swayRise` from the arrival, so
+    /// nothing jumps.
     private static let swayAmplitude: Float = 0.21
     private static let swayPeriod = 14.0
     private static let swayRise = 2.0
     /// The scene time the turn began from.
     private var swayOrigin = 0.0
 
-    /// How far a portal's plinth is turned at `elapsed` seconds into the turn.
+    /// How far a lab is turned at `elapsed` seconds into the turn.
     static func swayAngle(elapsed: Double, phase: Double) -> Float {
         guard elapsed > 0 else { return 0 }
         let x = min(elapsed / swayRise, 1)
@@ -492,13 +475,16 @@ final class HubScene {
         root.addChild(entity)
         moreSeat = entity
         if openingPhase == .running {
+            // Seated after the build's first update: hidden until the next
+            // one gives it the arrival's value, whatever the last write was.
             entity.components.set(OpacityComponent(opacity: 0))
+            shownFooting = -1
         }
     }
 
-    // MARK: The opening
+    // MARK: The arrival
 
-    private func beginOpening(layout: [PortalLayout.Portal]) {
+    private func beginOpening() {
         guard openingPhase == .pending else { return }
         let frozen = openingFrozenAt != nil
         if (stillness || openingAlreadyPlayed) && !frozen {
@@ -513,27 +499,13 @@ final class HubScene {
         openingStart = time
         titleArrives = true
         presence = 1
-
-        // "Birth of a System" needs the seven plinths it lands on.
-        guard layout.count == OpeningPlan.shared.worlds.count else {
-            openingPhase = .done
-            return
-        }
-        let made = OpeningStage(inSpace: inSpace)
-        root.addChild(made.root)
-        stage = made
-        if !inSpace { onNightFalls?() }
-
-        let shield = Self.makeSkipShield()
-        root.addChild(shield)
-        skipShield = shield
-
-        // The swell and bell start with the clock, once the scene has
-        // settled (`animate`); pinned for a still, there is neither.
+        // Everything waits at its start until the scene has settled
+        // (`animate`); pinned for a still, it stands where the pin says.
         updateOpening()
     }
 
-    /// Drives every curve of the opening, then clears it away and goes quiet.
+    /// Brings each lab up into its place, then its name, then the More —
+    /// written only when they change — and goes quiet once all are in.
     private func updateOpening() {
         guard openingPhase == .running else { return }
         let t = openingTime
@@ -541,180 +513,104 @@ final class HubScene {
             finishOpening()
             return
         }
-        stage?.update(at: t)
-        // The room's dimming takes over under the lifting night.
-        if !handedOver, t >= OpeningPlan.handOver {
-            handedOver = true
-            onHandOver?()
+        for (index, portal) in portals.enumerated() {
+            let arrival = (opacity: Opening.labOpacity(index, at: t),
+                           name: Opening.nameOpacity(index, at: t),
+                           scale: Opening.labScale(index, at: t))
+            lifts[index] = Opening.labLift(index, at: t)
+            if index < shownArrivals.count, shownArrivals[index] == arrival { continue }
+            if index < shownArrivals.count { shownArrivals[index] = arrival }
+            portal.anchor.components.set(OpacityComponent(opacity: arrival.opacity))
+            portal.label.components.set(OpacityComponent(opacity: arrival.name))
+            portal.body.scale = SIMD3(repeating: arrival.scale)
         }
-        // Written only when they change: for most of the opening the labs
-        // and their names stand at 0, and an opacity set on a lab reaches
-        // every entity in its diorama.
-        let portalLight = Opening.portalOpacity(at: t)
-        let labelLight = Opening.labelOpacity(at: t)
-        let scale = Opening.portalScale(at: t)
-        let arrival = (portal: portalLight, label: labelLight, scale: scale)
-        if shownArrival.map({ $0 != arrival }) ?? true {
-            shownArrival = arrival
-            // The labs grow out of their worlds into place as they fade up;
-            // the wordmark rises the last few centimetres as it does.
-            let growth = SIMD3<Float>(repeating: scale)
-            for portal in portals {
-                portal.anchor.components.set(OpacityComponent(opacity: portalLight))
-                portal.label.components.set(OpacityComponent(opacity: labelLight))
-                portal.body.scale = growth
-            }
-            moreSeat?.components.set(OpacityComponent(opacity: labelLight))
+        let footing = Opening.moreOpacity(at: t)
+        if footing != shownFooting {
+            shownFooting = footing
+            moreSeat?.components.set(OpacityComponent(opacity: footing))
+            titleRule?.components.set(OpacityComponent(opacity: footing))
         }
-        if livingTitle != nil {
-            // The letters bring themselves in; only their footing fades.
-            if arrival.label != shownTitleLight {
-                shownTitleLight = arrival.label
-                titleRule?.components.set(OpacityComponent(opacity: labelLight))
-            }
-        } else {
-            titleAnchor.components.set(OpacityComponent(opacity: labelLight))
+        if livingTitle == nil {
+            // The machined lines rise the last few centimetres as they fade up;
+            // the living letters bring themselves in.
+            titleAnchor.components.set(OpacityComponent(opacity: footing))
             titleAnchor.position = titlePosition + SIMD3(0, Opening.titleOffset(at: t), 0)
         }
     }
 
-    /// What the labs, their names and the wordmark's footing were last
-    /// given while the opening brings them in.
-    private var shownArrival: (portal: Float, label: Float, scale: Float)?
-    private var shownTitleLight: Float?
+    /// What each lab and its name, and the More, were last given while
+    /// they arrive.
+    private var shownArrivals: [(opacity: Float, name: Float, scale: Float)] = []
+    private var shownFooting: Float = -1
 
-    /// Any pinch: straight to the home. The home is there at once — labs,
-    /// names, wordmark — and the opening's own things fade away behind it
-    /// over a quarter-second, its sound with them.
-    func skipOpening() {
-        guard openingPhase == .running else { return }
-        openingFrozenAt = nil
-        // The letters are simply there, not still falling into place.
-        titleArrives = false
-        if let sound = openingSound {
-            sound.fade(to: -60, duration: Self.skipFade * 0.8)
-            Task { @MainActor in
-                try? await Task.sleep(for: .seconds(Self.skipFade))
-                sound.stop()
-            }
-        }
-        openingSound = nil
-        finishOpening(fading: true)
-    }
-
-    private func finishOpening(fading: Bool = false) {
+    private func finishOpening() {
         openingPhase = .done
-        // The turn carries on from the landing; a skip before it starts it now.
-        swayOrigin = min(time, openingStart + Opening.landingTime)
-        if fading, let stage {
-            leavingStage = stage
-            leavingSince = time
-        } else {
-            stage?.root.removeFromParent()
-        }
-        stage = nil
-        if !handedOver {
-            handedOver = true
-            onHandOver?()
-        }
-        skipShield?.removeFromParent()
-        skipShield = nil
-        for portal in portals {
+        // The turn carries on from the arrival's start, where it began.
+        swayOrigin = openingStart
+        for (index, portal) in portals.enumerated() {
             portal.anchor.components.remove(OpacityComponent.self)
             portal.label.components.remove(OpacityComponent.self)
             portal.body.scale = .one
+            lifts[index] = 0
         }
         titleAnchor.components.remove(OpacityComponent.self)
         titleAnchor.position = titlePosition
         titleRule?.components.remove(OpacityComponent.self)
         moreSeat?.components.remove(OpacityComponent.self)
-        shownArrival = nil
-        shownTitleLight = nil
-        // The opening has been seen — only now does it count against the session.
+        // The arrival has been seen — only now does it count against the session.
         onOpeningPlayed?()
-    }
-
-    /// The opening's "any pinch": walls of collider around the wearer, there
-    /// only while it plays, so a pinch anywhere lands on something. Named so a
-    /// tap on it is never mistaken for a portal.
-    static let skipShieldName = "opening-skip"
-
-    private static func makeSkipShield() -> Entity {
-        let shield = Entity()
-        shield.name = skipShieldName
-        // A box room around the wearer: any look ray from inside meets a wall.
-        let half: Float = 3.2
-        let thin: Float = 0.05
-        let span = 2 * half + thin
-        let shapes: [ShapeResource] = [
-            Primitives.collisionBox(size: [thin, 5, span], offset: [-half, 1.5, 0]),
-            Primitives.collisionBox(size: [thin, 5, span], offset: [half, 1.5, 0]),
-            Primitives.collisionBox(size: [span, 5, thin], offset: [0, 1.5, -half]),
-            Primitives.collisionBox(size: [span, 5, thin], offset: [0, 1.5, half]),
-            Primitives.collisionBox(size: [span, thin, span], offset: [0, 4.0, 0]),
-            Primitives.collisionBox(size: [span, thin, span], offset: [0, -1.0, 0]),
-        ]
-        shield.components.set(InputTargetComponent())
-        shield.components.set(CollisionComponent(shapes: shapes))
-        return shield
     }
 
     // MARK: Every frame
 
     func animate(dt rawDt: Double) {
         // Clamped: the first event after the space presents can carry seconds
-        // in one delta, which would spend the opening before anyone saw it.
+        // in one delta, which would spend the arrival before anyone saw it.
         let dt = min(rawDt, 1.0 / 30.0)
         time += dt
         // Nothing shows until the scene has settled (`Settle`): the frames
-        // just after the build run long, and the opening's first light —
-        // or the fade back in from a lab — stuttered through them. Until
-        // then the opening's clock holds at zero, where nothing is lit.
+        // just after the build run long, and an arrival — or the fade back
+        // in from a lab — stuttered through them. Until then the arrival's
+        // clock holds at zero, where nothing has come up.
         let arrived = settle.tick(dt: rawDt)
         if openingPhase == .running, openingFrozenAt == nil, !openingClockStarted {
             openingStart = time
             if arrived {
                 openingClockStarted = true
-                // Swell and bell, baked into one WAV whose bell is pinned to
-                // the landing — so it starts with the clock, not the build.
-                openingSound = SoundPalette.play(.calibration, on: titleAnchor, volume: 0.55)
                 #if DEBUG
-                LaunchTrace.mark("[frames] the opening's clock starts")
+                LaunchTrace.mark("[frames] the arrival's clock starts")
                 #endif
             }
         }
         if arrived { fadePresence(dt: dt) }
-        updateOpening()
-        if let leaving = leavingStage {
-            let left = Float(min((time - leavingSince) / Self.skipFade, 1))
-            if left >= 1 {
-                leaving.root.removeFromParent()
-                leavingStage = nil
-            } else {
-                leaving.root.components.set(OpacityComponent(opacity: 1 - left))
-            }
+        // The one tone, as the last lab comes to rest; none for a still.
+        if openingPhase == .running, openingFrozenAt == nil, openingClockStarted, !tonePlayed,
+           openingTime >= Opening.toneTime {
+            tonePlayed = true
+            SoundPalette.play(.arrival, on: titleAnchor, volume: 0.5)
         }
+        updateOpening()
 
         // Every portal runs its lab's physics, floats a few millimetres and
-        // turns slowly on its plinth, each on its own phase so they never
-        // move together. Under stillness they park. The turn waits for the
-        // landing, on the opening's clock while it plays (pinned with it
-        // for a screenshot).
+        // turns slowly, each on its own phase so they never move together.
+        // Under stillness they park. The turn builds from the arrival's
+        // start, on its clock while it plays (pinned with it for a still).
         let swayElapsed: Double = switch openingPhase {
         case .pending: 0
-        case .running: openingTime - Opening.landingTime
+        case .running: openingTime
         case .done: time - swayOrigin
         }
-        for portal in portals {
+        for (index, portal) in portals.enumerated() {
             portal.animate(stillness ? 0 : time + portal.phase)
             portal.sway.orientation = simd_quatf(
                 angle: stillness ? 0 : Self.swayAngle(elapsed: swayElapsed, phase: portal.phase),
                 axis: portal.swayAxis)
-            portal.body.position.y = stillness ? 0
+            let float = stillness ? 0
                 : Self.floatHeight * Float(sin(2 * .pi * time / Self.floatPeriod
                                                + portal.phase * 2.1))
+            portal.body.position.y = float + (index < lifts.count ? lifts[index] : 0)
         }
-        // The living title runs on the opening's clock while it arrives —
+        // The living title runs on the arrival's clock while it arrives —
         // pinned with it for a screenshot — and on the scene's after.
         livingTitle?.update(
             now: time,
@@ -728,7 +624,7 @@ final class HubScene {
 
     /// Whether the scene has taken in its build (`Settle`).
     private var settle = Settle()
-    /// Whether the opening's clock has started from its hold at zero.
+    /// Whether the arrival's clock has started from its hold at zero.
     private var openingClockStarted = false
 
     /// How far the home has faded up, 0…1; the root dissolve that is the
@@ -753,7 +649,6 @@ final class HubScene {
     func moduleID(for entity: Entity) -> String? {
         var current: Entity? = entity
         while let candidate = current {
-            if candidate.name == Self.skipShieldName { return nil }
             if portals.contains(where: { $0.anchor === candidate }) {
                 return candidate.name
             }
@@ -763,11 +658,11 @@ final class HubScene {
     }
 
     /// The chosen portal swells toward the wearer while the home fades —
-    /// an arrival, not a hard cut. False when nothing should happen.
+    /// an arrival, not a hard cut; at once, even while the labs are still
+    /// rising. False when nothing should happen.
     @discardableResult
     func beginEnterTransition(id: String) -> Bool {
-        guard openingPhase != .running,
-              let portal = portals.first(where: { $0.moduleID == id }) else { return false }
+        guard let portal = portals.first(where: { $0.moduleID == id }) else { return false }
         SoundPalette.play(.pop, on: portal.anchor, volume: 0.7)
         presenceTarget = 0
         var target = portal.anchor.transform
@@ -846,31 +741,25 @@ final class HubScene {
         // Kept for the rake. The lines turn, not the anchor.
         titleLines = built.map(\.entity)
 
-        // What the lockup stands on, which fades in with the portals' glass while
-        // the letters bring themselves in. The living wordmark stands on glass,
-        // like every label and panel in the room — the glass is also what keeps
-        // white letters legible on a white wall. The machined plaque has a thin
-        // champagne rule and no backing: its chamfer holds a bright rim on any wall.
-        let footing: Entity
+        // What the lockup stands on. The living wordmark stands on nothing —
+        // its glass plaque went on 2026-10-21, owner's call — and the More
+        // keeps the seat it had under it. The machined lines have a thin
+        // champagne rule and no backing: their chamfer holds a bright rim on
+        // any wall, and the rule fades in with the More while they arrive.
         let footingBottom: Float
-        if let livingTitle {
-            let width = Self.titleWidth + 2 * Self.plaquePadding.x
-            let height = blockHeight + 2 * Self.plaquePadding.y
-            footing = livingTitle.plaque(width: width, height: height)
-            // Behind the letters' backs, so they stand off it.
-            footing.position = SIMD3(0, 0, -0.03)
-            footingBottom = -height / 2
+        if livingTitle != nil {
+            footingBottom = -blockHeight / 2 - Self.livingFooting
         } else {
             let ruleMaterial = Materials.unlit(Self.titleRimColor, opacity: 0.65)
-            footing = ModelEntity(
+            let rule = ModelEntity(
                 mesh: Primitives.box(width: 0.5, height: 0.004, depth: 0.004,
                                    cornerRadius: 0.002),
                 materials: [ruleMaterial])
-            footing.position = SIMD3(0, -blockHeight / 2 - 0.09, 0)
+            rule.position = SIMD3(0, -blockHeight / 2 - 0.09, 0)
             footingBottom = -blockHeight / 2 - 0.09
+            titleAnchor.addChild(rule)
+            titleRule = rule
         }
-        titleAnchor.addChild(footing)
-        titleRule = footing
 
         var accessibility = AccessibilityComponent()
         accessibility.isAccessibilityElement = true

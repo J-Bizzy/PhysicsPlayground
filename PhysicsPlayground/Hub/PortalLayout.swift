@@ -3,16 +3,16 @@
 //  Physics Playground — Hub
 //
 //  Where the labs stand in the home: seven on one arc around the wearer,
-//  each on its plinth. Pure geometry, shared by the home, its opening
-//  (`OpeningPlan` lands a world on every plinth) and their tests.
+//  each floating at one size and height. Pure geometry, shared by the home
+//  and its tests.
 //
 
 import Foundation
 import simd
 
 /// Where the labs stand: one arc at eye level around the wearer, each lab
-/// in miniature on its own plinth, facing them. Pure geometry, so it is
-/// tested on numbers.
+/// in miniature floating in its place, facing them. Pure geometry, so it
+/// is tested on numbers.
 nonisolated enum PortalLayout {
     struct Portal: Equatable {
         /// The portal's centre, in the space's coordinates.
@@ -33,18 +33,19 @@ nonisolated enum PortalLayout {
     /// Between neighbouring portals, degrees.
     static let step = 20.0
 
-    /// The plinth every lab stands on — a miniature of Circuit Workshop's
-    /// turntable, the same size and height in every portal, so seven
-    /// differently shaped labs read as one row of exhibits. Metres, to the
-    /// knurled rim.
-    static let plinthRadius = 0.16
-    /// How far the plinth's top centre stands below the portal's centre:
-    /// every lab rises from the same height.
-    static let plinthDrop = 0.10
-    /// How far every plinth is turned toward the wearer: enough that its
-    /// top reads as a surface from a standing eye, little enough that a
-    /// cable still hangs plumb to it. `HubVignettes.stageTilt` is this.
-    static let plinthTilt = 10 * Double.pi / 180
+    /// The footprint every lab is scaled to: the same size and height in
+    /// every portal, so seven differently shaped labs read as one row of
+    /// exhibits. Metres. Each stood on a plinth this size, a miniature of
+    /// Circuit Workshop's turntable, until 2026-10-21 (owner's call: the
+    /// labs float).
+    static let footprintRadius = 0.16
+    /// How far a lab's footprint stands below the portal's centre: every
+    /// lab rises from the same height.
+    static let footprintDrop = 0.10
+    /// How far every footprint is turned toward the wearer: enough that a
+    /// lab's floor reads from a standing eye, little enough that a cable
+    /// still hangs near plumb. `HubVignettes.stageTilt` is this.
+    static let footprintTilt = 10 * Double.pi / 180
 
     static func portals(count: Int) -> [Portal] {
         (0..<count).map { index in
@@ -58,8 +59,9 @@ nonisolated enum PortalLayout {
         }
     }
 
-    /// The plinth's top centre, in the space's coordinates.
-    static func plinthCentre(of portal: Portal) -> SIMD3<Double> {
-        portal.position + SIMD3(0, -plinthDrop, 0)
+    /// The footprint's centre, where a lab's floor is, in the space's
+    /// coordinates.
+    static func footprintCentre(of portal: Portal) -> SIMD3<Double> {
+        portal.position + SIMD3(0, -footprintDrop, 0)
     }
 }

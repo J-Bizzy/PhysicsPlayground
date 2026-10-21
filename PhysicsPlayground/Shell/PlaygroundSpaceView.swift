@@ -282,13 +282,8 @@ struct PlaygroundSpaceView: View {
                     // The sky is drawn off the main thread beside the props, and
                     // never outlasts them.
                     async let sky = SkyResources.prepare()
-                    // The opening's worlds wear Orbital Mechanics' planets and
-                    // fly on faded paths; both are ready before it plays.
-                    CelestialTextures.warmUp()
-                    async let ramp = Materials.fadeRamp()
                     await PropCache.warmUp()
                     _ = await sky
-                    _ = await ramp
                     ready = true
                     #if DEBUG
                     LaunchTrace.mark(appModel.activeModuleID.map { "space ready, mounting \($0)" }

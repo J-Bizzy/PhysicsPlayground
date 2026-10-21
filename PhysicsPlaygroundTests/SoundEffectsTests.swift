@@ -40,16 +40,15 @@ final class SoundEffectsTests: XCTestCase {
         }
     }
 
-    /// The opening is choreographed to the bell: it must be the loudest
-    /// moment, and it must strike at the landing (`Opening.landingTime`).
-    func testTheOpeningsBellIsItsLoudestMomentAndLandsOnTime() {
-        let samples = SoundEffects.oneShot("calibration")
-        let peak = samples.indices.max { abs(samples[$0]) < abs(samples[$1]) }!
-        let at = Double(peak) / rate
-        XCTAssertGreaterThanOrEqual(at, SoundEffects.calibrationLanding)
-        XCTAssertLessThan(at, SoundEffects.calibrationLanding + 0.05,
-                          "the bell peaks \(at) s in, not at the landing")
-        XCTAssertEqual(SoundPalette.calibrationLanding, SoundEffects.calibrationLanding)
+    /// The arrival's one soft tone: struck at once, never louder than the
+    /// chime it shares a key with, and gone within a few seconds.
+    func testTheArrivalIsOneSoftTone() {
+        let tone = SoundEffects.oneShot("arrival")
+        let chime = SoundEffects.oneShot("chime")
+        let peak = tone.indices.max { abs(tone[$0]) < abs(tone[$1]) } ?? 0
+        XCTAssertLessThan(Double(peak) / rate, 0.15, "the tone swells instead of sounding")
+        XCTAssertLessThan(tone.map { abs($0) }.max() ?? 1, chime.map { abs($0) }.max() ?? 0)
+        XCTAssertLessThan(Double(tone.count) / rate, 3.5)
     }
 
     /// The tones loop for as long as a body orbits or a circuit runs: the
@@ -67,7 +66,7 @@ final class SoundEffectsTests: XCTestCase {
     /// The cache is keyed by file name, so a sound that differed between
     /// renders would differ between devices.
     func testNoiseIsSeeded() {
-        for name in ["whoosh", "thud", "boom", "clack", "launch", "calibration", "gleam"] {
+        for name in ["whoosh", "thud", "boom", "clack", "launch", "arrival", "gleam"] {
             XCTAssertEqual(SoundEffects.oneShot(name), SoundEffects.oneShot(name), name)
         }
     }
@@ -111,17 +110,5 @@ final class SoundEffectsTests: XCTestCase {
         XCTAssertGreaterThan(Double(gleam.count) / rate, 2)
         XCTAssertGreaterThan(rms(Array(gleam[Int(1.0 * rate)..<Int(1.2 * rate)])), 0.005,
                              "the gleam is gone within a second")
-    }
-
-    /// The opening's chimes ring as its worlds finish condensing, and its
-    /// low bloom as its star ignites — `OpeningPlan`'s moments, not a copy
-    /// that could drift from them.
-    func testTheOpeningsChimesFollowItsWorlds() {
-        let plan = OpeningPlan.shared
-        XCTAssertEqual(SoundEffects.calibrationChimes.count, plan.worlds.count)
-        for (chime, world) in zip(SoundEffects.calibrationChimes, plan.worlds) {
-            XCTAssertEqual(chime, world.condenseEnd, accuracy: 0.006, world.name)
-        }
-        XCTAssertEqual(SoundEffects.calibrationIgnition, OpeningPlan.ignition, accuracy: 1e-9)
     }
 }

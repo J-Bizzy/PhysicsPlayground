@@ -4,8 +4,9 @@
 //
 //  The wordmark in the app's own voice, alive: "Physics" over "Playground"
 //  in SF Pro Rounded Semibold — every label's face — as soft white solids
-//  standing on a glass plaque, the dot of the i a particle of champagne
-//  light (Tools/hubwordmark.py mills the letters, one at a time). Each
+//  standing free (the glass plaque behind them went on 2026-10-21, owner's
+//  call), the dot of the i a particle of champagne light
+//  (Tools/hubwordmark.py mills the letters, one at a time). Each
 //  letter is on its own hinge, so it can move; what moves and why is
 //  `HubTitleMotion`, and this file only builds the hinges and applies the
 //  curves.
@@ -19,7 +20,6 @@
 import Foundation
 import RealityKit
 import RenderKit
-import SwiftUI
 import UIKit
 import simd
 
@@ -209,32 +209,20 @@ final class HubTitleGlyphs {
     private static let finishRest: Float = 0.22
     private static let finishGlint: Float = 0.9
 
-    // MARK: The plaque
-
-    /// The glass the wordmark stands on: the family's glass, the shape of
-    /// every label and panel in the room, sized to the lockup with room
-    /// round it. It is also what keeps white letters legible on a white
-    /// wall. Never a target.
-    func plaque(width: Float, height: Float) -> Entity {
-        let points = CGSize(width: CGFloat(width) * CGFloat(ControlMetrics.pointsPerMeter),
-                            height: CGFloat(height) * CGFloat(ControlMetrics.pointsPerMeter))
-        return ControlAttachment.entity(TitlePlaque(size: points), name: "title-plaque")
-    }
-
     // MARK: Every frame
 
     /// - Parameters:
     ///   - now: the scene's clock, seconds.
-    ///   - arrival: seconds since the opening began, or nil when the title
-    ///     did not arrive this time (a walk back, Reduce Motion): it is
-    ///     simply there.
+    ///   - arrival: seconds since the home's arrival began, or nil when the
+    ///     title did not arrive this time (a walk back, Reduce Motion): it
+    ///     is simply there.
     ///   - stillness: Reduce Motion — no wave, no glint, no hop.
     func update(now: Double, arrival: Double?, stillness: Bool) {
         // When the last letter has settled, the wave and the glints take over.
         let settled = arrivalSettles
         let glintClock: Double
         if let arrival {
-            let first = Opening.landingTime + 0.15
+            let first = Opening.firstGlint
             glintClock = arrival < first ? -1
                 : (arrival - first).truncatingRemainder(dividingBy: HubTitleMotion.glintPeriod)
         } else {
@@ -385,18 +373,3 @@ final class HubTitleGlyphs {
     var dotEntity: Entity? { letters.lazy.compactMap(\.dot).first }
 }
 
-/// The glass the wordmark stands on: stock glass in a rounded rectangle,
-/// a shade darker inside so white letters hold against a bright wall.
-private struct TitlePlaque: View {
-    let size: CGSize
-
-    var body: some View {
-        let corner = min(size.height * 0.22, 120)
-        RoundedRectangle(cornerRadius: corner, style: .continuous)
-            .fill(Color.black.opacity(0.26))
-            .frame(width: size.width, height: size.height)
-            .glassBackgroundEffect(in: RoundedRectangle(cornerRadius: corner, style: .continuous))
-            .allowsHitTesting(false)
-            .accessibilityHidden(true)
-    }
-}
