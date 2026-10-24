@@ -4,10 +4,10 @@
 //
 //  The object is the interface: tap a thing and its own controls unfold
 //  around it in place. A continuous quantity is pulled straight out of
-//  the object — a handle on its surface, on a short stalk that stretches
-//  as the value grows, or the object itself stretching (a charge swelling
-//  with its charge, a cable lengthening) where the lab says how; a
-//  discrete action gets a petal.
+//  the object — a handle on a stalk that stretches as the value grows,
+//  along a long calm track where the value spans decades (a charge, a
+//  mass), or the object itself stretching (a cable lengthening) where the
+//  lab says how; a discrete action gets a petal.
 //
 
 import RealityKit
@@ -68,6 +68,34 @@ final class Bloom {
         /// The object's own geometry, when the lab knows it: the value is
         /// then where the hand is, not how far it travelled.
         var stretch: Stretch? = nil
+        /// A long, calm track out to the viewer's right, for a value the
+        /// object shows by its size (a charge's |q|, a body's mass).
+        var track: Track? = nil
+
+        /// The calm track. Until 2026-10-24 these values were set by a
+        /// handle on the object's surface whose distance from the centre WAS
+        /// the sphere's radius, so a charge's whole 0.2–6 µC took 3.7 cm of
+        /// hand travel and 8 mm doubled it: hand tracking's own jitter moved
+        /// the number (the owner: "very clunky"). Here the value moves by
+        /// how far the hand travels along the track, never by where it first
+        /// landed; a value spanning decades lies on it logarithmically, so
+        /// equal travel multiplies it by equal factors; and round values
+        /// click into place on the way past.
+        struct Track {
+            /// The values the bead clicks into, with the number each tick
+            /// carries (nil: a tick alone).
+            struct Detent {
+                let value: Double
+                let label: String?
+            }
+
+            var detents: [Detent] = []
+            /// Equal travel multiplies the value by equal factors.
+            var logarithmic = true
+            /// Its length at one metre, scaled with distance like the
+            /// rest of the ring.
+            var length: Float = Bloom.calmTrackLength
+        }
 
         /// How an object stretches, in the ring's parent frame — the frame
         /// its anchor and the hands arrive in. `axis` is the ring's pull
@@ -80,25 +108,6 @@ final class Bloom {
             let handle: (_ axis: SIMD3<Float>) -> SIMD3<Float>
             /// The value a hand at this point asks for.
             let value: (_ hand: SIMD3<Float>, _ axis: SIMD3<Float>) -> Double
-
-            /// For a sphere drawn with a radius that goes as the cube root
-            /// of its value (a planet's mass, a charge's |q|): the handle
-            /// sits just off the surface, and drawing it out to radius r
-            /// asks for the value whose sphere is that big, so the object
-            /// swells under the hand.
-            static func surface(center: @escaping () -> SIMD3<Float>,
-                                radius: @escaping () -> Float,
-                                read: @escaping () -> Double) -> Stretch {
-                let gap: Float = 0.02
-                return Stretch(
-                    origin: { center() },
-                    handle: { axis in center() + axis * (radius() + gap) },
-                    value: { hand, axis in
-                        let reach = simd_dot(hand - center(), axis) - gap
-                        let ratio = Double(max(reach, 0.004) / max(radius(), 1e-4))
-                        return read() * ratio * ratio * ratio
-                    })
-            }
 
             /// For an object whose size is not its value (a circuit part, a
             /// bar magnet): the stalk drops out of the object's underside —
@@ -128,7 +137,7 @@ final class Bloom {
         init(name: String, range: ClosedRange<Double>,
              read: @escaping () -> Double, write: @escaping (Double) -> Void,
              format: @escaping (Double) -> String,
-             radius: @escaping () -> Float, stretch: Stretch? = nil) {
+             radius: @escaping () -> Float, stretch: Stretch? = nil, track: Track? = nil) {
             self.name = name
             self.range = range
             self.read = read
@@ -136,6 +145,39 @@ final class Bloom {
             self.format = format
             self.radius = radius
             self.stretch = stretch
+            self.track = track
+        }
+
+        /// How far along its track `value` lies, 0 at the low end and 1 at
+        /// the high.
+        func fraction(of value: Double) -> Double {
+            let low = range.lowerBound, high = range.upperBound
+            guard high > low else { return 0 }
+            let clamped = min(max(value, low), high)
+            if track?.logarithmic ?? false, low > 0 {
+                return log(clamped / low) / log(high / low)
+            }
+            return (clamped - low) / (high - low)
+        }
+
+        /// The value at `fraction` of the way along the track.
+        func value(at fraction: Double) -> Double {
+            let low = range.lowerBound, high = range.upperBound
+            let t = min(max(fraction, 0), 1)
+            if track?.logarithmic ?? false, low > 0 {
+                return low * pow(high / low, t)
+            }
+            return low + t * (high - low)
+        }
+
+        /// The detent a bead at `fraction` falls into, if it lies within
+        /// `window` (a share of the track) of one.
+        func detent(near fraction: Double, window: Double) -> Track.Detent? {
+            guard let track else { return nil }
+            return track.detents
+                .map { ($0, abs(self.fraction(of: $0.value) - fraction)) }
+                .filter { $0.1 <= window }
+                .min { $0.1 < $1.1 }?.0
         }
     }
 
@@ -149,6 +191,9 @@ final class Bloom {
     private var gripEntity: ModelEntity?
     /// The stalk from the object's surface to the handle: the stretch.
     private var gripStalk: ModelEntity?
+    /// The calm track's rail, ticks and numbers; a pinch anywhere on it
+    /// takes the bead.
+    private var trackEntity: Entity?
     private var label: Callout?
     /// World metres per bloom-local unit, from the last update(); maps a
     /// hand's world pull onto the rail's local length.
@@ -161,7 +206,12 @@ final class Bloom {
     private var petalReveals: [Float] = []
 
     /// The live drag on the grip, if any.
-    private var gripDrag: (startHand: SIMD3<Float>, startValue: Double)?
+    /// `trackStart` is where the calm track began when the hand took it,
+    /// held for the whole drag: the object swells under the hand, and a
+    /// track that rode its surface would run the bead away from the finger.
+    private var gripDrag: (startHand: SIMD3<Float>, startValue: Double, trackStart: Float)?
+    /// The detent the bead last clicked into, so each click sounds once.
+    private var lastDetent: Double?
     /// The last value spoken for the bead, so the component is only
     /// rewritten when the number actually changes.
     private var lastGripSpoken: String?
@@ -187,6 +237,11 @@ final class Bloom {
     private static let gripTrackLength: Float = 0.14
     /// Air between the object's surface and the handle at the low end.
     private static let gripGap: Float = 0.018
+    /// The calm track's length at one metre: about 15 cm at arm's length.
+    static let calmTrackLength: Float = 0.19
+    /// How near a detent, as a share of the track, the bead falls into it:
+    /// about 3 mm of hand travel at arm's length.
+    static let detentWindow: Double = 0.018
     /// Nearly a horizontal row: petals sit above the object, spread just
     /// enough to separate.
     private static let ringArc: Float = 34 * .pi / 180
@@ -219,6 +274,7 @@ final class Bloom {
         // against the old grip, so a selection changing mid-drag would write
         // the old start value into the new object's range.
         gripDrag = nil
+        lastDetent = nil
         self.petals = petals
         self.grip = grip
         petalEntities.forEach { $0.removeFromParent() }
@@ -247,6 +303,13 @@ final class Bloom {
 
         gripEntity?.removeFromParent()
         gripStalk?.removeFromParent()
+        trackEntity?.removeFromParent()
+        trackEntity = nil
+        if let grip, let track = grip.track {
+            let built = Self.makeTrack(track, for: grip)
+            root.addChild(built)
+            trackEntity = built
+        }
         if let grip {
             let handle = Self.makeGrip()
             root.addChild(handle)
@@ -380,6 +443,27 @@ final class Bloom {
         if let stretch = grip.stretch {
             origin = stretch.origin()
             handle = stretch.handle(railAxis)
+        } else if let track = grip.track {
+            // Out of the object's surface to a bead on the calm track, which
+            // starts where the surface stood when the hand took it.
+            let start = gripDrag?.trackStart ?? grip.radius()
+            let t = Float(grip.fraction(of: grip.read()))
+            origin = anchor + railAxis * grip.radius()
+            handle = anchor + railAxis * (start + (Self.gripGap + track.length * t) * scale)
+            if let trackEntity {
+                // The ring's root is the anchor scaled by `scale` and turned
+                // so its +x is the rail: the track's start, in its own units.
+                trackEntity.position = [start / max(scale, 0.001) + Self.gripGap, 0, 0]
+                trackEntity.scale = [max(reveal, 0.001), 1, 1]
+                trackEntity.isEnabled = reveal > 0.02
+                let interactive = reveal > 0.85
+                if interactive, trackEntity.components[InputTargetComponent.self] == nil {
+                    trackEntity.components.set(InputTargetComponent())
+                } else if !interactive,
+                          trackEntity.components[InputTargetComponent.self] != nil {
+                    trackEntity.components.remove(InputTargetComponent.self)
+                }
+            }
         } else {
             let span = grip.range.upperBound - grip.range.lowerBound
             let t = Float(min(max((grip.read() - grip.range.lowerBound)
@@ -516,14 +600,20 @@ final class Bloom {
 
     func beginGrip(_ entity: Entity, hand: SIMD3<Float>) -> Bool {
         guard root.isEnabled, reveal > 0.85, let grip, let gripEntity else { return false }
-        guard Self.ownName(of: entity, under: root) == gripEntity.name else { return false }
-        gripDrag = (hand, grip.read())
+        // The bead, or anywhere on the calm track's rail: the bead is small,
+        // and the rail says where it can go.
+        let name = Self.ownName(of: entity, under: root)
+        guard name == gripEntity.name || (trackEntity != nil && name == trackEntity?.name)
+        else { return false }
+        gripDrag = (hand, grip.read(), grip.radius())
+        lastDetent = grip.detent(near: grip.fraction(of: grip.read()), window: 1e-9)?.value
         return true
     }
 
     /// Pull the handle. A stretching object takes its value from where the
-    /// hand is; the plain stalk from how far the hand has travelled along
-    /// the pull axis, so drift up, down or toward you moves nothing.
+    /// hand is; the plain stalk and the calm track from how far the hand has
+    /// travelled along the pull axis, so drift up, down or toward you moves
+    /// nothing.
     func updateGrip(hand: SIMD3<Float>) -> Bool {
         guard let grip, let gripDrag else { return false }
         if let stretch = grip.stretch {
@@ -532,6 +622,18 @@ final class Bloom {
             return true
         }
         let along = simd_dot(hand - gripDrag.startHand, railAxis)
+        if let track = grip.track {
+            let travel = Double(track.length * max(lastScale, 0.001))
+            let fraction = grip.fraction(of: gripDrag.startValue) + Double(along) / travel
+            let detent = grip.detent(near: fraction, window: Self.detentWindow)
+            grip.write(detent?.value ?? grip.value(at: fraction))
+            // One click as the bead drops into a round value.
+            if let detent, detent.value != lastDetent, let gripEntity {
+                SoundPalette.play(.grabTick, on: gripEntity, volume: 0.12)
+            }
+            lastDetent = detent?.value
+            return true
+        }
         let span = grip.range.upperBound - grip.range.lowerBound
         let worldTrack = Double(Self.gripTrackLength * max(lastScale, 0.001))
         let delta = Double(along) / worldTrack * span
@@ -540,13 +642,30 @@ final class Bloom {
         return true
     }
 
-    /// One VoiceOver increment/decrement — a twentieth of the range per
-    /// step, through the same clamp `updateGrip` uses.
+    /// One VoiceOver increment/decrement: on a calm track with detents,
+    /// from one round value to the next (and on to the range's ends);
+    /// otherwise a twentieth of the range per step, through the same clamp
+    /// `updateGrip` uses.
     func nudgeGrip(by steps: Double) {
         guard let grip else { return }
-        let span = grip.range.upperBound - grip.range.lowerBound
-        let next = grip.read() + steps * span / 20
-        grip.write(min(max(next, grip.range.lowerBound), grip.range.upperBound))
+        if let track = grip.track, !track.detents.isEmpty {
+            let stops = Array(Set(track.detents.map(\.value)
+                + [grip.range.lowerBound, grip.range.upperBound])).sorted()
+            var value = grip.read()
+            for _ in 0..<Int(abs(steps).rounded()) {
+                let tolerance = 1e-9 * max(abs(value), 1)
+                if steps > 0 {
+                    value = stops.first { $0 > value + tolerance } ?? grip.range.upperBound
+                } else {
+                    value = stops.last { $0 < value - tolerance } ?? grip.range.lowerBound
+                }
+            }
+            grip.write(value)
+        } else {
+            let span = grip.range.upperBound - grip.range.lowerBound
+            let next = grip.read() + steps * span / 20
+            grip.write(min(max(next, grip.range.lowerBound), grip.range.upperBound))
+        }
         if let gripEntity {
             SpatialActions.republish(value: grip.format(grip.read()), on: gripEntity)
         }
@@ -568,11 +687,44 @@ final class Bloom {
 
     // MARK: Building
 
-    /// The bead's instrument: a translucent rail the length of the
-    /// whole range, a tick at each end, a small − at the weak end and
-    /// + at the strong end, and a bright fill that grows with the
-    /// value. Origin at the rail's start; the fill is repositioned per
-    /// frame as the value moves.
+    /// The calm track: a faint rail the length of the range along +x from
+    /// its origin, a tick at each detent and its number above it. Built once
+    /// per retarget (the numbers are cached glyphs); the layout only moves
+    /// and unfolds it. The whole rail is a target, so a pinch anywhere on it
+    /// takes the bead.
+    static func makeTrack(_ track: Grip.Track, for grip: Grip) -> Entity {
+        let container = Entity()
+        container.name = "bloom-track"
+        container.isEnabled = false
+        let line = Primitives.cylinder(height: 1, radius: 1)
+
+        let rail = ModelEntity(mesh: line, materials: [Materials.unlit(.white, opacity: 0.26)])
+        rail.orientation = simd_quatf(angle: -.pi / 2, axis: [0, 0, 1])
+        rail.scale = [0.0009, track.length, 0.0009]
+        rail.position = [track.length / 2, 0, 0]
+        container.addChild(rail)
+
+        let tickMaterial = Materials.unlit(.white, opacity: 0.6)
+        for detent in track.detents {
+            let x = track.length * Float(grip.fraction(of: detent.value))
+            let tick = ModelEntity(mesh: line, materials: [tickMaterial])
+            tick.scale = [0.0007, 0.009, 0.0007]
+            tick.position = [x, 0, 0]
+            container.addChild(tick)
+            if let label = detent.label {
+                let number = GlyphRun(size: 0.0085, color: UIColor(white: 1, alpha: 0.72))
+                number.set(label)
+                number.root.position = [x, 0.0125, 0]
+                container.addChild(number.root)
+            }
+        }
+        // Thick enough to pinch, thin enough to leave the object to itself.
+        container.components.set(CollisionComponent(shapes: [
+            Primitives.collisionBox(size: [track.length, 0.024, 0.02],
+                                    offset: [track.length / 2, 0, 0])]))
+        return container
+    }
+
     /// The stalk: a thin bright line, the part of the object that
     /// stretches. Scaled along +y by the layout; never a target.
     private static func makeStalk() -> ModelEntity {

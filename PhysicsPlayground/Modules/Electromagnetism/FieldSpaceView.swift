@@ -192,20 +192,16 @@ struct FieldSpaceView: View {
                         model.removeCharge(id: id)
                     },
                 ],
-                // |q| is the charge's size: the handle sits on its surface and
-                // drawing it out grows the sphere it is pulled from.
+                // |q| is the charge's size, and the bead draws it out along
+                // the calm track: logarithmic, clicking at the round values.
                 grip: .init(
                     name: "Charge",
                     range: FieldModel.magnitudeRange,
                     read: { model.magnitudeMicroCoulombs(id: id) },
                     write: { model.setMagnitude(id: id, microCoulombs: $0) },
                     format: { PhysicsFormat.measurement($0, "\u{00B5}C", decimals: 1) },
-                    radius: { renderer.displayRadius(forChargeID: id) + 0.02 },
-                    stretch: .surface(
-                        center: { model.charges.first { $0.id == id }
-                            .map { SIMD3<Float>($0.position) } ?? .zero },
-                        radius: { renderer.displayRadius(forChargeID: id) },
-                        read: { model.magnitudeMicroCoulombs(id: id) })))
+                    radius: { renderer.displayRadius(forChargeID: id) },
+                    track: Self.chargeTrack))
             bloom.update(anchor: SIMD3<Float>(charge.position),
                          viewer: viewer, revealTarget: 1, dt: dt)
 
@@ -231,11 +227,8 @@ struct FieldSpaceView: View {
                     read: { model.probeChargeMagnitude },
                     write: { model.setProbeMagnitude($0) },
                     format: { PhysicsFormat.measurement($0 * 1e9, "nC", decimals: 0) },
-                    radius: { renderer.probeDisplayRadius + 0.02 },
-                    stretch: .surface(
-                        center: { model.probe.map { SIMD3<Float>($0.position) } ?? .zero },
-                        radius: { renderer.probeDisplayRadius },
-                        read: { model.probeChargeMagnitude })))
+                    radius: { renderer.probeDisplayRadius },
+                    track: Self.probeTrack))
             bloom.update(anchor: SIMD3<Float>(probe.position),
                          viewer: viewer, revealTarget: 1, dt: dt)
 
@@ -244,6 +237,19 @@ struct FieldSpaceView: View {
             bloom.clearTarget()
         }
     }
+
+    /// A charge's calm track: every round value clicks, and all but 5 µC
+    /// carry their number (5 and 6 sit 8 mm apart).
+    static let chargeTrack = Bloom.Grip.Track(
+        detents: FieldModel.magnitudeDetents.map {
+            .init(value: $0, label: $0 == 5 ? nil : PhysicsFormat.compact($0))
+        })
+
+    /// The test charge's, in nanocoulombs: 1, 2, 5, 10, 20, 50.
+    static let probeTrack = Bloom.Grip.Track(
+        detents: FieldModel.probeChargeDetents.map {
+            .init(value: $0, label: PhysicsFormat.compact($0 * 1e9))
+        })
 
     // MARK: Tap
     // Folded-out chrome before the physics under it.

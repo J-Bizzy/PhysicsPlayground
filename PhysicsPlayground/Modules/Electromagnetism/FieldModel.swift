@@ -64,6 +64,8 @@ final class FieldModel {
     // acceleration is a visible ~0.1–2 m/s² at tabletop distances.
     nonisolated static let defaultProbeCharge = 1e-8                // 10 nC
     nonisolated static let probeChargeRange = 1e-9...5e-8           // 1…50 nC
+    /// The round values the test charge's bead clicks into, C.
+    nonisolated static let probeChargeDetents = [1e-9, 2e-9, 5e-9, 1e-8, 2e-8, 5e-8]
     nonisolated static let probeMass = 5e-4                         // 0.5 g
     /// Probe freezes when it gets this close to a source charge ("captured").
     nonisolated static let probeCaptureRadius = 0.045
@@ -649,6 +651,8 @@ final class FieldModel {
     }
 
     nonisolated static let magnitudeRange = 0.2...6.0
+    /// The round values a charge's bead clicks into, µC.
+    nonisolated static let magnitudeDetents = [0.5, 1, 2, 3, 4, 5, 6]
 
     func removeSelectedCharge() {
         guard let id = selectedChargeID else { return }

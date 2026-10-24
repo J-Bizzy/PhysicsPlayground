@@ -351,12 +351,6 @@ struct OrbitalMechanicsSpaceView: View {
         // The star's mass is a grip like every planet's, in solar masses. No
         // delete petal: deleting the Sun deletes the system.
         let isPrimary = body.id == model.primaryBody?.id
-        // Where a body is now, in the system's display frame — the frame the
-        // ring and the hands share.
-        let center: (UUID) -> SIMD3<Float> = { id in
-            model.bodies.first { $0.id == id }
-                .map { SIMD3<Float>($0.body.position * model.simToDisplay) } ?? .zero
-        }
         bloom.retarget(
             uuid,
             petals: isPrimary ? [] : [
@@ -380,10 +374,7 @@ struct OrbitalMechanicsSpaceView: View {
                     format: { PhysicsFormat.count($0, singular: "Sun", plural: "Suns",
                                                   decimals: 2) },
                     radius: { Float(model.displayRadius(id: uuid)) },
-                    stretch: .surface(
-                        center: { center(uuid) },
-                        radius: { Float(model.displayRadius(id: uuid)) },
-                        read: { model.massInSuns(id: uuid) }))
+                    track: Self.starTrack)
                 : .init(
                     name: "Mass",
                     range: OrbitalMechanicsModel.massRangeEarths,
@@ -396,10 +387,7 @@ struct OrbitalMechanicsSpaceView: View {
                         : PhysicsFormat.count($0, singular: "Earth", plural: "Earths",
                                               decimals: $0 < 1 ? 2 : 0) },
                     radius: { Float(model.displayRadius(id: uuid)) },
-                    stretch: .surface(
-                        center: { center(uuid) },
-                        radius: { Float(model.displayRadius(id: uuid)) },
-                        read: { model.massInEarths(id: uuid) })))
+                    track: Self.planetTrack))
 
         let viewer = appModel.room.headPosition.map {
             renderer.systemRoot.convert(position: SIMD3<Float>($0), from: nil)
@@ -408,6 +396,20 @@ struct OrbitalMechanicsSpaceView: View {
                      viewer: viewer, revealTarget: 1, dt: dt)
     }
 
+
+    /// The star's calm track: clicks at half, one, two and three Suns.
+    static let starTrack = Bloom.Grip.Track(
+        detents: OrbitalMechanicsModel.primaryMassDetentsSuns.map {
+            .init(value: $0, label: PhysicsFormat.compact($0))
+        })
+
+    /// A planet's: a click at every 1-2-5 step, a number at each decade —
+    /// four decades on one track would otherwise be twelve numbers.
+    static let planetTrack = Bloom.Grip.Track(
+        detents: OrbitalMechanicsModel.massDetentsEarths.map { value in
+            let decade = abs(log10(value).rounded() - log10(value)) < 1e-9
+            return .init(value: value, label: decade ? PhysicsFormat.compact(value) : nil)
+        })
 
     /// The tap routing, out of the gesture closure so VoiceOver reaches it
     /// too.

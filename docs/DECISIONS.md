@@ -16,6 +16,34 @@ A running log of consequential decisions — architectural, physical, or product
 
 (The template sat stranded at line 309, mid-log between two 2026-07-29 entries, until 2026-08-01.)
 
+## 2026-10-24 — A calm track for every value an object shows by its size
+
+**Decision:** A charge's |q|, the test charge's, the star's mass and a planet's mass are now set by the ring's bead on a calm track (`Bloom.Grip.Track`). It is the owner's pick from three options; the others were a two-hand resize and a dial around the charge. The owner said the old control was "very clunky". `Bloom.Grip.Stretch.surface` is deleted, because nothing uses it any more.
+
+**How the track behaves:**
+- It runs about 15 cm out to the viewer's right at arm's length (0.19 m at one metre, scaled with distance like the rest of the ring).
+- The scale is logarithmic, so equal travel multiplies the value by equal factors.
+- The value moves by how far the hand travels along the track, never by where the pinch landed. A pinch anywhere on the faint rail takes the bead.
+- Round values click into place with a tick within about 3 mm of travel:
+  - charges: 0.5, 1, 2, 3, 4, 5 and 6 µC;
+  - the test charge: 1, 2, 5, 10, 20 and 50 nC;
+  - the star: 0.5, 1, 2 and 3 Suns;
+  - planets: every 1-2-5 step from 0.05 to 200 Earths.
+
+  Each detent carries its number, except where the numbers would crowd: 5 µC goes unlabelled, and planets are numbered only at the decades.
+- VoiceOver steps from one round value to the next.
+- The track starts where the object's surface stood when the hand took it, and that start is held for the whole drag, so the bead stays under the finger while the sphere swells.
+
+**Context:** The old handle sat on the sphere's surface, and its distance from the centre WAS the sphere's radius. Because a charge's volume goes as |q|, the whole 0.2–6 µC range took 3.7 cm of hand travel, and doubling a charge took 8 mm. Hand tracking's own jitter moved the number, and the ring had to be opened before a 1.8 cm bead could even be found. Orbital Mechanics shared that handle and its twitch: 0.02–400 Earths, four decades in a few centimetres.
+
+**Rejected:**
+- A track starting clear of the object at its largest. A planet's radius can grow sevenfold across its range, so the track would begin up to 22 cm from a small planet.
+- A two-hand resize. The owner preferred the familiar bead.
+
+**Consequences:**
+- `BloomTrackTests` holds the behaviour: the length, the log mapping, relative travel, the bead staying under the finger, the clicks, VoiceOver's steps, the rail grab, and every lab's detents lying inside their range and far enough apart that two never share a window.
+- Circuits, Magnetism and Pendulums keep their own handles, which were never twitchy: a linear track 14 cm long, and a cable's length.
+
 ## 2026-10-21 — No opening: the labs rise into place, float free, and the wordmark stands alone
 
 **Decision:** Three changes to the home, all the owner's call.

@@ -101,7 +101,9 @@ contradicts this section, this section is current.
       the system and the world well. The sky is QUIET until you tap Earth;
       then ring, card and arrows arrive together. Pull the far bead: the
       ellipse stretches; let go: Earth stays on the orbit you drew. Pull
-      Earth's mass handle out: the sphere swells. More → Clock 20×: the
+      Earth's mass bead out along its track (⟳ 2026-10-24: about 15 cm,
+      a click at each 1-2-5 step, numbers at 0.1, 1, 10, 100): the sphere
+      swells and the number moves calmly, without jitter. More → Clock 20×: the
       beads creep (precession). Two-hand pinch to ~4× and walk in: labels
       hold their size, the well stays put, the chord plays. More → Twin
       suns: every orbit answers. More → Lagrange points; drop a world on
@@ -775,13 +777,21 @@ can be tested at all.**
       way in. The charges come out the sign their previews show; the test
       charge comes out positive. (⟳ 2026-10-16: the negative mouth is new,
       and the test charge's mouth moved one pitch down to make room.)
-- [ ] **Tap a charge → its ring: Flip, Delete, and a handle on its
-      surface.** Flip: the sphere turns blue with a −, and the field
-      lines reverse at once. Pull the handle outward: the sphere SWELLS
-      under it and the field strengthens live; push it in and it
-      shrinks. The handle stays on the surface the whole way.
+- [ ] **Tap a charge → its ring: Flip, Delete, and a bead on a faint
+      track out to the right, ticked and numbered 0.5 to 6 µC**
+      (⟳ 2026-10-24, the calm track — it replaced a handle on the
+      sphere's surface the owner called "very clunky"). Flip: the sphere
+      turns blue with a −, and the field lines reverse at once. Pull the
+      bead out: the sphere SWELLS and the field strengthens live; push it
+      back and it shrinks. Judge: does the whole range take about a
+      hand's width (15 cm)? Does it click into each round value with a
+      tick you can hear, and hold still there however your hand jitters?
+      Does the bead stay under your finger as the sphere grows? Pinch the
+      faint rail itself, away from the bead: it should take the bead
+      without jumping the value.
 - [ ] **Tap the probe → the same ring at its scale.** Flip turns it
-      round mid-flight; its handle grows it from 1 to 50 nC.
+      round mid-flight; its bead runs its track from 1 to 50 nC,
+      clicking at 1, 2, 5, 10, 20 and 50.
 - [ ] **In More, flick each switch.** Capacitor makes the plates ARRIVE
       and wakes Plate voltage ΔV and Deflect shot; Uniform B wakes its
       own slider. Off, each dependent control greys out.

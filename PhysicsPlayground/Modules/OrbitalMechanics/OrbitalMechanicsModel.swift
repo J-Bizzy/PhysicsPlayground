@@ -343,10 +343,15 @@ final class OrbitalMechanicsModel {
     /// Mass in Earth masses; the drawn radius tracks the cube root of mass.
     nonisolated static let earthMass = 5.972e24
     nonisolated static let massRangeEarths = 0.02...400.0
+    /// The round values a planet's bead clicks into, Earths: the 1-2-5 steps
+    /// of every decade the range spans.
+    nonisolated static let massDetentsEarths = [0.05, 0.1, 0.2, 0.5, 1, 2, 5, 10, 20, 50, 100, 200]
 
     // MARK: The star's own mass
     // Its own range and unit: the Sun is 333,000 Earth masses, so it is set in solar masses.
     nonisolated static let primaryMassRangeSuns = 0.2...4.0
+    /// The round values the star's bead clicks into, Suns.
+    nonisolated static let primaryMassDetentsSuns = [0.5, 1, 2, 3]
 
     func massInSuns(id: UUID) -> Double {
         guard let body = bodies.first(where: { $0.id == id }) else { return 1 }

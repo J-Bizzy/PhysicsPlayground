@@ -31,6 +31,16 @@ nonisolated enum PhysicsFormat {
         return typographic(String(format: Self.fixedSpecifier(decimals), cleaned))
     }
 
+    /// A round value as a tick mark carries it: as few decimals as it
+    /// needs, up to three — "0.5", "1", "20", "0.05".
+    static func compact(_ value: Double) -> String {
+        for decimals in 0...3 where abs(quantise(value, decimals: decimals) - value)
+            <= 1e-9 * max(abs(value), 1) {
+            return fixed(value, decimals: decimals)
+        }
+        return fixed(value, decimals: 3)
+    }
+
     /// `"%.<n>f"` without allocating a format String per call — this runs
     /// dozens of times a frame across the renderers.
     private static let fixedSpecifiers = [
