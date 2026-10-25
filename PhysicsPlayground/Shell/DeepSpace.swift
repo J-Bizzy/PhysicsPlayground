@@ -5,7 +5,7 @@
 //  Deep space: the surroundings a wearer can choose in place of their room
 //  (`Surroundings`). Full immersion, and four things only:
 //    • the sky — the real one (`Sky`): every naked-eye star at its place,
-//      colour and brightness, the Milky Way along the galactic plane;
+//      colour and brightness, over the near-black of space;
 //    • the Sun, far off — where it stands seen from Pluto's distance on
 //      the sky's date: magnitude −19, too small for a disc, a white-hot
 //      point in its own glare. Put away while a lab draws a Sun of its own;
@@ -107,7 +107,7 @@ enum DeepSpace {
         root.name = rootName
         let group = ModelSortGroup(depthPass: nil)
         if let resources {
-            root.addChild(Sky.make(overRoom: false, resources: resources, group: group))
+            root.addChild(Sky.make(resources: resources, group: group))
         } else {
             // Before the sky is built (a test that never prepared it).
             let placeholder = Entity()

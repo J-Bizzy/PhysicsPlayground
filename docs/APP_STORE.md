@@ -138,8 +138,8 @@ at once.
 YOUR ROOM, OR DEEP SPACE
 
 Every lab stands in your room or, at a switch, among the real stars: all
-9,096 visible to the eye, at their true places and colours, the Milky Way
-across them, a glass platform at your feet.
+9,096 visible to the eye, at their true places and colours, a glass
+platform at your feet.
 
 CONTROLS THAT ARE OBJECTS
 
@@ -163,7 +163,8 @@ kind. Nothing you do leaves your device.
 
 Requires visionOS 26.0 or later.
 ```
-*3,832 characters* of 4,000. Counted, not estimated (2026-10-21, when the
+*3,805 characters* of 4,000. Counted, not estimated (2026-10-24, when the
+Milky Way left the deep-space sentence; 3,832 on 2026-10-21, when the
 sentence about the opening left with the opening; 3,927 before that, once
 the room-or-deep-space paragraph had joined and the Circuits, Time Capsule
 and fictional-field paragraphs were cut back to make room). **Recount after

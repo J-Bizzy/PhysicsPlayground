@@ -5,14 +5,14 @@
 //  The real sky (2026-10-19): the 9,096 naked-eye stars of the Yale Bright
 //  Star Catalogue at their true positions, each drawn in its own
 //  blackbody colour and at a size and brightness set by its magnitude
-//  (`PhysicsCore.StellarColour`, `StellarPhotometry`), over the Milky Way
-//  along the real galactic plane (`PhysicsCore.MilkyWay`, a stated model),
-//  turned as a winter evening at 40° N with Orion's belt rising ahead
-//  (`SkyOrientation.house`).
+//  (`PhysicsCore.StellarColour`, `StellarPhotometry`), over the near-black
+//  of space, turned as a winter evening at 40° N with Orion's belt rising
+//  ahead (`SkyOrientation.house`). The Milky Way's band was drawn behind
+//  them until 2026-10-24 (owner: "unnecessary contrast").
 //
 //  Built once, off the main thread, at launch — beside the prop cache's
 //  warm-up, which it never outlasts — and then only ever turned. Deep space
-//  stands in it; the opening fades it in over the room.
+//  stands in it.
 //
 
 import CoreGraphics
@@ -33,24 +33,21 @@ final class SkyResources {
     let starMesh: MeshResource
     let starMaterial: UnlitMaterial
     let domeMesh: MeshResource
-    /// The Milky Way opaque over black: for a sky that IS the surroundings.
-    let spaceGlow: UnlitMaterial
-    /// The same glow, transparent, for a sky laid over the room.
-    let roomGlow: UnlitMaterial
+    /// The space between the stars, opaque: the sky IS the surroundings.
+    let background: UnlitMaterial
 
     /// Stars on a sphere this far out — the retired Studio Mode's proven radius, past every
-    /// lab and past Orbital Mechanics' 16 m shell — and the glow just behind.
+    /// lab and past Orbital Mechanics' 16 m shell — and the dark just behind.
     nonisolated static let starRadius: Float = 45
     nonisolated static let domeRadius: Float = 46
 
     private init(starCount: Int, starMesh: MeshResource, starMaterial: UnlitMaterial,
-                 domeMesh: MeshResource, spaceGlow: UnlitMaterial, roomGlow: UnlitMaterial) {
+                 domeMesh: MeshResource, background: UnlitMaterial) {
         self.starCount = starCount
         self.starMesh = starMesh
         self.starMaterial = starMaterial
         self.domeMesh = domeMesh
-        self.spaceGlow = spaceGlow
-        self.roomGlow = roomGlow
+        self.background = background
     }
 
     /// Builds the sky once; every later call returns the same one.
@@ -74,12 +71,6 @@ final class SkyResources {
               let mask = try? await TextureResource(
                 image: drawing.atlasMask,
                 options: .init(semantic: .raw, mipmapsMode: .allocateAndGenerateAll)),
-              let space = try? await TextureResource(
-                image: drawing.glowSpace, options: .init(semantic: .color)),
-              let roomColour = try? await TextureResource(
-                image: drawing.glowRoomColour, options: .init(semantic: .color)),
-              let roomAlpha = try? await TextureResource(
-                image: drawing.glowRoomAlpha, options: .init(semantic: .raw)),
               let starMesh = StarField.mesh(drawing.geometry),
               let domeMesh = SkyDome.mesh(radius: domeRadius) else { return nil }
 
@@ -88,13 +79,10 @@ final class SkyResources {
         stars.blending = .transparent(opacity: .init(scale: 1, texture: .init(mask)))
         stars.writesDepth = false
 
-        var spaceGlow = UnlitMaterial()
-        spaceGlow.color = .init(tint: .white, texture: .init(space))
-
-        var roomGlow = UnlitMaterial()
-        roomGlow.color = .init(tint: .white, texture: .init(roomColour))
-        roomGlow.blending = .transparent(opacity: .init(scale: 1, texture: .init(roomAlpha)))
-        roomGlow.writesDepth = false
+        let dark = SkyDrawing.background
+        func byte(_ linear: Double) -> CGFloat { CGFloat(SkyDrawing.encode(linear)) / 255 }
+        let background = Materials.unlit(UIColor(red: byte(dark.x), green: byte(dark.y),
+                                                 blue: byte(dark.z), alpha: 1))
 
         #if DEBUG
         let seconds = (ContinuousClock.now - started) / .seconds(1)
@@ -103,7 +91,7 @@ final class SkyResources {
         #endif
         return SkyResources(starCount: drawing.geometry.vertices.count / 4,
                             starMesh: starMesh, starMaterial: stars, domeMesh: domeMesh,
-                            spaceGlow: spaceGlow, roomGlow: roomGlow)
+                            background: background)
     }
 }
 
@@ -118,28 +106,22 @@ enum Sky {
     /// from the wearer's eyes, not their feet.
     static let centre = SIMD3<Float>(0, 1.5, 0)
 
-    /// The sky turned into the room. `overRoom` lays the Milky Way over
-    /// passthrough as a transparent glow; otherwise it is the opaque
-    /// surroundings. Its two parts take orders 0 and 1 (`lastOrder`) in
-    /// `group`, so a caller can draw its own transparent parts after them.
-    static func make(overRoom: Bool, resources: SkyResources,
+    /// The sky turned into the room: the opaque surroundings. The stars take
+    /// order `lastOrder` in `group`, so a caller can draw its own transparent
+    /// parts after them.
+    static func make(resources: SkyResources,
                      group: ModelSortGroup = ModelSortGroup(depthPass: nil)) -> Entity {
         let root = Entity()
         root.name = "sky"
         root.position = centre
         root.orientation = orientation
 
-        let dome = ModelEntity(mesh: resources.domeMesh,
-                               materials: [overRoom ? resources.roomGlow : resources.spaceGlow])
-        dome.name = "sky-milky-way"
-        // Over the room the Milky Way is transparent and sorted under the
-        // stars. In space it is opaque and left out of the group, so it is
-        // drawn with the opaque pass, first: sorted, it was drawn late, and
-        // any transparent part that writes depth (Orbital's Sun glow) cut a
-        // hole through it to whatever lay beyond.
-        if overRoom {
-            dome.components.set(ModelSortGroupComponent(group: group, order: 0))
-        }
+        let dome = ModelEntity(mesh: resources.domeMesh, materials: [resources.background])
+        dome.name = "sky-dome"
+        // Opaque and left out of the group, so it is drawn with the opaque
+        // pass, first: sorted, it was drawn late, and any transparent part
+        // that writes depth (Orbital's Sun glow) cut a hole through it to
+        // whatever lay beyond.
         root.addChild(dome)
 
         let stars = ModelEntity(mesh: resources.starMesh, materials: [resources.starMaterial])
@@ -198,9 +180,6 @@ nonisolated enum SkyDrawing {
         var geometry: StarField.Geometry
         var atlasColour: CGImage
         var atlasMask: CGImage
-        var glowSpace: CGImage
-        var glowRoomColour: CGImage
-        var glowRoomAlpha: CGImage
     }
 
     /// The atlas: a 64-pixel cell per (temperature column, brightness row),
@@ -221,11 +200,8 @@ nonisolated enum SkyDrawing {
               let data = try? Data(contentsOf: url),
               let catalog = try? StarCatalog.decode(data) else { return nil }
         let geometry = StarField.assemble(stars(catalog), radius: SkyResources.starRadius, atlas: atlas)
-        guard let (colour, mask) = atlasImages(),
-              let glow = milkyWayImages(width: 2048, height: 1024) else { return nil }
-        return Drawing(geometry: geometry, atlasColour: colour, atlasMask: mask,
-                       glowSpace: glow.space, glowRoomColour: glow.roomColour,
-                       glowRoomAlpha: glow.roomAlpha)
+        guard let (colour, mask) = atlasImages() else { return nil }
+        return Drawing(geometry: geometry, atlasColour: colour, atlasMask: mask)
     }
 
     /// Each catalogue star as a quad: its direction, its size, its cell.
@@ -280,77 +256,8 @@ nonisolated enum SkyDrawing {
         return (colourImage, maskImage)
     }
 
-    /// How bright the Milky Way is drawn: its model brightness times this,
-    /// in linear light — faint, as the real one is.
-    static let glowScale = 0.12
-    /// The space between the stars: not quite black.
+    /// The space between the stars: not quite black, in linear light.
     static let background = SIMD3<Double>(0.0035, 0.0040, 0.0070)
-
-    /// The Milky Way as an equirectangular image of the celestial sphere
-    /// (column = right ascension, row 0 = the north celestial pole), three
-    /// ways: opaque over black, and as a colour plus an opacity for laying
-    /// over the room. Rows are drawn concurrently.
-    static func milkyWayImages(width: Int, height: Int)
-    -> (space: CGImage, roomColour: CGImage, roomAlpha: CGImage)? {
-        var space = [UInt8](repeating: 255, count: width * height * 4)
-        var roomColour = [UInt8](repeating: 255, count: width * height * 4)
-        var roomAlpha = [UInt8](repeating: 0, count: width * height)
-        space.withUnsafeMutableBufferPointer { spaceBuffer in
-            roomColour.withUnsafeMutableBufferPointer { colourBuffer in
-                roomAlpha.withUnsafeMutableBufferPointer { alphaBuffer in
-                    nonisolated(unsafe) let spacePixels = spaceBuffer
-                    nonisolated(unsafe) let colourPixels = colourBuffer
-                    nonisolated(unsafe) let alphaPixels = alphaBuffer
-                    DispatchQueue.concurrentPerform(iterations: height) { y in
-                        let v = 1 - (Double(y) + 0.5) / Double(height)
-                        let declination = (v - 0.5) * .pi
-                        for x in 0..<width {
-                            let ascension = 2 * .pi * (Double(x) + 0.5) / Double(width)
-                            let direction = CelestialSphere.equatorial(rightAscension: ascension,
-                                                                       declination: declination)
-                            let (l, b) = CelestialSphere.galactic(fromEquatorial: direction)
-                            let glow = MilkyWay.brightness(longitude: l, latitude: b)
-                                * mottle(l, b) * glowScale
-                            let tint = MilkyWay.tint(longitude: l, latitude: b)
-                            let lit = background + glow * tint
-                            let i = y * width + x
-                            spacePixels[i * 4] = encode(lit.x)
-                            spacePixels[i * 4 + 1] = encode(lit.y)
-                            spacePixels[i * 4 + 2] = encode(lit.z)
-                            colourPixels[i * 4] = encode(tint.x)
-                            colourPixels[i * 4 + 1] = encode(tint.y)
-                            colourPixels[i * 4 + 2] = encode(tint.z)
-                            alphaPixels[i] = UInt8((min(glow * 1.6, 1) * 255).rounded())
-                        }
-                    }
-                }
-            }
-        }
-        guard let spaceImage = image(rgba: space, width: width, height: height),
-              let colourImage = image(rgba: roomColour, width: width, height: height),
-              let alphaImage = image(gray: roomAlpha, width: width, height: height) else { return nil }
-        return (spaceImage, colourImage, alphaImage)
-    }
-
-    /// The real Milky Way is clumped into star clouds; the model is smooth.
-    /// A gentle two-octave value noise in galactic coordinates breaks it up
-    /// — drawn texture, not physics, and it never more than ±30 %.
-    static func mottle(_ l: Double, _ b: Double) -> Double {
-        let n = valueNoise(l * 9, b * 9) * 0.65 + valueNoise(l * 23 + 7, b * 23 - 3) * 0.35
-        return 0.7 + 0.6 * n
-    }
-
-    static func valueNoise(_ x: Double, _ y: Double) -> Double {
-        let xi = floor(x), yi = floor(y)
-        let fx = x - xi, fy = y - yi
-        func hash(_ i: Double, _ j: Double) -> Double {
-            let h = sin(i * 127.1 + j * 311.7) * 43758.5453
-            return h - floor(h)
-        }
-        let a = hash(xi, yi), b = hash(xi + 1, yi), c = hash(xi, yi + 1), d = hash(xi + 1, yi + 1)
-        let u = fx * fx * (3 - 2 * fx), w = fy * fy * (3 - 2 * fy)
-        return a + (b - a) * u + (c - a) * w + (a - b - c + d) * u * w
-    }
 
     static func smoothstep(_ a: Double, _ b: Double, _ x: Double) -> Double {
         let t = min(max((x - a) / (b - a), 0), 1)

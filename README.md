@@ -40,8 +40,8 @@ style.
 
 **Your room, or deep space.** Every lab stands in your own room — or, at
 one switch in More, among the real stars: the 9,096 naked-eye stars of the
-Yale Bright Star Catalogue at their true places and colours, the Milky Way
-along the galactic plane, a glass platform at your feet. The physics
+Yale Bright Star Catalogue at their true places and colours, a glass
+platform at your feet. The physics
 carries on unchanged, and the room is out of reach there: a ball you throw
 flies on instead of bouncing off a wall you cannot see.
 

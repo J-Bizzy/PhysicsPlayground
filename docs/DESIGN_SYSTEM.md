@@ -101,10 +101,10 @@ One sky serves deep space (`Shell/Sky.swift`, `PhysicsCore/Astronomy`). It serve
 | Colour | Blackbody of the star's B−V temperature, at 0.8 of its chroma | At 0.35 and 0.5 Betelgeuse read beige |
 | Brightness | Flux 10^(−0.4(m − 6.5)), peak 0.2–1, 8 brightness rows × 16 temperature columns in one atlas | No vertex colours in an unlit material, so colour and brightness are cells |
 | Size | Core ≥ 4.5′ (≈ 2.6 device px), ≤ 18′ | Below the floor, a star shimmers as the head moves |
-| The Milky Way | A model in galactic (l, b) on a 46 m dome; opaque in space, a transparent glow over the room | Its course is the real galactic plane |
+| Between the stars | One flat near-black (linear 0.0035, 0.0040, 0.0070) on a 46 m dome, opaque | The Milky Way's band was drawn here until 2026-10-24; the owner found it unnecessary contrast |
 | The house evening | 40° N, Orion's belt rising straight ahead 30° up | Orion over the wordmark, Polaris behind and left |
 | The Sun (deep space) | Where Pluto sees it on the sky's date: a 10′ white-hot core in a 3° glare | Magnitude −19, too small for a disc |
-| Draw order | One `ModelSortGroup`: the stars, then deep space's Sun, its floor pane, its platform (`Sky.make(overRoom:)` still sorts a transparent Milky Way first, for a sky over the room) | Each transparent layer lies over what is beyond it; in space the opaque Milky Way stays out of the group so it is drawn first |
+| Draw order | One `ModelSortGroup`: the stars, then deep space's Sun, its floor pane, its platform | Each transparent layer lies over what is beyond it; the opaque dome stays out of the group so it is drawn first |
 | Nothing glows | No `LiveGlow` anywhere in the sky or deep space | A glow means a hand is on something |
 
 Retired on 2026-10-14: the switch bank (`SpatialLayerBank`), the folding tab

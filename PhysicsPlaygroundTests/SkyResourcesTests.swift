@@ -82,8 +82,13 @@ final class SkyResourcesTests: XCTestCase {
         let second = try XCTUnwrap(secondBuilt)
         XCTAssertTrue(first === second)
         XCTAssertGreaterThan(first.starCount, 9_000)
-        let sky = Sky.make(overRoom: false, resources: first)
+        let sky = Sky.make(resources: first)
         XCTAssertNotNil(sky.findEntity(named: "sky-stars"))
-        XCTAssertNotNil(sky.findEntity(named: "sky-milky-way"))
+        XCTAssertNotNil(sky.findEntity(named: "sky-dome"))
+        // No band of light behind the stars (2026-10-24): the dome is one
+        // flat, nearly black colour, with no texture to draw a Milky Way.
+        let dome = try XCTUnwrap(sky.findEntity(named: "sky-dome") as? ModelEntity)
+        let material = try XCTUnwrap(dome.model?.materials.first as? UnlitMaterial)
+        XCTAssertNil(material.color.texture)
     }
 }

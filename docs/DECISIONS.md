@@ -16,6 +16,24 @@ A running log of consequential decisions — architectural, physical, or product
 
 (The template sat stranded at line 309, mid-log between two 2026-07-29 entries, until 2026-08-01.)
 
+## 2026-10-24 — Deep space loses the Milky Way's band
+
+**Decision:** The sky behind Deep space's 9,096 stars is now one flat near-black, the same "not quite black" the band was drawn over. The Milky Way's glow is gone. The owner said: "can you get rid of the white bar in the space view? i think its unnecessary contrast".
+
+**Context:**
+- The band was `PhysicsCore.MilkyWay`, a stated model along the real galactic plane, painted into a 2048 × 1024 texture at launch.
+- In every Deep space frame it read as a pale bar crossing the lab, behind the field lines and the orbits.
+- Its transparent version, for a sky laid over the room, served only the opening, which went on 2026-10-21.
+
+**Consequences:**
+- `MilkyWay` and `MilkyWayTests` are deleted, as `TimeLapse` was when its one user went.
+- `Sky.make` loses `overRoom`.
+- The launch no longer paints the band's texture.
+- `SkyResourcesTests` holds the dome to one untextured colour.
+- The stars, their colours and their places are unchanged.
+- `-skyLook core` still turns the sky to the galactic centre; there is simply no band there now.
+- The App Store description, the README, the demo script and the on-device checklist no longer promise the band.
+
 ## 2026-10-24 — A calm track for every value an object shows by its size
 
 **Decision:** A charge's |q|, the test charge's, the star's mass and a planet's mass are now set by the ring's bead on a calm track (`Bloom.Grip.Track`). It is the owner's pick from three options; the others were a two-hand resize and a dial around the charge. The owner said the old control was "very clunky". `Bloom.Grip.Stretch.surface` is deleted, because nothing uses it any more.

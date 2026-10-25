@@ -150,8 +150,9 @@ contradicts this section, this section is current.
 - [ ] **The stars are crisp and still** — points, no shimmer as you move
       your head, the faintest still visible as points. Orion is straight
       ahead and a little up, its belt upright: **Betelgeuse** (upper left)
-      reads orange beside blue-white **Rigel** (lower right). The Milky Way
-      arches overhead, with the dark Great Rift in it.
+      reads orange beside blue-white **Rigel** (lower right). No band of
+      light crosses the sky (⟳ 2026-10-24: the Milky Way's band is gone,
+      owner: "unnecessary contrast"); between the stars it is near-black.
 - [ ] **Standing on the platform is comfortable.** Look down: smoked glass with stars under it and a fine champagne edge 1.8 m out. Walk to the edge; passthrough breaks through at the system's boundary, as it should.
 - [ ] **Labs are lit the same in both surroundings.** Toggle Deep space in Pendulums: the bobs and the frame keep their shading.
 - [ ] **Orbital Mechanics opens in space by itself**, with no second Sun in the sky. Choose the room there: the room comes back at once, dimmed as before.
