@@ -319,7 +319,8 @@ working session:
       stand, 1.75 m off: does each read as its lab at a glance, and do the
       seven stages read as one set?
 - [ ] **Walk up to a portal.** Up close the models should hold: the
-      cradle's bent champagne frame and bifilar threads, the coil's copper
+      cradle's steel collars and single cables (the lab's own, no frame),
+      the circuit's lab-kit parts standing as the lab opens, the coil's copper
       turns, the prism's glass. Nothing pokes through the glass pane
       behind it, and a pinch on the front of a diorama still enters the lab.
 - [ ] **Frame time on the home with all seven running.** The Light

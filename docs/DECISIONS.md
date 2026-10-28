@@ -16,6 +16,23 @@ A running log of consequential decisions — architectural, physical, or product
 
 (The template sat stranded at line 309, mid-log between two 2026-07-29 entries, until 2026-08-01.)
 
+## 2026-10-26 — The home's cradle and circuit are the labs' own openings
+
+**Decision:** The Pendulums and Circuits miniatures on the home are now the scenes their labs open on, in the labs' own parts, at the labs' own size, scaled onto the stage. The owner asked for them "with the same style of what it was but better matching what is intiially shown in the labs".
+- **Pendulums:** five steel collars one bob apart, one 0.55 m cable each, satin bobs of 35 mm, the end one released from 0.55 rad — `PendulumsRenderer`'s parts and materials, and no frame.
+- **Circuits:** the starter loop standing upright — the battery along the bottom, the bulb at the top, the switch upright on the right — in the lab-kit modules from `CircuitsRenderer.makeModule`, joined by straight copper wires terminal to terminal.
+
+**Context:**
+- The cradle was a desk toy: a milled champagne frame (`HubCradle.usdz`) with bifilar threads. The lab has no frame; its collars hang in the air.
+- The circuit lay flat in a loop the lab never builds.
+- The lab's opening layouts lived inside private seeding functions, so the home had to copy their numbers.
+
+**Consequences:**
+- The openings are shared statics the home reads: `PendulumsModel.cradleBobRadius`, `cradleCableLength`, `cradleRelease`, and `CircuitsModel.starterParts`, `starterWires`. A change to a lab's opening changes its miniature with it.
+- `HubDioramaTests` holds each miniature to its lab: the cradle's cable lengths, spacing and release, and every circuit part where the lab stands it relative to the battery.
+- The circuit's turntable stays out of the miniature: the home has no plinths (2026-10-21), and the 0.9 m disc would shrink the loop to fit the stage.
+- `HubCradle.usdz` and `Tools/hubdioramas.py`, which milled only it, are deleted. Git has them.
+
 ## 2026-10-24 — Deep space loses the Milky Way's band
 
 **Decision:** The sky behind Deep space's 9,096 stars is now one flat near-black, the same "not quite black" the band was drawn over. The Milky Way's glow is gone. The owner said: "can you get rid of the white bar in the space view? i think its unnecessary contrast".

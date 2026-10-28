@@ -2395,33 +2395,31 @@ final class CircuitsModel {
         seedStarterLoop()
     }
 
+    /// The starter loop, as the lab opens on it and as the home's miniature
+    /// stands it: a clean rectangle facing the wearer, the battery along the
+    /// bottom, the bulb at the top, the switch upright on the right.
+    static let starterParts: [(kind: ComponentKind, position: SIMD3<Double>, axis: SIMD3<Double>)] = [
+        (.battery, SIMD3(0, 1.12, -0.9), SIMD3(1, 0, 0)),
+        (.switcher, SIMD3(0.30, 1.31, -0.9), SIMD3(0, 1, 0)),
+        (.bulb, SIMD3(0, 1.5, -0.9), SIMD3(1, 0, 0)),
+    ]
+    /// Its wires, part and end to part and end, indices into `starterParts`:
+    /// the battery's − to the switch, the switch to the bulb, the bulb back
+    /// to the battery's +.
+    static let starterWires: [(from: (part: Int, end: Int), to: (part: Int, end: Int))] = [
+        ((0, 1), (1, 0)), ((1, 1), (2, 1)), ((2, 0), (0, 0)),
+    ]
+
     private func seedStarterLoop() {
-        // A clean rectangle: battery bottom, bulb top, switch upright on the right.
-        let battery = Component(
-            id: UUID(), kind: .battery,
-            position: SIMD3(0, 1.12, -0.9),
-            value: ComponentKind.battery.defaultValue)
-        let switcher = Component(
-            id: UUID(), kind: .switcher,
-            position: SIMD3(0.30, 1.31, -0.9),
-            value: ComponentKind.switcher.defaultValue,
-            axis: SIMD3(0, 1, 0))
-        let bulb = Component(
-            id: UUID(), kind: .bulb,
-            position: SIMD3(0, 1.5, -0.9),
-            value: ComponentKind.bulb.defaultValue)
-        components = [battery, switcher, bulb]
-        wires = [
+        components = Self.starterParts.map { part in
+            Component(id: UUID(), kind: part.kind, position: part.position,
+                      value: part.kind.defaultValue, axis: part.axis)
+        }
+        wires = Self.starterWires.map { wire in
             Wire(id: UUID(),
-                 from: Terminal(componentID: battery.id, end: 1),
-                 to: Terminal(componentID: switcher.id, end: 0)),
-            Wire(id: UUID(),
-                 from: Terminal(componentID: switcher.id, end: 1),
-                 to: Terminal(componentID: bulb.id, end: 1)),
-            Wire(id: UUID(),
-                 from: Terminal(componentID: bulb.id, end: 0),
-                 to: Terminal(componentID: battery.id, end: 0)),
-        ]
+                 from: Terminal(componentID: components[wire.from.part].id, end: wire.from.end),
+                 to: Terminal(componentID: components[wire.to.part].id, end: wire.to.end))
+        }
         settleStage()
         // Solve once immediately so the bulb opens lit, not one frame dark.
         solve(dt: 1.0 / 90.0)

@@ -24,6 +24,13 @@ final class PendulumsModel {
     /// floor is this plus the cable's length.
     nonisolated static let minimumPivotHeight = 0.30
 
+    /// Newton's cradle as the lab opens on it, and as the home's miniature
+    /// hangs it: five bobs this big on cables this long, the end one
+    /// released from this angle (rad).
+    nonisolated static let cradleBobRadius = 0.035
+    nonisolated static let cradleCableLength = 0.55
+    nonisolated static let cradleRelease = 0.55
+
     nonisolated static let lengthRange = 0.25...1.6      // m
     nonisolated static let massRange = 0.1...5.0         // kg
     nonisolated static let gravityRange = 0.5...25.0     // m/s²
@@ -291,12 +298,12 @@ final class PendulumsModel {
     func loadNewtonsCradle() {
         pendulums = []
         let count = 5
-        let radius = 0.035
-        let length = 0.55
+        let radius = Self.cradleBobRadius
+        let length = Self.cradleCableLength
         for index in 0..<count {
             let pivot = Self.defaultPivot
                 + SIMD3(Double(index) * radius * 2 - Double(count - 1) * radius, 0, 0)
-            let angle = index == 0 ? -0.55 : 0.0
+            let angle = index == 0 ? -Self.cradleRelease : 0.0
             pendulums.append(Pendulum(
                 id: UUID(), kind: .simple, length: length, mass: 0.2,
                 damping: 0, bobRadius: radius, cableThickness: 0.0016,

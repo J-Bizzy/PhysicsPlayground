@@ -7,8 +7,9 @@
 //  props, its tracer and its solver), fitted to one shared stage and
 //  moved by the lab's real physics. Not an emblem of the lab — the lab,
 //  small:
-//    • Pendulums — Newton's cradle, the lab's opening scene, its end balls
-//      on the exact large-amplitude swing of the lab's 0.55 m cables.
+//    • Pendulums — Newton's cradle as the lab opens on it: five collars,
+//      single cables and satin bobs at the lab's own size, no frame, its end
+//      balls on the exact large-amplitude swing of the lab's 0.55 m cables.
 //    • Light — the torch, the flint prism and a screen; the light traced
 //      by `LightTracer`, rocking through least deviation.
 //    • Electric Fields — the dipole inside its glass equipotentials
@@ -16,8 +17,9 @@
 //    • Magnetism — the bar magnet through the pickup coil, the LED lit
 //      red going in and green coming out by `PickupCoil`'s own EMF.
 //    • Projectiles — the launcher, a true arc and the hoop it drops through.
-//    • Circuits — battery, switch and bulb: the lever closes, the bulb
-//      lights, the electrons go round.
+//    • Circuits — the lab's starter loop as the lab stands it: battery
+//      along the bottom, bulb at the top, the switch upright on the right;
+//      the lever closes, the bulb lights, the electrons go round.
 //    • Orbital Mechanics — an orrery: the four inner planets on their real
 //      ellipses, perihelia and period ratios, on arms from the Sun's post.
 //
@@ -89,12 +91,6 @@ extension HubVignettes {
     /// The stage: a point, its top at y = 0, `stageRadius` across in the
     /// home's measure — nothing drawn.
     static func stage() -> Entity { Entity() }
-
-    /// A milled prop at its authored size and origin — the cradle is
-    /// placed by its numbers, not recentred like `prop`.
-    static func placed(_ name: String) -> Entity? {
-        PropCache.prototype(named: name)?.clone(recursive: true)
-    }
 
     /// The bounds of `entity` in `space`, swept over a whole cycle.
     private static func swept(_ entity: Entity, in space: Entity, cycle: Double,
@@ -233,70 +229,52 @@ extension HubVignettes {
         }
     }
 
-    /// The cradle's dimensions on the stage (`hubdioramas.py`).
-    static let cradleRailHeight: Float = 0.118
-    static let cradleRailOffset: Float = 0.026
-    static let cradleRailHalf: Float = 0.091
-    static let cradleFootRadius: Float = 0.005
-    static let cradleBallRadius: Float = 0.0105
-    static let cradleRestHeight: Float = 0.043
-
-    /// The lab's own cradle (`PendulumsModel.loadNewtonsCradle`): 0.55 m
-    /// cables, the end ball released from 0.55 rad. The miniature is a
+    /// The lab's own cradle (`PendulumsModel.loadNewtonsCradle`): its
+    /// cables, the end ball released from its angle. The miniature is a
     /// scale model of it, so it swings at its period, not a desk toy's.
-    static let cradleSwing = PendulumSwing(length: 0.55, gravity: 9.81, amplitude: 0.55)
+    static let cradleSwing = PendulumSwing(length: PendulumsModel.cradleCableLength, gravity: 9.81,
+                                           amplitude: PendulumsModel.cradleRelease)
 
+    /// Newton's cradle as the lab opens on it, at the lab's own size: five
+    /// steel collars in a row one bob apart, each with one cable down to a
+    /// satin-steel bob — `PendulumsRenderer`'s parts and materials — and no
+    /// frame, because the lab hangs its collars in the air. `fitStage`
+    /// scales it onto the stage.
     static func cradleDiorama() -> Built {
         let diorama = Diorama()
-        let scene = diorama.scene
-        if let frame = placed("HubCradle") {
-            scene.addChild(frame)
-        } else {
-            for z in [-cradleRailOffset, cradleRailOffset] {
-                let rail = ModelEntity(mesh: unitCylinder, materials: [Materials.machined()])
-                stretch(rail, from: [-cradleRailHalf, cradleRailHeight, z],
-                        to: [cradleRailHalf, cradleRailHeight, z],
-                        radius: 0.0024)
-                scene.addChild(rail)
-            }
-        }
-
-        let radius = cradleBallRadius
-        let length = cradleRailHeight - cradleRestHeight
-        let steel = Materials.machined(UIColor(white: 0.92, alpha: 1), roughness: 0.12)
-        let thread = Materials.machined(UIColor(white: 0.18, alpha: 1), roughness: 0.6)
-        var balls: [(ball: ModelEntity, threads: [Entity], x: Float)] = []
+        let bench = diorama.bench()
+        let radius = Float(PendulumsModel.cradleBobRadius)
+        let length = Float(PendulumsModel.cradleCableLength)
+        // The bobs hang a little above the stage at rest.
+        let pivotHeight = length + radius + 0.02
+        let steel = Materials.machined(UIColor(white: 0.85, alpha: 1))
+        let cable = Materials.machined(UIColor(white: 0.25, alpha: 1), roughness: 0.6)
+        let satin = Materials.machined(UIColor(white: 0.9, alpha: 1))
+        var rigs: [(bob: ModelEntity, cable: ModelEntity, pivot: SIMD3<Float>)] = []
         for index in 0..<5 {
-            let x = Float(index - 2) * 2 * radius
-            let ball = ModelEntity(mesh: Primitives.sphere(radius: radius), materials: [steel])
-            scene.addChild(ball)
-            let threads = (0..<2).map { _ -> Entity in
-                let entity = ModelEntity(mesh: unitCylinder, materials: [thread])
-                scene.addChild(entity)
-                return entity
-            }
-            balls.append((ball, threads, x))
-        }
-
-        func hang(_ entry: (ball: ModelEntity, threads: [Entity], x: Float), angle: Float) {
-            let down = SIMD3<Float>(sin(angle), -cos(angle), 0)
-            let pivot = SIMD3<Float>(entry.x, cradleRailHeight, 0)
-            entry.ball.position = pivot + down * length
-            // Bifilar: each thread from its rail to the eye on top of the
-            // ball, so the ball swings in one plane, as a cradle's must.
-            let eye = pivot + down * (length - radius)
-            for (thread, side) in zip(entry.threads, [Float(1), -1]) {
-                stretch(thread, from: [entry.x, cradleRailHeight, side * cradleRailOffset],
-                        to: eye, radius: 0.00045)
-            }
+            let pivot = SIMD3<Float>(Float(index - 2) * 2 * radius, pivotHeight, 0)
+            let collar = ModelEntity(mesh: Primitives.cylinder(height: 0.03, radius: 0.014),
+                                     materials: [steel])
+            collar.name = "cradle-collar-\(index)"
+            collar.position = pivot
+            bench.addChild(collar)
+            let line = ModelEntity(mesh: unitCylinder, materials: [cable])
+            bench.addChild(line)
+            let bob = ModelEntity(mesh: Primitives.sphere(radius: radius), materials: [satin])
+            bob.name = "cradle-bob-\(index)"
+            bench.addChild(bob)
+            rigs.append((bob, line, pivot))
         }
 
         let swing = cradleSwing
-        return fitStage(diorama, cycle: swing.period) { time in
+        return fitStage(diorama, bench: bench, cycle: swing.period) { time in
             let ends = swing.cradle(at: time)
-            for (index, entry) in balls.enumerated() {
-                let angle = index == 0 ? ends.left : index == 4 ? ends.right : 0
-                hang(entry, angle: Float(angle))
+            for (index, rig) in rigs.enumerated() {
+                let angle = Float(index == 0 ? ends.left : index == 4 ? ends.right : 0)
+                let bob = rig.pivot + SIMD3(sin(angle), -cos(angle), 0) * length
+                rig.bob.position = bob
+                // The lab's cable: 1.6 mm, from the collar to the bob.
+                stretch(rig.cable, from: rig.pivot, to: bob, radius: 0.0016)
             }
         }
     }
@@ -759,57 +737,52 @@ extension HubVignettes {
         }
     }
 
-    // MARK: Circuits — battery, switch and bulb
+    // MARK: Circuits — the lab's starter loop
 
+    /// The circuit the lab opens on (`CircuitsModel.starterParts` and
+    /// `starterWires`), as the lab stands it: an upright rectangle facing the
+    /// reader, the battery along the bottom, the bulb at the top, the switch
+    /// upright on the right, joined by straight copper wires terminal to
+    /// terminal. Every part is the lab's own lab-kit module.
     static func circuitsDiorama() -> Built {
         let diorama = Diorama()
-        let bench = diorama.bench(yaw: 0.35)
-        // The carrier's underside, so a module stands on the board.
-        let lift = -CircuitsRenderer.carrierBottom
+        let bench = diorama.bench(yaw: 0.3)
         let lead = Float(CircuitsModel.terminalOffset)
         let copper = Materials.machined(DesignTokens.Palette.copperUI, roughness: 0.35)
 
-        // The lab's own lab-kit modules, live pieces and all.
-        func part(_ kind: CircuitsModel.ComponentKind, at centre: SIMD3<Float>,
-                  along axis: SIMD3<Float>) -> (module: CircuitsRenderer.Module, ends: [SIMD3<Float>]) {
-            let module = CircuitsRenderer.makeModule(kind: kind)
+        // Placed as the lab places them, relative to the battery, whose
+        // carrier stands on the stage.
+        let parts = CircuitsModel.starterParts
+        let origin = SIMD3<Float>(parts[0].position) - [0, -CircuitsRenderer.carrierBottom, 0]
+        var modules: [CircuitsRenderer.Module] = []
+        var ends: [[SIMD3<Float>]] = []
+        for part in parts {
+            let centre = SIMD3<Float>(part.position) - origin
+            let axis = SIMD3<Float>(part.axis)
+            let module = CircuitsRenderer.makeModule(kind: part.kind)
+            module.root.name = "circuit-\(part.kind)"
             module.root.position = centre
             module.root.orientation = CircuitsRenderer.moduleOrientation(axis: axis, front: [0, 0, 1])
             bench.addChild(module.root)
-            return (module, [centre - axis * lead, centre + axis * lead])
+            modules.append(module)
+            // Terminal 0 at −axis, terminal 1 at +axis, as `terminalPosition`.
+            ends.append([centre - axis * lead, centre + axis * lead])
         }
-
-        let battery = part(.battery, at: [0, lift, 0.10], along: [1, 0, 0])
-        // The bulb in its holder on a pedestal, as a kit stands one, so the
-        // circuit rises off the board and its light stands over it.
-        let raised: Float = 0.06
-        let pedestal = ModelEntity(mesh: Primitives.box(size: [0.09, raised, 0.05], cornerRadius: 0.006),
-                                   materials: [Materials.graphite()])
-        pedestal.position = [0, raised / 2, -0.10]
-        bench.addChild(pedestal)
-        let bulb = part(.bulb, at: [0, lift + raised, -0.10], along: [1, 0, 0])
-        let switcher = part(.switcher, at: [-0.17, lift, 0], along: [0, 0, -1])
-        let lever = switcher.module.lever
-        let glow = bulb.module.glow
-
-        // Straight wires, terminal to terminal: battery + to the switch, the
-        // switch to the bulb, the bulb back to battery −.
-        let runs: [(SIMD3<Float>, SIMD3<Float>)] = [
-            (battery.ends[0], switcher.ends[0]),
-            (switcher.ends[1], bulb.ends[0]),
-            (bulb.ends[1], battery.ends[1]),
-        ]
-        for run in runs {
-            let wire = ModelEntity(mesh: unitCylinder, materials: [copper])
-            stretch(wire, from: run.0, to: run.1, radius: 0.0045)
-            bench.addChild(wire)
+        for wire in CircuitsModel.starterWires {
+            let segment = ModelEntity(mesh: unitCylinder, materials: [copper])
+            stretch(segment, from: ends[wire.from.part][wire.from.end],
+                    to: ends[wire.to.part][wire.to.end], radius: 0.0045)
+            bench.addChild(segment)
         }
+        let lever = modules[1].lever
+        let bulb = modules[2]
+        let glow = bulb.glow
 
-        // The electrons' road, from − round to +: through the bulb, the
-        // switch, into the battery's + and through it.
-        let road: [SIMD3<Float>] = [battery.ends[1], bulb.ends[1], bulb.ends[0],
-                                    switcher.ends[1], switcher.ends[0], battery.ends[0],
-                                    battery.ends[1]]
+        // The electrons' road, from the battery's − round to its +: to the
+        // switch, through it, to the bulb, through it, back to the battery's
+        // +, and through the battery.
+        let road: [SIMD3<Float>] = [ends[0][1], ends[1][0], ends[1][1], ends[2][1],
+                                    ends[2][0], ends[0][0], ends[0][1]]
         var cumulative: [Float] = [0]
         for (a, b) in zip(road, road.dropFirst()) { cumulative.append(cumulative.last! + simd_distance(a, b)) }
         let total = cumulative.last!
@@ -822,7 +795,6 @@ extension HubVignettes {
         let electronMaterial = Materials.energized(DesignTokens.Palette.electronUI, glow: 0.9)
         let electrons = (0..<14).map { _ -> ModelEntity in
             let electron = ModelEntity(mesh: Primitives.sphere(radius: 0.0075), materials: [electronMaterial])
-            electron.position.y = lift + 0.01
             bench.addChild(electron)
             return electron
         }
@@ -832,7 +804,7 @@ extension HubVignettes {
         var wasLit: Bool?
         return fitStage(diorama, bench: bench, cycle: period) { time in
             let t = time.truncatingRemainder(dividingBy: period)
-            // Closed, then thrown open, then closed again.
+            // Closed, as the lab opens, then thrown open, then closed again.
             let openness: Double
             switch t {
             case ..<closedFor: openness = 0
@@ -844,15 +816,16 @@ extension HubVignettes {
             let lit = openness < 0.05
             if lit != wasLit {
                 wasLit = lit
-                CircuitsRenderer.paintBulb(filament: bulb.module.filament, glow: glow,
-                                           light: bulb.module.light, level: lit ? 4 : 0)
+                CircuitsRenderer.paintBulb(filament: bulb.filament, glow: glow,
+                                           light: bulb.light, level: lit ? 4 : 0)
             }
             glow?.scale = SIMD3(repeating: 0.92 + 0.08 * Float(sin(time * 2.1)))
-            // The carriers move only while the loop is closed.
+            // The carriers move only while the loop is closed, riding just in
+            // front of the copper.
             let drift = Float(min(t, closedFor)) * 0.12
             for (index, electron) in electrons.enumerated() {
                 let s = drift + Float(index) / Float(electrons.count) * total
-                electron.position = onRoad(s) + [0, 0.012, 0]
+                electron.position = onRoad(s) + [0, 0, 0.006]
                 electron.components.set(OpacityComponent(opacity: lit ? 1 : 0.35))
             }
         }

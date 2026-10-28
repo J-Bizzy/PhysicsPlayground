@@ -57,6 +57,51 @@ final class HubDioramaTests: XCTestCase {
         }
     }
 
+    /// The miniature is the lab's opening cradle: five bobs one diameter
+    /// apart, each one cable length below its collar, the end one released
+    /// from the lab's angle — and no frame, because the lab has none.
+    func testTheCradleIsTheLabsOwnCradle() throws {
+        let built = HubVignettes.cradleDiorama()
+        built.animate(0)
+        let radius = Float(PendulumsModel.cradleBobRadius)
+        let length = Float(PendulumsModel.cradleCableLength)
+        var collars: [Entity] = []
+        for index in 0..<5 {
+            let collar = try XCTUnwrap(built.entity.findEntity(named: "cradle-collar-\(index)"))
+            let bob = try XCTUnwrap(built.entity.findEntity(named: "cradle-bob-\(index)"))
+            // Collar and bob share the bench, so this is the lab's metres.
+            XCTAssertEqual(simd_distance(collar.position, bob.position), length, accuracy: 1e-5)
+            collars.append(collar)
+            if index == 0 {
+                let hang = bob.position - collar.position
+                XCTAssertEqual(Double(atan2(hang.x, -hang.y)), -PendulumsModel.cradleRelease, accuracy: 1e-4)
+            }
+        }
+        for (a, b) in zip(collars, collars.dropFirst()) {
+            XCTAssertEqual(b.position.x - a.position.x, 2 * radius, accuracy: 1e-6)
+        }
+        XCTAssertNil(built.entity.findEntity(named: "HubCradle"))
+    }
+
+    // MARK: The circuit
+
+    /// The miniature is the circuit the lab opens on: every part where the
+    /// lab stands it relative to the battery, on the lab's own axis.
+    func testTheCircuitIsTheLabsStarterLoop() throws {
+        let built = HubVignettes.circuitsDiorama()
+        let model = CircuitsModel()
+        let battery = try XCTUnwrap(model.components.first { $0.kind == .battery })
+        let batteryEntity = try XCTUnwrap(built.entity.findEntity(named: "circuit-\(battery.kind)"))
+        XCTAssertEqual(model.components.count, CircuitsModel.starterParts.count)
+        XCTAssertEqual(model.wires.count, CircuitsModel.starterWires.count)
+        for component in model.components {
+            let entity = try XCTUnwrap(built.entity.findEntity(named: "circuit-\(component.kind)"))
+            let expected = SIMD3<Float>(component.position - battery.position)
+            XCTAssertLessThan(simd_distance(entity.position - batteryEntity.position, expected), 1e-5,
+                              "\(component.kind) does not stand where the lab stands it")
+        }
+    }
+
     // MARK: The prism
 
     /// White light at least deviation: violet turned further than red, the
