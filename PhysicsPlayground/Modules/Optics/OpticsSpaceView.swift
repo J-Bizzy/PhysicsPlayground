@@ -60,6 +60,7 @@ struct OpticsSpaceView: View {
                                  position: anchor,
                                  spawn: { point in model.addPiece(kind, at: point) })
             })
+            sources.spawnSpace = renderer.viewRoot
             renderer.viewRoot.addChild(sources.root)
             renderer.viewRoot.addChild(bloom.root)
             wells = sources

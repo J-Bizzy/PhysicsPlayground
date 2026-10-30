@@ -88,6 +88,8 @@ final class CircuitsRenderer {
         var fuseIntact: Bool?
         var ledState = Int.min
         var labelText = ""
+        /// What VoiceOver last heard the part say about itself.
+        var spokenState = ""
         var glowBucket = -1
         var resistorCodeKey = ""
         /// Resistors: how hot, 0…4 by dissipation against the rating,
@@ -889,9 +891,8 @@ final class CircuitsRenderer {
     private func syncStage(_ model: CircuitsModel, dt: Double) {
         let stage = model.stage
         let target = Float(stage.top)
-        var top = stageTop ?? target
-        top += (target - top) * Float(min(dt * 6, 1))
-        if abs(target - top) < 0.0005 { top = target }
+        // The house ease, so a 0.9 m disc does not glide under Reduce Motion.
+        let top = Motion.ease(stageTop ?? target, toward: target, dt: dt, rate: 6)
         stageTop = top
         stageRoot.position = SIMD3(Float(stage.center.x), top, Float(stage.center.y))
         stageRoot.orientation = simd_quatf(angle: Float(stage.yaw), axis: [0, 1, 0])
@@ -1260,6 +1261,16 @@ final class CircuitsRenderer {
                 visual.labelText = text
             }
             visual.labelPivot.isEnabled = !text.isEmpty
+            // Its value and its state, spoken — a switch's open or closed
+            // and a blown fuse are otherwise only seen.
+            let spoken = Self.spokenState(for: component)
+            if visual.spokenState != spoken {
+                visual.spokenState = spoken
+                SpatialActions.republish(value: spoken, on: visual.holder)
+                if let lever = visual.lever {
+                    SpatialActions.republish(value: component.isClosed ? "closed" : "open", on: lever)
+                }
+            }
 
             switch component.kind {
             case .bulb:
@@ -1475,17 +1486,29 @@ final class CircuitsRenderer {
         }
     }
 
+    /// A part's value and state as VoiceOver says them.
+    static func spokenState(for component: CircuitsModel.Component) -> String {
+        var words: [String] = []
+        let value = labelText(for: component)
+        if !value.isEmpty { words.append(PhysicsFormat.spoken(value)) }
+        switch component.kind {
+        case .switcher: words.append(component.isClosed ? "closed" : "open")
+        case .fuse where component.failed: words.append("blown")
+        case .led where component.failed: words.append("burned out")
+        case .resistor where component.failed: words.append("scorched")
+        default: break
+        }
+        return words.joined(separator: ", ")
+    }
+
     private func makeVisual(for component: CircuitsModel.Component) -> ComponentVisual {
         // The holder is the manipulation target, so a carried part brings
         // its contacts, label and halo along.
         let holder = Entity()
         holder.name = component.id.uuidString
         holder.position = SIMD3<Float>(component.position)
-        var accessibility = AccessibilityComponent()
-        accessibility.isAccessibilityElement = true
-        accessibility.label = LocalizedStringResource(
-            stringLiteral: "\(component.kind.displayName). Drag to move; pull from its terminals to wire.")
-        holder.components.set(accessibility)
+        // Its name, not its id: the touch target's attach below keeps it.
+        SpatialActions.describe(holder, label: component.kind.displayName)
         viewRoot.addChild(holder)
 
         // The module: the part on its carrier, its two brass contacts and its
@@ -1529,11 +1552,9 @@ final class CircuitsRenderer {
                 activate: { [weak self] in self?.onTerminalAction?(key) })
             // "Activate this, then another" is true for VoiceOver's tap-tap path
             // (`voiceOverWire`).
-            var terminalAccessibility = AccessibilityComponent()
-            terminalAccessibility.isAccessibilityElement = true
-            terminalAccessibility.label = LocalizedStringResource(stringLiteral:
-                "\(component.kind.displayName) terminal. Activate this, then another terminal, to wire them.")
-            terminal.components.set(terminalAccessibility)
+            SpatialActions.describe(terminal, label:
+                "\(component.kind.displayName), \(end == 0 ? "first" : "second") terminal. "
+                + "Activate this, then another terminal, to wire them.")
             GroundingShadows.cast(on: terminal)
         }
 
@@ -1569,10 +1590,6 @@ final class CircuitsRenderer {
             // The blade pivots between the cheeks; the tap target is the
             // pivot, so the whole blade is pinchable.
             pivot.name = "k-\(component.id.uuidString)"
-            var leverAccessibility = AccessibilityComponent()
-            leverAccessibility.isAccessibilityElement = true
-            leverAccessibility.label = "Switch lever. Pinch to open or close the circuit."
-            pivot.components.set(leverAccessibility)
             // Measured after the blade exists, so it does not bulge below the
             // switch and take the pinches meant for the contacts. Set
             // directly: the pivot is not a carried object.
@@ -1859,10 +1876,6 @@ final class CircuitsRenderer {
                 // transforms only.
                 entity = ModelEntity()
                 entity.name = "w-\(wire.id.uuidString)"
-                var accessibility = AccessibilityComponent()
-                accessibility.isAccessibilityElement = true
-                accessibility.label = "Wire. Pinch an end and pull to move it."
-                entity.components.set(accessibility)
                 // The activation removes the wire (a gesture VoiceOver cannot make by
                 // pulling) — arming on the first, as every destructive verb does;
                 // physical taps never fire this.

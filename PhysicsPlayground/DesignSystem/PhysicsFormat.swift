@@ -139,6 +139,80 @@ nonisolated enum PhysicsFormat {
         return "\(fixed(mantissa, decimals: 2)) × 10\(superscript(exponent))"
     }
 
+    // MARK: Spoken
+
+    /// What VoiceOver should say for a display string: "6.0 µC" as "6.0
+    /// microcoulombs", "24 Ω" as "24 ohms", "3.5 × 10²²" as "3.5 times 10 to
+    /// the 22". VoiceOver reads Ω as "omega", skips superscripts and says
+    /// "m/s²" letter by letter; the screen keeps the symbols.
+    static func spoken(_ display: String) -> String {
+        guard !display.isEmpty else { return display }
+        let tokens = display
+            .replacingOccurrences(of: "\u{2212}", with: "-")
+            .split(separator: " ", omittingEmptySubsequences: true)
+            .map(String.init)
+        var words: [String] = []
+        for token in tokens {
+            if let unit = spokenUnits[token] {
+                words.append(unit)
+                continue
+            }
+            switch token {
+            case "×": words.append("times"); continue
+            case "·": words.append(","); continue
+            case "±": words.append("plus or minus"); continue
+            default: break
+            }
+            words.append(spokenNumber(token))
+        }
+        return words.joined(separator: " ").replacingOccurrences(of: " ,", with: ",")
+    }
+
+    /// A number with its marks spoken: a leading minus, a superscript
+    /// exponent ("10²²"), a trailing degree or percent sign.
+    private static func spokenNumber(_ token: String) -> String {
+        var text = token
+        var suffix = ""
+        if text.hasSuffix("°") { text.removeLast(); suffix = " degrees" }
+        else if text.hasSuffix("%") { text.removeLast(); suffix = " percent" }
+        let exponentDigits: [Character: Character] = [
+            "⁰": "0", "¹": "1", "²": "2", "³": "3", "⁴": "4",
+            "⁵": "5", "⁶": "6", "⁷": "7", "⁸": "8", "⁹": "9", "⁻": "-",
+        ]
+        if let start = text.firstIndex(where: { exponentDigits[$0] != nil }) {
+            let base = String(text[..<start])
+            let exponent = String(text[start...].compactMap { exponentDigits[$0] })
+            text = "\(base) to the \(exponent)"
+        }
+        if text.hasPrefix("-"), text.count > 1 {
+            text = "minus " + text.dropFirst()
+        }
+        return text.replacingOccurrences(of: "to the -", with: "to the minus ") + suffix
+    }
+
+    /// Every unit symbol the app puts on screen, as words.
+    private static let spokenUnits: [String: String] = [
+        "Ω": "ohms", "kΩ": "kilohms", "MΩ": "megohms",
+        "V": "volts", "mV": "millivolts", "kV": "kilovolts",
+        "A": "amps", "mA": "milliamps", "µA": "microamps",
+        "W": "watts", "mW": "milliwatts",
+        "F": "farads", "mF": "millifarads", "µF": "microfarads", "nF": "nanofarads",
+        "H": "henries", "mH": "millihenries",
+        "C": "coulombs", "µC": "microcoulombs", "nC": "nanocoulombs",
+        "Hz": "hertz", "J": "joules", "mJ": "millijoules", "µJ": "microjoules",
+        "N": "newtons", "N/m": "newtons per metre", "N/C": "newtons per coulomb",
+        "V/m": "volts per metre", "T": "tesla", "mT": "millitesla", "µT": "microtesla",
+        "A·m²": "amp square metres",
+        "m": "metres", "cm": "centimetres", "mm": "millimetres", "km": "kilometres",
+        "AU": "astronomical units",
+        "s": "seconds", "ms": "milliseconds", "µs": "microseconds", "min": "minutes",
+        "m/s": "metres per second", "km/s": "kilometres per second",
+        "m/s²": "metres per second squared", "rad/s": "radians per second",
+        "kg": "kilograms", "g": "grams", "rpm": "revolutions per minute",
+        "yr": "years", "days": "days",
+        "nm": "nanometres", "°": "degrees", "%": "percent",
+    ]
+
     // MARK: States
 
     /// One spelling for a switched state, everywhere.

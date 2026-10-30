@@ -70,6 +70,7 @@ struct MagnetismSpaceView: View {
                       position: Self.coilWellAnchor,
                       spawn: { point in model.addCoil(at: point) }),
             ])
+            sources.spawnSpace = renderer.viewRoot
             renderer.viewRoot.addChild(sources.root)
             renderer.viewRoot.addChild(bloom.root)
             wells = sources

@@ -52,6 +52,10 @@ struct ModuleHostView: View {
                     Text(module.title)
                         .font(.title2.bold())
                         .lineLimit(1)
+                        // "Orbital Me…" at the largest sizes otherwise; the bar
+                        // has no room to grow beside the window.
+                        .minimumScaleFactor(0.6)
+                        .accessibilityAddTraits(.isHeader)
                 }
 
                 Spacer(minLength: 12)
@@ -109,6 +113,7 @@ struct ModuleHostView: View {
                             withAnimation(.easeOut(duration: 0.2)) {
                                 showInRoomFailed = true
                             }
+                            AccessibilityNotification.Announcement("The room couldn't open.").post()
                         }
                     }
                 }

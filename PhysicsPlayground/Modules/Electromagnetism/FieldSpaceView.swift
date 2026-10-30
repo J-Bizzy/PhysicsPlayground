@@ -125,12 +125,14 @@ struct FieldSpaceView: View {
                   label: "Charge +",
                   preview: { FieldRenderer.chargePreview(isPositive: true) },
                   position: SIMD3<Float>(FieldInstrumentLayout.wellAnchor(index: 0)),
-                  spawn: { model.addCharge(positive: true, at: $0) }),
+                  spawn: { model.addCharge(positive: true, at: $0) },
+                  placeWithoutHands: { Self.placeCharge(positive: true, in: model) }),
             .init(name: "Negative charge", tint: DesignTokens.Palette.negativeUI,
                   label: "Charge −",
                   preview: { FieldRenderer.chargePreview(isPositive: false) },
                   position: SIMD3<Float>(FieldInstrumentLayout.wellAnchor(index: 1)),
-                  spawn: { model.addCharge(positive: false, at: $0) }),
+                  spawn: { model.addCharge(positive: false, at: $0) },
+                  placeWithoutHands: { Self.placeCharge(positive: false, in: model) }),
             .init(name: "Test charge", tint: DesignTokens.Palette.probePositiveUI,
                   label: "Test charge",
                   preview: { FieldRenderer.probePreview(isPositive: true) },
@@ -140,10 +142,20 @@ struct FieldSpaceView: View {
                       model.probeIsPositive = true
                       model.holdProbe(at: point)
                       return Self.probeWellID
-                  }),
+                  },
+                  // A hand lets the probe fly; VoiceOver lets go of it at once.
+                  settle: { _ in model.releaseProbe() }),
         ])
+        wells.spawnSpace = renderer.viewRoot
         renderer.viewRoot.addChild(wells.root)
         self.wells = wells
+    }
+
+    /// VoiceOver's charge: on the ring round the field's centre that
+    /// `addCharge(positive:)` walks, so a second does not land on the first.
+    private static func placeCharge(positive: Bool, in model: FieldModel) -> UUID? {
+        model.addCharge(positive: positive)
+        return model.selectedChargeID
     }
 
     // MARK: Per frame

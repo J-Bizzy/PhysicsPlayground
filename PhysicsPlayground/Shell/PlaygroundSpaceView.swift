@@ -120,8 +120,8 @@ struct PlaygroundSpaceView: View {
                 circuits.select(id: resistor)
             }
         }
-        // `-circAC 3`: an AC source across a bulb at that many hertz, the
-        // source selected so its frequency rail hangs under it.
+        // `-circAC 1.5`: an AC source across a bulb at that many hertz (clamped
+        // to the rail), the source selected so its frequency rail hangs under it.
         if defaults.object(forKey: "circAC") != nil {
             let circuits = appModel.circuitsModel
             circuits.clearBench()

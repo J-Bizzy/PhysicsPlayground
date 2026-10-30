@@ -250,19 +250,23 @@ field it draws carries the warning.)
   which is where a rejected option belongs. A plaque is **one solid, not a
   stack** — held by `testThePlaqueIsASingleSolid`.
   (This said "the other three voices stay in the enum" until 2026-08-09.)
-- **Bench labels (2026-10-14).** Each exhibit's name is lit into its
-  terrace's dark front edge, under the mount, in the lab's accent at
-  `PlateStyle.exhibitLabelSize` (`HubScene.benchLabel`). The bench is the
-  backing a floating card was refused for. A label never moves: 0.78 at
-  rest, full while faced, a third while its lab is on the pad.
-- **Name plates.** The label voice on instruments in a lab — wells,
-  plates, petals, rails. `HubScene.namePlate` returns a pill **centred on its own
-  origin** — place it by its edge (`namePlateWidth`) or it straddles whatever
-  it names.
+- **Portal names.** The system's own type on a glass capsule with a dot
+  of the lab's colour (`PortalLabel`). (Bench labels lit into a terrace,
+  `HubScene.benchLabel`, went with the terraces.)
+- **Name plates.** The label voice on instruments in a lab — wells, the
+  parts shelf's header, the multimeter, the time reel.
+  `HubScene.namePlate` returns a pill **centred on its own origin** — place
+  it by its edge (`namePlateWidth`) or it straddles whatever it names.
 - **Module promise.** One line per module (`HubDomains.promise`): what you
   *do*, never a syllabus entry.
-- **Minimum size.** Nothing below visionOS `body`; semantic fonts via
-  `DesignTokens.TypeScale` so Dynamic Type works.
+- **Minimum size, windows.** Semantic fonts via `DesignTokens.TypeScale`
+  so Dynamic Type works; nothing below `footnote`. At the accessibility
+  sizes a control's name wraps (`ControlTitleLines`) and a row of
+  controls stacks (`ViewThatFits`) — a name never ends in "…".
+- **Spoken.** What VoiceOver says for a number goes through
+  `PhysicsFormat.spoken`: "24 ohms", "6.0 microcoulombs", "3.5 times 10
+  to the 22". A label is written with `SpatialActions.describe`, never a
+  fresh `AccessibilityComponent` (`AccessibilityWriteCriterionTests`).
 - **Numbers.** One canon: `DesignSystem/PhysicsFormat`. Fixed-point at a
   named house precision, SI prefixes chosen by magnitude (`47.0 µT`, not
   `0.0000470 T`), angles, scientific notation, and one spelling of a
@@ -295,6 +299,8 @@ All hub motion ticks from `SceneEvents.Update` — never `RealityView`'s
 
 **Reduce motion** follows the **system** setting only — `accessibilityReduceMotion`.
 The in-app duplicate was deleted; there is no `reduceMotion` in `AppSettings`.
+**Nothing flashes faster than three times a second** (WCAG 2.3.1): the AC
+source stops at 1.5 Hz because a bulb on it brightens twice a cycle.
 Under stillness there is no arrival — the portals fade in — the previews
 park at their rest pose, and the wordmark's letters hold still.
 

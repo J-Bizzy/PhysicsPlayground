@@ -1139,9 +1139,6 @@ final class KinematicsRenderer {
     // MARK: Helpers
 
     private static func setAccessibility(on entity: Entity, label: String) {
-        var accessibility = AccessibilityComponent()
-        accessibility.isAccessibilityElement = true
-        accessibility.label = LocalizedStringResource(stringLiteral: label)
-        entity.components.set(accessibility)
+        SpatialActions.describe(entity, label: label)
     }
 }

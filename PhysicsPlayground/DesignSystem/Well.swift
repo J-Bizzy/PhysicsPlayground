@@ -32,12 +32,20 @@ final class Well {
         /// For a one-of-a-kind object parked here rather than minted here:
         /// hands over the existing object instead of calling `spawn`.
         var handOver: (@MainActor (SIMD3<Double>) -> Void)?
+        /// VoiceOver only: lets go of what `spawn` made, for a spawn that
+        /// is born held (a hand always lets go; VoiceOver never would).
+        var settle: (@MainActor (UUID) -> Void)?
+        /// VoiceOver only: places one where the lab would want it with no
+        /// hand to say where, instead of stacking every one at the mouth.
+        var placeWithoutHands: (@MainActor () -> UUID?)?
 
         init(name: String, tint: UIColor, label: String,
              preview: @escaping @MainActor () -> Entity,
              position: SIMD3<Float>,
              spawn: @escaping (SIMD3<Double>) -> UUID?,
-             handOver: (@MainActor (SIMD3<Double>) -> Void)? = nil) {
+             handOver: (@MainActor (SIMD3<Double>) -> Void)? = nil,
+             settle: (@MainActor (UUID) -> Void)? = nil,
+             placeWithoutHands: (@MainActor () -> UUID?)? = nil) {
             self.name = name
             self.tint = tint
             self.label = label
@@ -45,6 +53,8 @@ final class Well {
             self.position = position
             self.spawn = spawn
             self.handOver = handOver
+            self.settle = settle
+            self.placeWithoutHands = placeWithoutHands
         }
     }
 
@@ -170,6 +180,11 @@ final class Well {
 
     let root = Entity()
 
+    /// The entity whose frame `spawn` takes its points in — the frame the
+    /// lab converts a hand into before `pull`. Nil is the scene. Only the
+    /// VoiceOver path reads it; a hand arrives already converted.
+    var spawnSpace: Entity?
+
     /// The strip the sources ride — the only thing that moves on a scroll.
     /// Always `root`'s first child.
     private let rack = Entity()
@@ -205,15 +220,15 @@ final class Well {
             rack.addChild(source)
             sources.append(source)
             previews.append(preview)
-            // VoiceOver has no hand position, so an activation spawns just
-            // in front of and above the source, where a short pull would.
+            // VoiceOver has no hand position, so an activation places one
+            // where the lab would want it or, failing that, just in front of
+            // and above the source, where a short pull would — in the frame
+            // the lab's `spawn` reads. Then it lets go, as a hand would.
             SpatialActions.attach(
                 to: source, label: spec.label,
                 activate: { [weak self, weak source] in
                     guard let self, let source else { return }
-                    let origin = source.position(relativeTo: nil)
-                        + SIMD3<Float>(0, 0.06, 0.10)
-                    _ = self.pull(source, at: SIMD3<Double>(origin))
+                    self.pullWithoutHands(source, spec: spec)
                 })
         }
     }
@@ -543,6 +558,23 @@ final class Well {
         return id
     }
 
+    /// VoiceOver's pull: no hand, so no place but the lab's own or the
+    /// mouth's, and nothing left held.
+    private func pullWithoutHands(_ source: Entity, spec: Spec) {
+        let id: UUID?
+        if let place = spec.placeWithoutHands {
+            guard let index = sources.firstIndex(where: { $0 === source }) else { return }
+            id = place()
+            if id == nil { refusal[index] = 1; return }
+            dip[index] = 1
+            SoundPalette.play(.pop, on: source, volume: 0.5)
+        } else {
+            let origin = source.position(relativeTo: spawnSpace) + SIMD3<Float>(0, 0.06, 0.10)
+            id = pull(source, at: SIMD3<Double>(origin))
+        }
+        if let id { spec.settle?(id) }
+    }
+
     private static func sourceName(of entity: Entity, under rack: Entity) -> String? {
         var current: Entity? = entity
         while let candidate = current {
@@ -586,11 +618,8 @@ final class Well {
 
         plate.position = [0, bounds.min.y - 0.034, 0]
 
-        var accessibility = AccessibilityComponent()
-        accessibility.isAccessibilityElement = true
-        accessibility.label = LocalizedStringResource(
-            stringLiteral: "\(spec.label). Pinch and pull to make one.")
-        source.components.set(accessibility)
+        // Activate makes one (`init`'s attach); the label is the slot's own words.
+        SpatialActions.describe(source, label: spec.label)
         return (source, preview)
     }
 }

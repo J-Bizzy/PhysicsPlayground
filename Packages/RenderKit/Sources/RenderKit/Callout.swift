@@ -167,12 +167,7 @@ public final class Callout {
             root.components.remove(AccessibilityComponent.self)
             return
         }
-        var accessibility = AccessibilityComponent()
-        accessibility.isAccessibilityElement = true
-        accessibility.label = LocalizedStringResource(
-            stringLiteral: accessibilityName ?? "Reading")
-        accessibility.value = LocalizedStringResource(stringLiteral: text)
-        root.components.set(accessibility)
+        SpatialActions.describe(root, label: accessibilityName ?? "Reading", value: text)
     }
 
     public var isEnabled: Bool {

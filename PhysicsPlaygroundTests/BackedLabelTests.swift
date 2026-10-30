@@ -151,6 +151,18 @@ final class BackedLabelTests: XCTestCase {
         return count
     }
 
+    /// A readout with line breaks stands its lines one over another, as
+    /// the whole-string mesh did — not run together on one line.
+    func testALineBreakStartsANewLine() {
+        let oneLine = GlyphRun(size: 0.02, color: .white).set("Caught 2.31 m/s")
+        let twoLines = GlyphRun(size: 0.02, color: .white).set("Caught\n2.31 m/s")
+        XCTAssertGreaterThan(twoLines.extents.y, oneLine.extents.y * 1.6,
+                             "the second line stands under the first")
+        XCTAssertLessThan(twoLines.extents.x, oneLine.extents.x * 0.75,
+                          "two short lines are narrower than one long one")
+        XCTAssertEqual(twoLines.center.x, 0, accuracy: 1e-4, "centred on the run")
+    }
+
     private final class ValueBox {
         var value: Double = 20
     }

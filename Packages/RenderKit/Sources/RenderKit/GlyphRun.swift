@@ -43,34 +43,54 @@ public final class GlyphRun {
         for glyph in glyphs { glyph.model?.materials = [material] }
     }
 
-    /// Lays `text` out on one line, centred on `root`.
+    /// Lays `text` out centred on `root`: one line, or one per "\n", each
+    /// centred over the next as the whole-string mesh set them. A "\n"
+    /// was a zero-width character here until 2026-10-27, and three
+    /// readouts ran their lines together ("Caught2.31 m/s").
     @discardableResult
     public func set(_ text: String) -> BoundingBox {
-        var pen: Float = 0
         var lower = SIMD3<Float>(repeating: .greatestFiniteMagnitude)
         var upper = SIMD3<Float>(repeating: -.greatestFiniteMagnitude)
         var used = 0
-        var placed: [(entity: ModelEntity, x: Float)] = []
-        for character in text {
-            let glyph = Self.glyph(character, size: size)
-            if let mesh = glyph.mesh {
-                let entity: ModelEntity
-                if used < glyphs.count {
-                    entity = glyphs[used]
-                    if entity.model?.mesh !== mesh { entity.model?.mesh = mesh }
-                    entity.isEnabled = true
-                } else {
-                    entity = ModelEntity(mesh: mesh, materials: [material])
-                    root.addChild(entity)
-                    glyphs.append(entity)
+        var placed: [(entity: ModelEntity, position: SIMD3<Float>)] = []
+        let leading = Float(Self.font(size: size).lineHeight)
+        for (row, line) in text.split(separator: "\n", omittingEmptySubsequences: false).enumerated() {
+            let baseline = -Float(row) * leading
+            let lineStart = placed.count
+            var lineLower = Float.greatestFiniteMagnitude
+            var lineUpper = -Float.greatestFiniteMagnitude
+            var pen: Float = 0
+            for character in line {
+                let glyph = Self.glyph(character, size: size)
+                if let mesh = glyph.mesh {
+                    let entity: ModelEntity
+                    if used < glyphs.count {
+                        entity = glyphs[used]
+                        if entity.model?.mesh !== mesh { entity.model?.mesh = mesh }
+                        entity.isEnabled = true
+                    } else {
+                        entity = ModelEntity(mesh: mesh, materials: [material])
+                        root.addChild(entity)
+                        glyphs.append(entity)
+                    }
+                    used += 1
+                    placed.append((entity, SIMD3(pen, baseline, 0)))
+                    let box = mesh.bounds
+                    lineLower = min(lineLower, box.min.x + pen)
+                    lineUpper = max(lineUpper, box.max.x + pen)
+                    lower.y = min(lower.y, box.min.y + baseline)
+                    upper.y = max(upper.y, box.max.y + baseline)
+                    lower.z = min(lower.z, box.min.z)
+                    upper.z = max(upper.z, box.max.z)
                 }
-                used += 1
-                placed.append((entity, pen))
-                let box = mesh.bounds
-                lower = simd_min(lower, box.min + SIMD3(pen, 0, 0))
-                upper = simd_max(upper, box.max + SIMD3(pen, 0, 0))
+                pen += glyph.advance
             }
-            pen += glyph.advance
+            guard placed.count > lineStart else { continue }
+            // Each line centred on the run's axis.
+            let shift = -(lineLower + lineUpper) / 2
+            for index in lineStart..<placed.count { placed[index].position.x += shift }
+            lower.x = min(lower.x, lineLower + shift)
+            upper.x = max(upper.x, lineUpper + shift)
         }
         for spare in glyphs.dropFirst(used) { spare.isEnabled = false }
         guard used > 0 else {
@@ -79,8 +99,8 @@ public final class GlyphRun {
         }
         // Centre the run on the root, as the whole-string mesh was.
         let centre = SIMD3((lower.x + upper.x) / 2, (lower.y + upper.y) / 2, 0)
-        for (entity, x) in placed {
-            entity.position = SIMD3(x, 0, 0) - centre
+        for (entity, position) in placed {
+            entity.position = position - centre
         }
         bounds = BoundingBox(min: lower - centre, max: upper - centre)
         return bounds

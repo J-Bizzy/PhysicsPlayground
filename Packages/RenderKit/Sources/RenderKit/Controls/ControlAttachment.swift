@@ -150,7 +150,10 @@ public enum RoomControlFootprint {
     /// Half the width of the widest of these labels as a button or toggle
     /// with a symbol — the control is centred on its anchor.
     public static func halfWidth(forLongestOf labels: [String]) -> Float {
-        let font = UIFont.systemFont(ofSize: 17, weight: .medium)
+        // At the wearer's text size: a control in the room grows with it,
+        // and a bank spaced for 17 pt overlapped at the larger sizes.
+        let font = UIFontMetrics(forTextStyle: .body)
+            .scaledFont(for: UIFont.systemFont(ofSize: 17, weight: .medium))
         let widest = labels
             .map { ($0 as NSString).size(withAttributes: [.font: font]).width }
             .max() ?? 0

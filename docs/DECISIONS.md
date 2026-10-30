@@ -16,6 +16,39 @@ A running log of consequential decisions — architectural, physical, or product
 
 (The template sat stranded at line 309, mid-log between two 2026-07-29 entries, until 2026-08-01.)
 
+## 2026-10-27 — A readability and accessibility pass before submission
+
+**Decision:** Four read-only audits (window UI, type in the room, VoiceOver in the room, motion and colour) and one pass of fixes. The owner asked to "make sure all UI is readable and accessible."
+
+**Context:** The audits found:
+- **A flashing hazard.** The AC source ran to 5 Hz. A bulb on it brightened ten times a second, and an LED flashed red five times a second. That is over WCAG 2.3.1's limit of three flashes a second.
+- **VoiceOver could not activate ten kinds of object.** Ten objects across seven labs replaced the component `attach` had written. The bob, magnets, charges, planets, optics pieces and others were read out but never offered Activate. The routing tests stayed green because they performed the action directly.
+- **Wells broke under VoiceOver.** Circuit parts were read out as UUIDs. A well's VoiceOver spawn could stay held for ever (the test charge, the ball) or land in the wrong frame.
+- **Accent type was unreadable.** Accent letters on a 0.58 plate measured 1.2–1.9:1 over a white wall, at a third of a degree.
+- **Line breaks were ignored.** `GlyphRun` dropped every "\n", so multi-line readouts ran together.
+- **Names were cut off.** Every name in More, and on the home's More, truncated at the accessibility text sizes.
+
+**Consequences:**
+- **Flashing:** `CircuitsModel.acFrequencyRange` is 0.1–1.5 Hz, clamped on every write and every restore.
+- **VoiceOver labels:** they are written through `SpatialActions.describe`. `AccessibilityWriteCriterionTests` bans a fresh component anywhere else. `assertObjectsRoute` now also requires that an activatable object advertise Activate and not read out an id.
+- **Wells under VoiceOver:**
+  - `Well.spawnSpace` tells a well the frame its lab's `spawn` reads.
+  - `settle` lets go of a spawn that is born held.
+  - `placeWithoutHands` places a charge on the ring `addCharge(positive:)` walks, and gives a pendulum a 15° swing.
+- **Spoken text:**
+  - `PhysicsFormat.spoken` speaks units in words.
+  - Circuit parts, the switch, the coil's LED, charges and planets publish their state.
+  - Arming and room failures are announced.
+- **Windows:** names wrap and rows stack at the accessibility sizes only. The home's More falls back to symbols there, and the lab list scrolls.
+- **Comfort:** Effects volume reaches the continuous tones.
+- **The look stayed as it was (2026-10-28, owner's call: "I'm not a fan of it, I like what it was before").** The visible half of the pass was built, photographed, and taken back out:
+  - near-white type with an accent dot on a darker 0.85 plate, and 16 mm well labels;
+  - a strip behind the calm track's numbers, and the meter's note under its case;
+  - glass behind the lab list, sentence case on its buttons, brighter About and slider text;
+  - a thicker lit net, and a worded overload line.
+  The audit's contrast numbers for the room's labels (1.2–1.9:1 over a white wall) still stand, as a known limit of the house look.
+- **Not done here, and the larger gap:** moving an object with no hands. A VoiceOver user still cannot carry a magnet through the coil, place a charge or optics piece where they choose, aim the laser, or use the multimeter's probes. It needs a custom-actions lane (`AccessibilityComponent.customActions`, routed like Activate), which is new interaction design.
+
 ## 2026-10-26 — The home's cradle and circuit are the labs' own openings
 
 **Decision:** The Pendulums and Circuits miniatures on the home are now the scenes their labs open on, in the labs' own parts, at the labs' own size, scaled onto the stage. The owner asked for them "with the same style of what it was but better matching what is intiially shown in the labs".

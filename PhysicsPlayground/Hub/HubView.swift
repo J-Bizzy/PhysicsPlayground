@@ -19,6 +19,21 @@ struct HubView: View {
     @State private var openFailed = false
 
     var body: some View {
+        // Scrolls only once the largest type no longer fits the window; at
+        // the sizes it was drawn for it stands centred, as before.
+        ViewThatFits(in: .vertical) {
+            content
+            ScrollView { content }
+        }
+        .task {
+            // Cheap and idempotent; this view can appear without the space ever
+            // having opened.
+            SoundPalette.warmUp()
+            SoundPalette.masterVolume = appModel.settings.masterVolume
+        }
+    }
+
+    private var content: some View {
         VStack(spacing: 18) {
             Spacer(minLength: 12)
 
@@ -26,6 +41,7 @@ struct HubView: View {
                 VStack(spacing: 5) {
                     Text("Physics Playground")
                         .font(DesignTokens.TypeScale.wordmark())
+                        .accessibilityAddTraits(.isHeader)
                     Text("Room-scale physics labs, in your actual room.")
                         .font(DesignTokens.TypeScale.label)
                         .foregroundStyle(.secondary)
@@ -83,12 +99,6 @@ struct HubView: View {
         .frame(minWidth: 440, maxWidth: .infinity, minHeight: 200, maxHeight: .infinity)
         // Bare type over passthrough needs its own separation from the room.
         .shadow(color: .black.opacity(0.45), radius: 8, y: 2)
-        .task {
-            // Cheap and idempotent; this view can appear without the space ever
-            // having opened.
-            SoundPalette.warmUp()
-            SoundPalette.masterVolume = appModel.settings.masterVolume
-        }
     }
 
     /// Whether a UI test is driving the app. Not `#if DEBUG`-gated: the UI
@@ -108,6 +118,7 @@ struct HubView: View {
         let result = await openImmersiveSpace(id: PlaygroundSpaceView.spaceID)
         if case .error = result {
             withAnimation(.easeOut(duration: 0.2)) { openFailed = true }
+            AccessibilityNotification.Announcement("The room couldn't open.").post()
         }
     }
 }
@@ -169,6 +180,7 @@ struct HubCatalogList: View {
                             Text(domain.title)
                                 .font(.caption.weight(.semibold))
                                 .foregroundStyle(.secondary)
+                                .accessibilityAddTraits(.isHeader)
                         }
                         .padding(.leading, 4)
 

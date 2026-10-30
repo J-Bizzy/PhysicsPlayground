@@ -68,9 +68,13 @@ final class ToneVoice {
     func update(pitchHz: Double, loudness: Double, smoothing: Double = 0.12) {
         guard let controller else { return }
         let clampedLoudness = min(max(loudness, 0), 1)
-        let targetGain = clampedLoudness < 0.005
+        // Settings' effects volume reaches the voices too, as it does every
+        // one-shot: at zero the mains hum played on regardless until 2026-10-27.
+        let master = SoundPalette.masterVolume
+        let targetGain = clampedLoudness < 0.005 || master < 0.001
             ? floorDecibels - 20
             : floorDecibels + (ceilingDecibels - floorDecibels) * clampedLoudness
+                - 28 * (1 - min(master, 1))
         smoothedGain += (targetGain - smoothedGain) * smoothing
         smoothedPitch += (max(pitchHz, 20) - smoothedPitch) * smoothing
         controller.gain = Audio.Decibel(smoothedGain)

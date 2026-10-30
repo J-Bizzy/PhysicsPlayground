@@ -233,6 +233,29 @@ final class SpatialActionCriterionTests: XCTestCase {
                        "\(label) built no grabbable objects to test",
                        file: file, line: line)
 
+        // Performing the action is half of it: VoiceOver only offers
+        // Activate on an element that advertises it, and reads out the
+        // label it carries. A fresh `AccessibilityComponent` written after
+        // `attach` dropped the first (ten objects, until 2026-10-27), and
+        // `Grabbable` named circuit parts by their ids.
+        for target in targets where Self.actionable(target) {
+            guard let element = Self.element(above: target),
+                  let accessibility = element.components[AccessibilityComponent.self] else {
+                XCTFail("\(label): \(target.name) does something and says nothing",
+                        file: file, line: line)
+                continue
+            }
+            let spoken = Self.spokenLabel(accessibility)
+            XCTAssertTrue(accessibility.systemActions.contains(.activate), """
+                \(label): "\(spoken)" can be activated but does not advertise \
+                Activate, so VoiceOver never offers it. Write labels with \
+                `SpatialActions.describe`, never a fresh component.
+                """, file: file, line: line)
+            XCTAssertFalse(Self.looksLikeAnID(spoken),
+                           "\(label): an object is read out as \"\(spoken)\"",
+                           file: file, line: line)
+        }
+
         let before = taps()
         var routed = 0
         for target in targets where SpatialActions.activate(target) { routed += 1 }
@@ -244,6 +267,40 @@ final class SpatialActionCriterionTests: XCTestCase {
             \(label)'s objects declare an action that does not reach the \
             module's own tap routing.
             """, file: file, line: line)
+    }
+
+    /// Whether something on the walk up from `entity` performs an action.
+    private static func actionable(_ entity: Entity) -> Bool {
+        var current: Entity? = entity
+        while let candidate = current {
+            if candidate.components[SpatialActionComponent.self]?.activate != nil { return true }
+            current = candidate.parent
+        }
+        return false
+    }
+
+    /// The element VoiceOver lands on: the nearest entity at or above
+    /// `entity` that is an accessibility element.
+    private static func element(above entity: Entity) -> Entity? {
+        var current: Entity? = entity
+        while let candidate = current {
+            if candidate.components[AccessibilityComponent.self]?.isAccessibilityElement == true {
+                return candidate
+            }
+            current = candidate.parent
+        }
+        return nil
+    }
+
+    private static func spokenLabel(_ accessibility: AccessibilityComponent) -> String {
+        accessibility.label.map { String(localized: $0) } ?? ""
+    }
+
+    /// A UUID, whole or as a suffix ("pivot-…"), or nothing at all.
+    private static func looksLikeAnID(_ label: String) -> Bool {
+        label.isEmpty
+            || label.range(of: "[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}",
+                           options: .regularExpression) != nil
     }
 
     func testMagnetismObjectsRouteToTheModule() {

@@ -57,6 +57,31 @@ public enum SpatialActions {
                                                      adjust: adjust))
     }
 
+    /// Says what `entity` is to VoiceOver without touching what it can
+    /// do. The only way to write a label after `attach`: a fresh
+    /// `AccessibilityComponent` drops the `systemActions` it advertised,
+    /// and the object goes on being read out but stops answering Activate
+    /// — which is how ten objects in seven labs lost their rings until
+    /// 2026-10-27. `AccessibilityWriteCriterionTests` holds it.
+    public static func describe(_ entity: Entity, label: String, value: String? = nil) {
+        var accessibility = entity.components[AccessibilityComponent.self]
+            ?? AccessibilityComponent()
+        accessibility.isAccessibilityElement = true
+        accessibility.label = LocalizedStringResource(stringLiteral: label)
+        if let value {
+            accessibility.value = LocalizedStringResource(stringLiteral: value)
+        }
+        entity.components.set(accessibility)
+    }
+
+    /// The label a caller already wrote, if any — so `attach` from a
+    /// touch target keeps a name instead of reading out the entity's.
+    public static func existingLabel(of entity: Entity) -> String? {
+        guard let label = entity.components[AccessibilityComponent.self]?.label else { return nil }
+        let text = String(localized: label)
+        return text.isEmpty ? nil : text
+    }
+
     /// Re-publishes just the spoken value. Separate from `attach` because
     /// it is called on every state change, not at construction — a plate
     /// that publishes once reads its launch state forever.

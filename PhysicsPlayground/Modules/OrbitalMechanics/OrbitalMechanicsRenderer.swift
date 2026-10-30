@@ -238,10 +238,8 @@ final class OrbitalMechanicsRenderer {
                     guard let sphere else { return }
                     router.route?(sphere)
                 })
-            var accessibility = AccessibilityComponent()
-            accessibility.isAccessibilityElement = true
-            accessibility.label = "Celestial body. Grab to move it; throw it to set a new orbit."
-            sphere.components.set(accessibility)
+            // Renamed to the body it carries whenever the slot changes hands.
+            SpatialActions.describe(sphere, label: "Celestial body")
             container.addChild(sphere)
             return sphere
         }
@@ -339,10 +337,7 @@ final class OrbitalMechanicsRenderer {
             labelPivot.addChild(label.root)
             marker.addChild(labelPivot)
             marker.isEnabled = false
-            var accessibility = AccessibilityComponent()
-            accessibility.isAccessibilityElement = true
-            accessibility.label = "Lagrange point \(name)"
-            marker.components.set(accessibility)
+            SpatialActions.describe(marker, label: "Lagrange point \(name)")
             lagrangeMarkers.append(marker)
             systemRoot.addChild(marker)
         }
@@ -834,6 +829,10 @@ final class OrbitalMechanicsRenderer {
             if bodySlotIDs[index] != orbiting.id {
                 bodySlotIDs[index] = orbiting.id
                 slot.payload.name = orbiting.id.uuidString
+            }
+            if bodyNames[index] != orbiting.body.name {
+                bodyNames[index] = orbiting.body.name
+                SpatialActions.describe(slot.payload, label: orbiting.body.name)
             }
             ensureLabel(index)
             // The material key is the body's name, so this gate is "has this slot

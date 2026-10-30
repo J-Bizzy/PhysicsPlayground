@@ -78,7 +78,11 @@ public enum Grabbable {
         entity.components.set(CollisionComponent(shapes: [shape]))
         entity.components.set(HoverEffectComponent())
         if let activate {
-            SpatialActions.attach(to: entity, label: entity.name, activate: activate)
+            // A name the caller already gave wins: an entity's own name is
+            // usually an id, and VoiceOver read circuit parts out as UUIDs.
+            SpatialActions.attach(to: entity,
+                                  label: SpatialActions.existingLabel(of: entity) ?? entity.name,
+                                  activate: activate)
         }
         // Contact shadow grounds it against real surfaces (device-only;
         // the simulator has no room mesh to catch it).

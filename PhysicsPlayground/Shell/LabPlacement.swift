@@ -216,10 +216,8 @@ struct LabAnchorView: View {
         // highlight says the pinch will land.
         anchor.components.set(HoverEffectComponent(.highlight(.init(
             color: accent, strength: 0.6))))
-        var accessibility = AccessibilityComponent()
-        accessibility.isAccessibilityElement = true
-        accessibility.label = "Lab anchor. Drag it to move the whole lab to where you have room."
-        anchor.components.set(accessibility)
+        SpatialActions.describe(
+            anchor, label: "Lab anchor. Drag it to move the whole lab to where you have room.")
         anchor.isEnabled = false
         return anchor
     }

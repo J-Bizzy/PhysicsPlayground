@@ -23,9 +23,11 @@ struct AboutView: View {
                     colors: [HubDomain.electricity.color,
                              HubDomain.mechanics.color],
                     startPoint: .topLeading, endPoint: .bottomTrailing))
+                .accessibilityHidden(true)
 
             Text("Physics Playground")
                 .font(DesignTokens.TypeScale.wordmark(.title2))
+                .accessibilityAddTraits(.isHeader)
 
             Text("Room-scale physics labs. Real constants, exact solutions.")
                 .font(.callout)

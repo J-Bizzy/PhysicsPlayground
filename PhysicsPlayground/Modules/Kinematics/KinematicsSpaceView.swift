@@ -130,7 +130,10 @@ struct KinematicsSpaceView: View {
                           // letting go with a moving hand throws.
                           model.grabBall(id: id)
                           return id
-                      }),
+                      },
+                      // VoiceOver has no hand to throw it: let go and it waits, staged,
+                      // for the launcher's Fire.
+                      settle: { model.releaseBall(id: $0) }),
                 // The hoop: born at the hand and carried by the same gesture; nil at
                 // the budget fades the mouth in refusal.
                 .init(name: "Hoop",

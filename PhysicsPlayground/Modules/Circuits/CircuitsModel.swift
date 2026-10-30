@@ -96,7 +96,18 @@ final class CircuitsModel {
     /// The AC frequency when a part does not say otherwise; each source
     /// carries its own (`Component.acFrequency`).
     nonisolated static let acFrequency = 0.5
-    nonisolated static let acFrequencyRange = 0.1...5.0        // Hz
+    /// A bulb on AC flashes at twice the source's frequency (its power
+    /// goes as sin²) and an LED, conducting one half-cycle, at the
+    /// frequency itself. WCAG 2.3.1 allows three flashes a second, so the
+    /// source stops at 1.5 Hz: 5 Hz flashed a bulb ten times a second.
+    nonisolated static let acFrequencyRange = 0.1...1.5        // Hz
+
+    /// A frequency the rail can reach — what every write and every
+    /// restore goes through, so a bench saved under the old 5 Hz rail
+    /// cannot bring the flashing back.
+    nonisolated static func clampedACFrequency(_ hertz: Double) -> Double {
+        min(max(hertz, acFrequencyRange.lowerBound), acFrequencyRange.upperBound)
+    }
 
     /// The inductor as a coil: 0.07 m long with 0.019 m windings, so for
     /// an air core L = μ₀N²A/ℓ gives the turn count the field layer draws
@@ -407,8 +418,9 @@ final class CircuitsModel {
             }
             isClosed = try container.decodeIfPresent(Bool.self, forKey: .isClosed) ?? true
             capacitorVoltage = try container.decodeIfPresent(Double.self, forKey: .capacitorVoltage) ?? 0
-            acFrequency = try container.decodeIfPresent(Double.self, forKey: .acFrequency)
-                ?? CircuitsModel.acFrequency
+            acFrequency = CircuitsModel.clampedACFrequency(
+                try container.decodeIfPresent(Double.self, forKey: .acFrequency)
+                    ?? CircuitsModel.acFrequency)
         }
 
         /// Spelled out because the tolerant `init(from:)` suppresses the
@@ -1899,8 +1911,7 @@ final class CircuitsModel {
     func setACFrequency(id: UUID, _ hertz: Double) {
         guard let index = components.firstIndex(where: { $0.id == id }),
               components[index].kind == .acSource else { return }
-        components[index].acFrequency = min(max(hertz, Self.acFrequencyRange.lowerBound),
-                                            Self.acFrequencyRange.upperBound)
+        components[index].acFrequency = Self.clampedACFrequency(hertz)
     }
 
     /// Watts a part is dissipating right now, for the card's "of 2 W".
@@ -1987,7 +1998,7 @@ final class CircuitsModel {
             }
             component.isClosed = row.isClosed ?? true
             component.capacitorVoltage = row.capacitorVoltage ?? 0
-            component.acFrequency = row.acFrequency ?? Self.acFrequency
+            component.acFrequency = Self.clampedACFrequency(row.acFrequency ?? Self.acFrequency)
             components.append(component)
             for end in 0...1 {
                 survivingTerminals.append((Terminal(componentID: row.id, end: end),

@@ -23,13 +23,15 @@ struct SettingsView: View {
             VStack(alignment: .leading, spacing: DesignTokens.Panel.sectionSpacing) {
                 Text("Settings")
                     .font(DesignTokens.TypeScale.cardTitle)
+                    .accessibilityAddTraits(.isHeader)
 
                 ControlSection("Sound") {
                     ControlSlider("Effects volume", systemImage: "speaker.wave.2.fill",
                                   range: 0...1,
                                   read: { settings.masterVolume },
                                   write: { settings.masterVolume = $0 },
-                                  format: { "\(Int(($0 * 100).rounded())) %" })
+                                  format: { "\(Int(($0 * 100).rounded())) %" },
+                                  speak: { "\(Int(($0 * 100).rounded())) percent" })
                     ControlToggle("Lab room tone", systemImage: "waveform",
                                   presentation: .row, isOn: $settings.ambientAudio)
                 }

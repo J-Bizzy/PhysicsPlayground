@@ -22,7 +22,10 @@ struct LabMorePanel: View {
 
     /// Tall enough for the busiest lab at default type; the rest scrolls.
     private static let maxHeight: CGFloat = 760
-    private static let width: CGFloat = 400
+    /// 400 pt at default type, growing with it — but no wider than a
+    /// panel beside a window can stand, so the largest sizes wrap instead.
+    @ScaledMetric(relativeTo: .body) private var scaledWidth: CGFloat = 400
+    private var width: CGFloat { min(scaledWidth, 560) }
 
     var body: some View {
         @Bindable var appModel = appModel
@@ -64,22 +67,25 @@ struct LabMorePanel: View {
                                       range: 0...1,
                                       read: { appModel.roomDimming },
                                       write: { appModel.setDimming($0) },
-                                      format: { "\(Int(($0 * 100).rounded())) %" })
+                                      format: { "\(Int(($0 * 100).rounded())) %" },
+                                      speak: { "\(Int(($0 * 100).rounded())) percent" })
                             .disabled(appModel.surroundings == .deepSpace)
+                            .accessibilityHint(appModel.surroundings == .deepSpace
+                                               ? "There is no room to dim in deep space" : "")
                     }
 
-                    HStack(spacing: ControlMetrics.spacing) {
-                        ControlButton("Settings", systemImage: "gearshape") {
-                            openWindow(id: SettingsView.windowID)
+                    // Side by side while they fit; stacked at the sizes where
+                    // side by side would cut "Reset lab" to "Res…".
+                    ViewThatFits(in: .horizontal) {
+                        HStack(spacing: ControlMetrics.spacing) {
+                            settingsButton
+                            Spacer(minLength: 0)
+                            resetButton
                         }
-                        Spacer(minLength: 0)
-                        // Arms first: in Circuit Workshop it wipes a bench that
-                        // persists across launches.
-                        ControlButton("Reset lab", systemImage: "arrow.counterclockwise",
-                                      emphasis: .destructive, confirms: true) {
-                            appModel.resetActiveModule(module)
+                        VStack(alignment: .leading, spacing: ControlMetrics.spacing) {
+                            settingsButton
+                            resetButton
                         }
-                        .accessibilityHint("Returns this lab to how it opened")
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -98,7 +104,23 @@ struct LabMorePanel: View {
             #endif
             }
         }
-        .frame(width: Self.width)
+        .frame(width: width)
+    }
+
+    private var settingsButton: some View {
+        ControlButton("Settings", systemImage: "gearshape") {
+            openWindow(id: SettingsView.windowID)
+        }
+    }
+
+    /// Arms first: in Circuit Workshop it wipes a bench that persists
+    /// across launches.
+    private var resetButton: some View {
+        ControlButton("Reset lab", systemImage: "arrow.counterclockwise",
+                      emphasis: .destructive, confirms: true) {
+            appModel.resetActiveModule(module)
+        }
+        .accessibilityHint("Returns this lab to how it opened")
     }
 
     private static let valuesID = "values"
@@ -123,8 +145,12 @@ struct MoreItemView: View {
             VStack(alignment: .leading, spacing: 8) {
                 Text(title)
                     .font(.body.weight(.medium))
+                    .accessibilityHidden(true)
                 ChoiceRow(options: options, selected: selected(), select: select)
             }
+            // "1×, toggle button" means nothing without the clock it sets.
+            .accessibilityElement(children: .contain)
+            .accessibilityLabel(title)
         case let .verbs(_, title, items, run):
             VStack(alignment: .leading, spacing: 8) {
                 Text(title)
@@ -138,12 +164,13 @@ struct MoreItemView: View {
                 }
             }
         case let .slider(adjustable, isEnabled):
+            let format = adjustable.format ?? {
+                PhysicsFormat.measurement($0, adjustable.unit, decimals: adjustable.decimals)
+            }
             ControlSlider(adjustable.label, range: adjustable.range,
                           read: adjustable.read, write: adjustable.write,
-                          format: adjustable.format ?? {
-                              PhysicsFormat.measurement($0, adjustable.unit,
-                                                        decimals: adjustable.decimals)
-                          })
+                          format: format,
+                          speak: { PhysicsFormat.spoken(format($0)) })
                 .disabled(!isEnabled())
         }
     }
@@ -168,17 +195,47 @@ private struct ChoiceRow: View {
     }
 }
 
+/// One reading as one VoiceOver stop: its words, its law on request,
+/// and the trait that tells VoiceOver it changes on its own.
+private struct ReadingAccessibility: ViewModifier {
+    let row: Reading
+
+    func body(content: Content) -> some View {
+        let element = content
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(ReadingsGrid.spoken(row))
+            .accessibilityAddTraits(.updatesFrequently)
+        if let law = ReadingsGrid.law(row) {
+            element.accessibilityCustomContent("Law", law)
+        } else {
+            element
+        }
+    }
+}
+
 /// The lab's live numbers, refreshed eight times a second: what the
 /// Physics box used to stand in the room.
 struct ReadingsGrid: View {
     let module: ModuleDescriptor
 
-    /// What VoiceOver says for a row: the reading, then its law, spoken
-    /// without the subscript markup.
+    @Environment(\.dynamicTypeSize) private var typeSize
+    @Environment(\.colorSchemeContrast) private var contrast
+
+    /// What VoiceOver says for a row: the reading, its units in words.
+    /// The law is there on request (`law`), not on every swipe.
     static func spoken(_ row: Reading) -> String {
-        let reading = "\(row.name): \(row.value) \(row.unit)"
-        guard let formula = row.formula else { return reading }
-        return reading + ". " + Formula.plain(formula)
+        PhysicsFormat.spoken("\(row.name): \(row.value) \(row.unit)")
+    }
+
+    /// The law under a reading, as VoiceOver's "more content".
+    static func law(_ row: Reading) -> String? {
+        row.formula.map { PhysicsFormat.spoken(Formula.plain($0)) }
+    }
+
+    /// The law's ink: dim so the column of numbers reads first, less dim
+    /// when the wearer has asked for more contrast.
+    private var lawStyle: HierarchicalShapeStyle {
+        contrast == .increased ? .secondary : .tertiary
     }
 
     var body: some View {
@@ -188,24 +245,50 @@ struct ReadingsGrid: View {
             // which set the grid in from the edge whenever a note below it
             // ran wider.
             VStack(alignment: .leading, spacing: ControlMetrics.spacing) {
+            if typeSize.isAccessibilitySize {
+                // Three columns cannot hold a number at these sizes: each
+                // reading stands as its name over its value.
+                ForEach(Array(rows.enumerated()), id: \.offset) { _, row in
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(row.name)
+                            .font(.callout)
+                            .foregroundStyle(.secondary)
+                        HStack(alignment: .firstTextBaseline, spacing: 8) {
+                            Text(row.value).font(.body.monospacedDigit())
+                            Text(row.unit).font(.callout).foregroundStyle(.secondary)
+                        }
+                        if let formula = row.formula {
+                            Text(Formula.attributed(formula))
+                                .font(.footnote.monospacedDigit())
+                                .foregroundStyle(lawStyle)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+                    .modifier(ReadingAccessibility(row: row))
+                }
+            } else {
             Grid(alignment: .leading, horizontalSpacing: 14, verticalSpacing: 6) {
                 ForEach(Array(rows.enumerated()), id: \.offset) { _, row in
                     GridRow {
+                        // The name cell speaks for the row: a modifier on the
+                        // GridRow lands on every cell, and the row was read
+                        // out three times.
                         Text(row.name)
                             .font(.callout)
                             .foregroundStyle(.secondary)
                             .lineLimit(1)
+                            .modifier(ReadingAccessibility(row: row))
                         Text(row.value)
                             .font(.body.monospacedDigit())
                             .gridColumnAlignment(.trailing)
                             .lineLimit(1)
+                            .accessibilityHidden(true)
                         Text(row.unit)
                             .font(.callout)
                             .foregroundStyle(.secondary)
                             .lineLimit(1)
+                            .accessibilityHidden(true)
                     }
-                    .accessibilityElement(children: .combine)
-                    .accessibilityLabel(Self.spoken(row))
                     // The law, under the number it governs: smaller and
                     // dimmer than the reading, so the column of numbers
                     // still reads first.
@@ -213,15 +296,16 @@ struct ReadingsGrid: View {
                         GridRow {
                             Text(Formula.attributed(formula))
                                 .font(.footnote.monospacedDigit())
-                                .foregroundStyle(.tertiary)
+                                .foregroundStyle(lawStyle)
                                 .fixedSize(horizontal: false, vertical: true)
                                 .gridCellColumns(3)
                                 .padding(.top, -3)
                                 .padding(.bottom, 2)
+                                .accessibilityHidden(true)
                         }
-                        .accessibilityHidden(true)
                     }
                 }
+            }
             }
             if let note = module.physicsNote() {
                 Text(note)

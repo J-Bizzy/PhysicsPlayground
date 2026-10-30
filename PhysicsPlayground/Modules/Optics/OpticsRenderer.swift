@@ -358,10 +358,7 @@ final class OpticsRenderer {
                                            guard let container else { return }
                                            self?.onObjectTap?(container)
                                        })
-        var accessibility = AccessibilityComponent()
-        accessibility.isAccessibilityElement = true
-        accessibility.label = LocalizedStringResource(stringLiteral: Self.spokenName(piece.kind))
-        container.components.set(accessibility)
+        SpatialActions.describe(container, label: Self.spokenName(piece.kind))
         viewRoot.addChild(container)
         pieceEntities[piece.id] = container
         return container
@@ -437,10 +434,7 @@ final class OpticsRenderer {
                                                guard let entity else { return }
                                                self?.onObjectTap?(entity)
                                            })
-            var accessibility = AccessibilityComponent()
-            accessibility.isAccessibilityElement = true
-            accessibility.label = LocalizedStringResource(stringLiteral: name)
-            entity.components.set(accessibility)
+            SpatialActions.describe(entity, label: name)
             viewRoot.addChild(entity)
         }
     }
@@ -471,10 +465,7 @@ final class OpticsRenderer {
         aimBead.addChild(bead)
         Grabbable.configureTouchTarget(
             aimBead, collisionRadius: Grabbable.sphereTargetRadius(baseRadius: 0.013, scale: 1))
-        var accessibility = AccessibilityComponent()
-        accessibility.isAccessibilityElement = true
-        accessibility.label = "Aim. Move it to turn the selected piece."
-        aimBead.components.set(accessibility)
+        SpatialActions.describe(aimBead, label: "Aim. Move it to turn the selected piece.")
         aimBead.isEnabled = false
         aimStalk.isEnabled = false
         viewRoot.addChild(aimStalk)

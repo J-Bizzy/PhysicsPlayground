@@ -94,7 +94,8 @@ contradicts this section, this section is current.
       wire in the coil; More → Magnetic field: a looping field over the
       coil, flipping when you reverse the battery, collapsing when you open
       the switch. Tap the AC source: a frequency slider hangs under it; at
-      3 Hz the bulb flickers and the capacitor lags. **[H]** Every part on
+      its top, 1.5 Hz, the bulb pulses three times a second — never faster
+      (the flash limit) — and the capacitor lags. **[H]** Every part on
       the shelf and on the bench reads as one milled family.
 - [ ] **5 · Orbital Mechanics** (Home, then the Orbits portal). The room
       goes to 0.85 and reads as entering space — nothing stands in it but
@@ -143,6 +144,36 @@ contradicts this section, this section is current.
       1.62 m since 2026-09-04 because at 2.0 m the bar crossed its cables.
 - [ ] **The cut test:** enter all seven labs in sequence; the room's
       brightness moves only at Orbital Mechanics, and ramps rather than steps.
+
+## ⟳ 2026-10-27 — readable and accessible
+
+With VoiceOver on (Settings › Accessibility), then off, then with the
+largest Dynamic Type and Increase Contrast.
+- [ ] **Every object in every lab answers a double-tap.** A cradle bob,
+      a magnet, a charge, a planet, an optics piece, a circuit part: each
+      opens its ring. Until this pass ten kinds were read out and could
+      not be activated. Nothing is read as a string of letters and digits.
+- [ ] **A well's double-tap makes one that is free.** Projectiles' ball
+      waits for Fire; Electric Fields' test charge flies; a charge lands
+      on a ring round the field, not on the last one; a pendulum comes out
+      swinging; Orbital Mechanics' world appears beside the well, not a
+      metre and a half off.
+- [ ] **States are spoken:** a switch says open or closed, a blown fuse
+      says blown, the coil's LED says which way the current runs, a planet
+      says its name, a charge says its size after the track moves.
+- [ ] **Units in words:** "24 ohms", "6.0 microcoulombs", "metres per
+      second squared" — never "omega" or letters.
+- [ ] **Reset lab armed** is announced, and so is its disarming.
+- [ ] **Largest text:** More's names wrap rather than end in "…", its
+      readings stand name over value, Settings and Reset stack; the home's
+      More falls back to four symbols; the lab list scrolls. At the
+      default size nothing looks different.
+- [ ] **A multi-line callout is on lines:** Projectiles' catch, Electric
+      Fields' capacitor, Circuits' true speed.
+- [ ] **Effects volume at zero** silences the mains hum and the orbit
+      chord too.
+- [ ] **AC at its top, 1.5 Hz:** the bulb pulses three times a second, no
+      faster.
 
 ## ⟳ 2026-10-20 — Deep space, and the room out of reach there
 
@@ -227,7 +258,8 @@ Run a Debug build from Xcode with `-frameLog 1` in the scheme's arguments and ke
       plainly secondary to the column of numbers?
 - [ ] **A long formula breaks before its numbers**, never in the middle
       of a term: Optics' least deviation, Pendulums' "Against".
-- [ ] **VoiceOver on a reading** speaks the value and then the law.
+- [ ] **VoiceOver on a reading** speaks the value, its units in words,
+      once; the law is under the rotor's "more content" (2026-10-27).
 - [ ] **Nothing in the room changed.** The laws are in More only; no lab
       writes an equation into the space.
 

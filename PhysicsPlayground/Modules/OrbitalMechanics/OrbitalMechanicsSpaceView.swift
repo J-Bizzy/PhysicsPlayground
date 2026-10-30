@@ -93,6 +93,7 @@ struct OrbitalMechanicsSpaceView: View {
             ])
             // Under systemRoot: every body position is in the system's display
             // space.
+            sources.spawnSpace = renderer.systemRoot
             renderer.systemRoot.addChild(sources.root)
             renderer.systemRoot.addChild(bloom.root)
             // The well is an instrument, not an object in the sky: it keeps its

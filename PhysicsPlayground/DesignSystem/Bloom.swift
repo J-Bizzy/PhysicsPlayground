@@ -752,10 +752,7 @@ final class Bloom {
             shapes: [Primitives.collisionSphere(radius: 0.016)]))
         bead.components.set(HoverEffectComponent())
         bead.components.set(GroundingShadowComponent(castsShadow: true))
-        var accessibility = AccessibilityComponent()
-        accessibility.isAccessibilityElement = true
-        accessibility.label = "Pull to change"
-        bead.components.set(accessibility)
+        SpatialActions.describe(bead, label: "Pull to change")
         bead.isEnabled = false
         return bead
     }

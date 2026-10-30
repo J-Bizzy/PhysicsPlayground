@@ -99,6 +99,11 @@ struct PendulumsSpaceView: View {
                           // Born hanging plumb, at rest: a pendulum pulled out by hand must hold
                           // still until the hand swings it.
                           model.addPendulum(angle: 0, at: point)
+                      },
+                      // With no hand to swing it, VoiceOver's comes out already swinging, 15°.
+                      placeWithoutHands: {
+                          model.addPendulum(angle: 15 * .pi / 180,
+                                            at: SIMD3<Double>(Self.wellAnchor) + SIMD3(0, 0.06, 0.10))
                       }),
                 // The chaotic one, as its own mouth: different physics, so a labelled
                 // object rather than a hidden modifier.

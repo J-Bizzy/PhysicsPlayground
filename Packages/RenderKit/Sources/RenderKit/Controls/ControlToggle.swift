@@ -61,7 +61,7 @@ public struct ControlToggle: View {
                 } else {
                     Text(title)
                         .font(.body.weight(.medium))
-                        .lineLimit(1)
+                        .modifier(ControlTitleLines())
                         .frame(minHeight: ControlMetrics.minimumTarget - 16)
                 }
             }

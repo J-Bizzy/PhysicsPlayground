@@ -127,6 +127,9 @@ final class MagnetismRenderer {
         let halo: Entity
         /// The LED's drawn state: 0 dark, ±1…±8 red or green levels.
         var level: Int = 0
+        /// The sign VoiceOver last heard: the colour is the only other
+        /// way to tell which way the current runs.
+        var spokenSign: Int = 0
     }
 
     private var coilVisuals: [UUID: CoilVisual] = [:]
@@ -217,10 +220,7 @@ final class MagnetismRenderer {
                                            guard let container else { return }
                                            self?.onObjectTap?(container)
                                        })
-        var accessibility = AccessibilityComponent()
-        accessibility.isAccessibilityElement = true
-        accessibility.label = "Coil. Push a magnet through it and its light shows the current: red one way, green the other."
-        container.components.set(accessibility)
+        SpatialActions.describe(container, label: "Pickup coil", value: "dark")
         viewRoot.addChild(container)
         return CoilVisual(container: container, dome: dome, glow: glow, light: light, halo: halo)
     }
@@ -240,6 +240,14 @@ final class MagnetismRenderer {
             if level != visual.level {
                 visual.level = level
                 Self.light(visual, level: level)
+            }
+            let sign = level.signum()
+            if sign != visual.spokenSign {
+                visual.spokenSign = sign
+                SpatialActions.republish(value: sign == 0 ? "dark"
+                                         : sign > 0 ? "lit red, current one way"
+                                                    : "lit green, current the other way",
+                                         on: visual.container)
             }
             coilVisuals[coil.id] = visual
         }
@@ -364,10 +372,7 @@ final class MagnetismRenderer {
                 guard let handCompass else { return }
                 self?.onObjectTap?(handCompass)
             })
-        var accessibility = AccessibilityComponent()
-        accessibility.isAccessibilityElement = true
-        accessibility.label = "Compass. Carry it around the magnets and watch the needle swing to the field."
-        handCompass.components.set(accessibility)
+        SpatialActions.describe(handCompass, label: "Compass")
         viewRoot.addChild(handCompass)
     }
 
@@ -629,10 +634,7 @@ final class MagnetismRenderer {
                 guard let container else { return }
                 self?.onObjectTap?(container)
             })
-        var accessibility = AccessibilityComponent()
-        accessibility.isAccessibilityElement = true
-        accessibility.label = "Bar magnet. Grab it and carry it — nearby magnets attract, repel, and swing to align."
-        container.components.set(accessibility)
+        SpatialActions.describe(container, label: "Bar magnet")
 
         container.position = SIMD3<Float>(magnet.position)
         viewRoot.addChild(container)

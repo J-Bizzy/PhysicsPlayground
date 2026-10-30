@@ -304,13 +304,9 @@ final class OrbitRing {
         bead.components.set(CollisionComponent(
             shapes: [Primitives.collisionSphere(radius: beadRadius)]))
         bead.components.set(HoverEffectComponent())
-        var accessibility = AccessibilityComponent()
-        accessibility.isAccessibilityElement = true
-        accessibility.label = LocalizedStringResource(
-            stringLiteral: name == nearBeadName
-                ? "Closest point of the orbit. Pull to reshape it."
-                : "Furthest point of the orbit. Pull to reshape it.")
-        bead.components.set(accessibility)
+        SpatialActions.describe(bead, label: name == nearBeadName
+                                    ? "Closest point of the orbit. Pull to reshape it."
+                                    : "Furthest point of the orbit. Pull to reshape it.")
         bead.isEnabled = false
         return bead
     }

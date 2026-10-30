@@ -450,6 +450,7 @@ final class PendulumsRenderer {
         // The collar is grabbable: a rig you cannot re-hang is
         // furniture, not rigging.
         pivot.name = "pivot-\(pendulum.id.uuidString)"
+        SpatialActions.describe(pivot, label: "Pendulum collar")
         // Collars in a cradle stand 0.07 m apart, so a target larger than the
         // collar reaches its neighbours' centres.
         Grabbable.configureTouchTarget(
@@ -477,10 +478,7 @@ final class PendulumsRenderer {
                 guard let bob else { return }
                 self?.onObjectTap?(bob)
             })
-        var accessibility = AccessibilityComponent()
-        accessibility.isAccessibilityElement = true
-        accessibility.label = "Pendulum bob. Grab it, carry it, and throw it."
-        bob.components.set(accessibility)
+        SpatialActions.describe(bob, label: "Pendulum bob")
         root.addChild(bob)
 
         let cable2 = ModelEntity(

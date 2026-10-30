@@ -128,6 +128,7 @@ final class FieldRenderer {
     /// negative charge, turning the + into a −.
     private var chargeSignVerticals: [UUID: ModelEntity] = [:]
     private var appliedPolarity: [UUID: Bool] = [:]
+    private var spokenMagnitude: [UUID: Double] = [:]
     private var probeEntity: ModelEntity?
     /// Vertical stroke of the probe's sign glyph (hidden makes it a −).
     private var probeSignVertical: ModelEntity?
@@ -655,10 +656,7 @@ final class FieldRenderer {
                         guard let plate else { return }
                         self?.onObjectTap?(plate)
                     })
-                var accessibility = AccessibilityComponent()
-                accessibility.isAccessibilityElement = true
-                accessibility.label = "Capacitor plate. Drag along the field axis to change the gap; carry it to move the capacitor."
-                plate.components.set(accessibility)
+                SpatialActions.describe(plate, label: "Capacitor plate")
                 plate.isEnabled = false
                 plateEntities.append(plate)
                 viewRoot.addChild(plate)
@@ -691,12 +689,7 @@ final class FieldRenderer {
                 materials: [glass])
             slab.name = "dielectric-slab"
             Grabbable.configureTouchTarget(slab, box: [1, 1, 1])
-            var accessibility = AccessibilityComponent()
-            accessibility.isAccessibilityElement = true
-            accessibility.label = LocalizedStringResource(
-                stringLiteral: "Dielectric slab. Slide it into the gap "
-                + "to raise the capacitance.")
-            slab.components.set(accessibility)
+            SpatialActions.describe(slab, label: "Dielectric slab")
             viewRoot.addChild(slab)
             dielectricSlab = slab
 
@@ -937,6 +930,11 @@ final class FieldRenderer {
                 chargeSignVerticals[charge.id]?.isEnabled = charge.isPositive
                 setAccessibilityLabel(on: entity, for: charge)
             }
+            // The size the track sets is the charge VoiceOver reads.
+            if spokenMagnitude[charge.id] != charge.magnitudeMicroCoulombs {
+                spokenMagnitude[charge.id] = charge.magnitudeMicroCoulombs
+                setAccessibilityLabel(on: entity, for: charge)
+            }
             if let halo = chargeHalos[charge.id] {
                 Fade.tick(halo, visible: charge.id == selectedID)
             }
@@ -947,6 +945,7 @@ final class FieldRenderer {
             chargeHalos.removeValue(forKey: id)
             chargeSignVerticals.removeValue(forKey: id)
             appliedPolarity.removeValue(forKey: id)
+            spokenMagnitude.removeValue(forKey: id)
         }
     }
 
@@ -1063,14 +1062,10 @@ final class FieldRenderer {
     }
 
     private func setAccessibilityLabel(on entity: ModelEntity, for charge: PointCharge) {
-        var accessibility = AccessibilityComponent()
-        accessibility.isAccessibilityElement = true
         let polarity = charge.isPositive ? "Positive" : "Negative"
         let magnitude = PhysicsFormat.fixed(charge.magnitudeMicroCoulombs, decimals: 1)
-        accessibility.label = LocalizedStringResource(
-            stringLiteral: "\(polarity) charge, \(magnitude) microcoulombs. Drag to move."
-        )
-        entity.components.set(accessibility)
+        SpatialActions.describe(entity, label: "\(polarity) charge",
+                                value: "\(magnitude) microcoulombs")
     }
 
     // MARK: Probe
@@ -1090,13 +1085,8 @@ final class FieldRenderer {
             appliedProbePolarity = isPositive
             probeSignVertical?.isEnabled = isPositive
 
-            var accessibility = AccessibilityComponent()
-            accessibility.isAccessibilityElement = true
-            let polarity = isPositive ? "Positive" : "Negative"
-            accessibility.label = LocalizedStringResource(stringLiteral:
-                "\(polarity) test charge. Drag to reposition; it accelerates along the field when released."
-            )
-            entity.components.set(accessibility)
+            SpatialActions.describe(entity, label: isPositive ? "Positive test charge"
+                                                                : "Negative test charge")
         }
         entity.position = SIMD3<Float>(probe.position)
         let scale = Self.probeScale(

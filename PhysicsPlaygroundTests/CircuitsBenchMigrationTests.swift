@@ -309,20 +309,25 @@ final class CircuitsBenchMigrationTests: XCTestCase {
 
     /// A bench written before the AC source had a frequency of its own
     /// runs at the fixed 0.5 Hz it always did; one written
-    /// after keeps what it stored.
+    /// after keeps what it stored, and one saved under the old 5 Hz rail
+    /// comes back at the 1.5 Hz the flash limit allows.
     func testAnACSourceWithoutAStoredFrequencyRunsAtHalfAHertz() throws {
-        let old = UUID(), new = UUID()
+        let old = UUID(), new = UUID(), fast = UUID()
         let json = """
         {"components":[
           {"id":"\(old.uuidString)","kind":"acSource","position":[0,1.25,-0.9],"value":6},
           {"id":"\(new.uuidString)","kind":"acSource","position":[0.3,1.25,-0.9],"value":6,
-           "acFrequency":3.0}],"wires":[]}
+           "acFrequency":1.2},
+          {"id":"\(fast.uuidString)","kind":"acSource","position":[0.6,1.25,-0.9],"value":6,
+           "acFrequency":4.0}],"wires":[]}
         """
         UserDefaults.standard.set(Data(json.utf8), forKey: CircuitsModel.saveKey)
         defer { UserDefaults.standard.removeObject(forKey: CircuitsModel.saveKey) }
         let model = CircuitsModel(restoreSaved: true)
 
         XCTAssertEqual(try XCTUnwrap(model.components.first { $0.id == old }).acFrequency, 0.5)
-        XCTAssertEqual(try XCTUnwrap(model.components.first { $0.id == new }).acFrequency, 3.0)
+        XCTAssertEqual(try XCTUnwrap(model.components.first { $0.id == new }).acFrequency, 1.2)
+        XCTAssertEqual(try XCTUnwrap(model.components.first { $0.id == fast }).acFrequency,
+                       CircuitsModel.acFrequencyRange.upperBound)
     }
 }

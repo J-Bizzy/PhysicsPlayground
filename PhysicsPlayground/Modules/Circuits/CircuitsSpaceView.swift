@@ -151,6 +151,8 @@ struct CircuitsSpaceView: View {
             parts.facing = CircuitsPartsLayout.viewer
             parts.windowTitle = "Parts"
             parts.visibleCount = CircuitsPartsLayout.rightVisibleRows
+            // A part is born in the bench's frame, as a hand is converted into it.
+            parts.spawnSpace = renderer.viewRoot
             renderer.root.addChild(parts.root)
             self.palette = parts
 

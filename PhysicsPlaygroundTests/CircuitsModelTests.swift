@@ -1262,13 +1262,13 @@ final class CircuitsModelTests: XCTestCase {
     /// start it is at its peak, and half a period later at its trough.
     func testTheACSourceRunsAtItsOwnFrequency() throws {
         let (model, ids) = loop([.acSource, .bulb])
-        model.setACFrequency(id: ids[0], 2.5)
-        XCTAssertEqual(try XCTUnwrap(model.components.first { $0.id == ids[0] }).acFrequency, 2.5)
+        model.setACFrequency(id: ids[0], 1.25)
+        XCTAssertEqual(try XCTUnwrap(model.components.first { $0.id == ids[0] }).acFrequency, 1.25)
         let dt = 0.01
-        run(model, seconds: 0.1, dt: dt)           // t = 0.1 s = quarter period
+        run(model, seconds: 0.2, dt: dt)           // t = 0.2 s = quarter period
         let peak = model.readouts[ids[0]]?.volts ?? 0
         XCTAssertEqual(abs(peak), 6, accuracy: 6 * 0.05)
-        run(model, seconds: 0.2, dt: dt)           // t = 0.3 s = three quarters
+        run(model, seconds: 0.4, dt: dt)           // t = 0.6 s = three quarters
         let trough = model.readouts[ids[0]]?.volts ?? 0
         XCTAssertEqual(abs(trough), 6, accuracy: 6 * 0.05)
         XCTAssertLessThan(peak * trough, 0, "opposite halves of the cycle")
@@ -1276,5 +1276,13 @@ final class CircuitsModelTests: XCTestCase {
         model.setACFrequency(id: ids[0], 40)
         XCTAssertEqual(try XCTUnwrap(model.components.first { $0.id == ids[0] }).acFrequency,
                        CircuitsModel.acFrequencyRange.upperBound)
+    }
+
+    /// Nothing on the bench flashes more than three times a second
+    /// (WCAG 2.3.1): a bulb on AC brightens twice a cycle, an LED once.
+    func testNoACPartFlashesMoreThanThreeTimesASecond() {
+        let fastest = CircuitsModel.acFrequencyRange.upperBound
+        XCTAssertLessThanOrEqual(2 * fastest, 3, "a bulb flashes at twice the source frequency")
+        XCTAssertEqual(CircuitsModel.clampedACFrequency(5), fastest)
     }
 }

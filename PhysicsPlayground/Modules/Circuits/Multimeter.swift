@@ -117,10 +117,6 @@ final class Multimeter {
                 guard let body else { return }
                 self?.onTap?(body)
             })
-        var bodyAccess = AccessibilityComponent()
-        bodyAccess.isAccessibilityElement = true
-        bodyAccess.label = "Multimeter. Drag to move it."
-        body.components.set(bodyAccess)
         root.addChild(chassis)
         chassis.addChild(body)
 
@@ -175,11 +171,7 @@ final class Multimeter {
                 Primitives.collisionCapsule(height: 0.09, radius: 0.013, offset: SIMD3(0, 0.05, 0)),
             ]))
             probe.components.set(HoverEffectComponent())
-            var accessibility = AccessibilityComponent()
-            accessibility.isAccessibilityElement = true
-            accessibility.label = LocalizedStringResource(
-                stringLiteral: slot == .red ? "Red probe" : "Black probe")
-            probe.components.set(accessibility)
+            SpatialActions.describe(probe, label: slot == .red ? "Red probe" : "Black probe")
             root.addChild(probe)
             probes[slot] = probe
 
@@ -199,11 +191,9 @@ final class Multimeter {
         plate.position = [0, 0.108, 0]
         chassis.addChild(plate)
 
+        // The body speaks for the meter: a second "Multimeter" on the root
+        // was one more stop with nothing to do.
         root.components.set(GroundingShadowComponent(castsShadow: true))
-        var accessibility = AccessibilityComponent()
-        accessibility.isAccessibilityElement = true
-        accessibility.label = "Multimeter"
-        root.components.set(accessibility)
     }
 
     // MARK: Input

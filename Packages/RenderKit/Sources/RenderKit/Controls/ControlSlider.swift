@@ -20,6 +20,8 @@ public struct ControlSlider: View {
     private let read: () -> Double
     private let write: (Double) -> Void
     private let format: (Double) -> String
+    /// What VoiceOver says for a value — the format's symbols in words.
+    private let speak: (Double) -> String
 
     @State private var isEditing = false
 
@@ -29,7 +31,8 @@ public struct ControlSlider: View {
                 step: Double? = nil,
                 read: @escaping () -> Double,
                 write: @escaping (Double) -> Void,
-                format: @escaping (Double) -> String) {
+                format: @escaping (Double) -> String,
+                speak: ((Double) -> String)? = nil) {
         self.title = title
         self.systemImage = systemImage
         self.range = range
@@ -37,6 +40,7 @@ public struct ControlSlider: View {
         self.read = read
         self.write = write
         self.format = format
+        self.speak = speak ?? format
     }
 
     private var value: Binding<Double> {
@@ -64,6 +68,9 @@ public struct ControlSlider: View {
                     .foregroundStyle(isEditing ? .primary : .secondary)
                     .contentTransition(.numericText())
             }
+            // The slider below says both; the header would be two more stops
+            // saying them again.
+            .accessibilityHidden(true)
             Group {
                 if let step {
                     Slider(value: value, in: range, step: step) { editing in
@@ -77,7 +84,7 @@ public struct ControlSlider: View {
             }
             .frame(minHeight: ControlMetrics.minimumTarget - 16)
             .accessibilityLabel(title)
-            .accessibilityValue(format(value.wrappedValue))
+            .accessibilityValue(speak(value.wrappedValue))
         }
         .frame(minHeight: ControlMetrics.minimumTarget)
         .liveGlow(isEditing)

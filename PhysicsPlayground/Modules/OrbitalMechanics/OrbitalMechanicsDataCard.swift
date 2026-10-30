@@ -54,8 +54,37 @@ struct OrbitalMechanicsDataCard: View {
             }
             .frame(maxWidth: 300, alignment: .leading)
             .readoutCard()
-            .accessibilityElement(children: .combine)
+            // The symbols are for the eye; VoiceOver hears the names ("r 0.39 AU
+            // v 47.9 km/s" read out as letters, with no body named).
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(selected.body.name)
+            .accessibilityValue(spoken(readout: readout, elements: elements))
         }
+    }
+
+    private func spoken(readout: OrbitalMechanicsModel.Readout,
+                        elements: OrbitalElements?) -> String {
+        let au = CelestialBody.astronomicalUnit
+        var parts = [
+            "distance " + PhysicsFormat.measurement(quantise(readout.distanceAU, 100), "AU", decimals: 2),
+            "speed " + PhysicsFormat.measurement(quantise(readout.speedKmPerS, 10), "km/s", decimals: 1),
+        ]
+        if let elements {
+            if let a = elements.semiMajorAxis {
+                parts.append("semi-major axis " + PhysicsFormat.measurement(a / au, "AU", decimals: 2))
+            }
+            parts.append("eccentricity " + PhysicsFormat.fixed(elements.eccentricity, decimals: 3))
+            parts.append("closest " + PhysicsFormat.measurement(elements.periapsisRadius / au, "AU", decimals: 2))
+            if elements.hasApoapsis {
+                parts.append("furthest " + PhysicsFormat.measurement(elements.apoapsisRadius / au, "AU", decimals: 2))
+            }
+            parts.append("inclination " + PhysicsFormat.angle(elements.inclination * 180 / .pi, decimals: 0))
+            if let period = elements.period {
+                parts.append("period " + PhysicsFormat.measurement(period / (365.25 * 86_400), "yr", decimals: 2))
+            }
+        }
+        parts.append(readout.totalEnergy < 0 ? "bound" : "leaving")
+        return PhysicsFormat.spoken(parts.joined(separator: " · "))
     }
 
     /// One symbol and one number, the symbol dim and the number bright.

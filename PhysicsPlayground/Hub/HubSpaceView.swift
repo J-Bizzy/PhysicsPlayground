@@ -152,18 +152,12 @@ private struct HomeMore: View {
                 .padding(6)
                 .glassBackgroundEffect(in: Capsule())
             if isExpanded {
-                HStack(spacing: ControlMetrics.spacing) {
-                    ControlToggle("Deep space", systemImage: "sparkles", isOn: $deepSpace)
-                        .accessibilityHint("Stands you among the stars instead of in your room")
-                    ControlButton("Lab list", systemImage: "list.bullet.rectangle",
-                                  action: openCatalog)
-                        .accessibilityHint("Opens a flat list of every lab in a window")
-                    ControlButton("Settings", systemImage: "gearshape",
-                                  action: openSettings)
-                        .accessibilityHint("Sound, room tone and the Time Capsule")
-                    ControlButton("About", systemImage: "info.circle",
-                                  action: openAbout)
-                        .accessibilityHint("Credits and version")
+                // Named while the names fit the frame; at the largest type the
+                // same four as symbols — each keeps its name for VoiceOver and
+                // the hover tooltip — rather than "Dee…", "Lab…", "Sett…".
+                ViewThatFits(in: .horizontal) {
+                    row(iconOnly: false)
+                    row(iconOnly: true)
                 }
                 .padding(6)
                 .glassBackgroundEffect(in: Capsule())
@@ -178,6 +172,23 @@ private struct HomeMore: View {
             if UserDefaults.standard.bool(forKey: "moreOpen") { isExpanded = true }
         }
         #endif
+    }
+
+    private func row(iconOnly: Bool) -> some View {
+        HStack(spacing: ControlMetrics.spacing) {
+            ControlToggle("Deep space", systemImage: "sparkles", iconOnly: iconOnly,
+                          isOn: $deepSpace)
+                .accessibilityHint("Stands you among the stars instead of in your room")
+            ControlButton("Lab list", systemImage: "list.bullet.rectangle", iconOnly: iconOnly,
+                          action: openCatalog)
+                .accessibilityHint("Opens a flat list of every lab in a window")
+            ControlButton("Settings", systemImage: "gearshape", iconOnly: iconOnly,
+                          action: openSettings)
+                .accessibilityHint("Sound, room tone and the Time Capsule")
+            ControlButton("About", systemImage: "info.circle", iconOnly: iconOnly,
+                          action: openAbout)
+                .accessibilityHint("Credits and version")
+        }
     }
 }
 
@@ -761,10 +772,7 @@ final class HubScene {
             titleRule = rule
         }
 
-        var accessibility = AccessibilityComponent()
-        accessibility.isAccessibilityElement = true
-        accessibility.label = "Physics Playground"
-        titleAnchor.components.set(accessibility)
+        SpatialActions.describe(titleAnchor, label: "Physics Playground")
         livingTitle?.makeOperable(titleAnchor, label: "Physics Playground",
                                   now: { [weak self] in self?.time ?? 0 },
                                   stillness: { [weak self] in self?.stillness ?? true })

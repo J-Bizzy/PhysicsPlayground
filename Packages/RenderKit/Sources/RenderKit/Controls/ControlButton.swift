@@ -78,6 +78,14 @@ public struct ControlButton: View {
         .help(title)
         .accessibilityLabel(title)
         .accessibilityValue(isArmed ? "armed — tap again to confirm" : "")
+        // Voice Control matches what the screen says, and an armed button says "Tap again".
+        .accessibilityInputLabels(isArmed ? [title, ControlMetrics.armedTitle] : [title])
+        // The arming is a change of meaning, and it runs out on a clock: say both.
+        .onChange(of: isArmed) { _, nowArmed in
+            AccessibilityNotification.Announcement(
+                nowArmed ? "\(title): activate again within \(Int(ControlMetrics.armWindow)) seconds to confirm"
+                         : "\(title) disarmed").post()
+        }
         .task(id: armed) {
             // The button's own arming runs down here; an owner's runs down
             // wherever the owner keeps it.
@@ -143,12 +151,26 @@ public struct ControlLabelStyle: LabelStyle {
                     .font(.body.weight(.semibold))
                 configuration.title
                     .font(.body.weight(.medium))
-                    .lineLimit(1)
+                    .modifier(ControlTitleLines())
                 if fillsWidth { Spacer(minLength: 0) }
             }
             .frame(maxWidth: fillsWidth ? .infinity : nil,
                    minHeight: ControlMetrics.minimumTarget - 16)
         }
+    }
+}
+
+/// One line at the sizes the layouts were drawn for; at the accessibility
+/// sizes a name wraps rather than turning into "Res…" — a destructive
+/// button whose name is cut off is a guess.
+struct ControlTitleLines: ViewModifier {
+    @Environment(\.dynamicTypeSize) private var typeSize
+
+    func body(content: Content) -> some View {
+        content
+            .lineLimit(typeSize.isAccessibilitySize ? 3 : 1)
+            .multilineTextAlignment(.leading)
+            .fixedSize(horizontal: false, vertical: typeSize.isAccessibilitySize)
     }
 }
 
