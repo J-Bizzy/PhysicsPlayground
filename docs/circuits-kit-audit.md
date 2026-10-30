@@ -111,7 +111,7 @@ So the faster you drive it, the more the motor lies.
 - The ticks come from the detent loop in `multimeter.py`. Why two of them land off the case is for Phase 4 to find.
 
 **4. Small drifts:**
-- The meter's screen sits at y 0.044 in Swift but 0.040 in `multimeter.py`.
+- ~~The meter's screen sits at y 0.044 in Swift but 0.040 in `multimeter.py`.~~ Withdrawn on 2026-10-30. Swift's 0.044 is the reading's line and 0.026 the note's, two lines laid out inside the LCD (21–59 mm). It is not a drift.
 - `multimeter.py` says the meter "arrives standing", but it is milled face-up and `Multimeter.swift` stands it.
 - `CircuitPropTests.swift:21` attributes the 0.059 clamp to `CircuitsSpaceView`. It is `CircuitsRenderer`'s, at 0.057.
 

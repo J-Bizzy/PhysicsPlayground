@@ -82,7 +82,7 @@ Coordinates are in each part's RealityKit frame: the line is x, up is y, and +z 
 | Switch close | instant | **0.12 s after the tap, when the blade lands** (D3); a pending close in the Time Capsule | `CircuitsModel` | `TimeCapsuleRoundTripTests`, new timing test |
 | Electron dot | 2 × `Primitives.sphere` (16,128 tris), one entity pair per dot | **`CircuitElectron.usdz`**: core r 0.0026 plus halo r 0.0045, 400 tris, instanced (D5) | renderer | `CircuitBudgetTests` |
 | Stage, its numbers, `stageClearance` | 0.45, 0.30 | **unchanged.** Its keyline is fixed (the `band()` defect). | — | `CircuitsStageTests` unchanged |
-| Multimeter | 86 × 168 × 32 mm | **unchanged**. Its detents move onto the case, and the screen sits at y 0.044 in both. | `Multimeter.swift` | `MultimeterTests` unchanged |
+| Multimeter | 86 × 168 × 32 mm | **unchanged**. Its detents move back onto the case. | `Multimeter.swift` | `MultimeterTests` unchanged |
 
 **Retired with it:**
 - the chamfered carrier and its mirrored back symbol;
@@ -188,3 +188,21 @@ How the estimates add up:
 - the other labs;
 - the turntable's behaviour;
 - the shelf's layout.
+
+## As milled (Phase 4, 2026-10-30)
+
+From here on, the authority is `Tools/circuitparts.py`'s top-level literals: `LEAD_INNER`, `DOT_RADIUS`, `WIRE_CORE`, `WIRE_JACKET`, `ELEMENT_CLAMP`, `PART_ASSETS`, `LIVE_CHILDREN`, `MOTOR_INERTIA`, `SWITCH_*` and `AC_WAVE`. `propsheet.py` reads them, and Phase 5's tests hold the Swift to them.
+
+Milling refined the approved table in these places:
+
+| Value | Approved | As milled | Why |
+|---|---|---|---|
+| Keylines (D2) | brass | **champagne** | The design system gives brass to "a wire lands here" and champagne to symbol inlays. Brass stays on the dots, caps and switch rings, where current enters. |
+| `motorInertia` (D4) | 0.00052 | **0.000543** | The rim plus its web, as milled. `circuitparts.py` refuses to export a flywheel that disagrees with `MOTOR_INERTIA` by more than 1%. Spin-up at 9 V / 8 Ω is 0.44 s. |
+| `contactRadius`'s dot | about 500 tris | **728 tris** (UV 28 × 14) | — |
+| Lead inner ends | AC ±0.031, resistor ±0.028, capacitor ±0.008, bulb ±0.031, LED −0.013 / +0.008, fuse ±0.024, switch −0.039 / +0.027 | **AC ±0.035, resistor ±0.0255, capacitor −0.007 / +0.0075, bulb ±0.0345, LED −0.012 / +0.007, fuse ±0.028, switch ±0.040** | Each is where the milled element's surface actually begins: a cap's face, a ring's outer edge. |
+| Fuse | Ø 13 × 34 mm | **Ø 19 × 44 mm** | At 13 mm it was the smallest object on the bench. |
+| Live-child names | `ac-bead`, `cap-plate-0`, `led-core`, `fuse-bridge`… | **`bead`, `plate0`, `plate1`, `filament`, `core`, `rotor`, `rotor_blur`, `fuse_glass`, `fuse_left`, `fuse_bridge`, `fuse_right`, `blade`** | USD prim names allow no hyphen. Each is a top-level prim with its origin where Swift turns or places it: the blade at (−0.032, 0, 0), the bead at the wave's start (−0.018, 0, 0.0069), the rest at the part's centre. |
+| Electron | — | `core` (320 tris) and `halo` (80) in `CircuitElectron.usdz` | — |
+| Ten elements, all together | — | **52,032 triangles**, every element inside its ceiling (the largest is the bulb at 11,700) | — |
+| Capacitor plates | plain plates | **an ink rim with a champagne edge on each** | Seen nearly edge-on, bare metal mirrored a white wall and the "\| (" never read. |

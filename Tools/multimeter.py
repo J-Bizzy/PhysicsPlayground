@@ -26,9 +26,11 @@ It is deliberately NOT shrunk to sit tidily on the bench: this app is 1:1
 everywhere else, and a miniature meter beside full-size components would
 be the one dishonest object in the room.
 
-ORIENTATION. Blender is Z-up; RealityKit is Y-up. The exporter is told to
-convert, so the meter arrives standing on its base with the screen facing
-the reader and the dial below it.
+ORIENTATION. Blender is Z-up; RealityKit is Y-up. The case is built with
+its face toward Blender +Z, so after the exporter's conversion it arrives
+lying FACE UP in RealityKit, the dial toward the reader; `Multimeter.swift`
+stands it with a quarter turn about x. (This said "arrives standing" until
+2026-10-30.)
 """
 
 import bpy
@@ -95,7 +97,11 @@ def box(name, size, location=(0, 0, 0)):
     obj = bpy.context.active_object
     obj.name = name
     obj.scale = (size[0], size[1], size[2])
-    bpy.ops.object.transform_apply(scale=True)
+    # Scale only: transform_apply's location and rotation default to True,
+    # and baking the location made each detent tick below turn about the
+    # world's origin rather than its own centre — two of the four landed
+    # in the air beside the case (2026-10-30, Tools/propsheet.py found it).
+    bpy.ops.object.transform_apply(location=False, rotation=False, scale=True)
     return obj
 
 

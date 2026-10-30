@@ -55,20 +55,22 @@ before a pale wall, because passthrough is a bright medium and contours
 beat glows indoors (DESIGN_SYSTEM.md); `studio` is Deep space's
 near-black with a faint fill.
 
-WHAT IT CANNOT SHOW. RealityKit's own pieces — the brass contacts, the
-resistor's ceramic and bands, the switch blade, the motor's rotor, the
-filaments, the gauge, the AC needle — are drawn here as stand-ins at the
-places and sizes `CircuitsRenderer.makeModule` gives them, in materials
-that only approximate the app's (an unlit colour becomes an emissive one;
-the GlowSprite is left out). The headset is the authority on those.
+WHAT IT CANNOT SHOW. The pieces Swift draws itself — the two brass dots
+(the milled CircuitDot), the two leads from the terminals to the element,
+the resistor's procedural ceramic and bands — are drawn here where the
+contract puts them, in materials that only approximate the app's (an
+unlit colour becomes an emissive one; the GlowSprite is left out). The
+live children ship inside each asset and are shown at rest (the motor's
+blur hidden, the bulb lit only in the loop). The headset is the
+authority on all of it.
 
-THE NUMBERS ARE READ, NOT COPIED. Mount heights come from
-`circuitparts.py`'s top-level constants through `ast` — importing it
-would mill every part, because it calls `main()` at module scope — and
-the Swift-only ones (contact spacing and radius, the switch pivot, the
-ceramic, the starter loop, the asset names, the stage) by pattern from
-the Swift sources. A pattern that stops matching stops the script, rather
-than letting a stand-in drift from what it stands for.
+THE NUMBERS ARE READ, NOT COPIED. The asset side's numbers — the dot,
+the wire, each lead's inner end, the asset names, the element clamp —
+are `circuitparts.py`'s top-level literals, read through `ast`
+(importing it would mill every part). The Swift's own — the terminal
+spacing, the stage, the starter loop, the kinds — come by pattern from
+the sources. A pattern that stops matching stops the script, rather than
+letting a stand-in drift from what it stands for.
 
 HANDEDNESS. RealityKit (x, y, z) is Blender (x, -z, y): `rk()` below.
 """
@@ -164,41 +166,25 @@ def swift(relative, pattern, flags=0):
 
 
 def contract():
+    """The Solid Schematic's numbers (docs/circuits-kit-contract.md):
+    `circuitparts.py` owns the asset side as literals; the Swift owns the
+    terminal spacing, the stage and the starter loop."""
     model = "Modules/Circuits/CircuitsModel.swift"
-    renderer = "Modules/Circuits/CircuitsRenderer.swift"
-    tokens = "DesignSystem/DesignTokens.swift"
     py = python_constants()
-    c = {key: py[key] for key in ("CARRIER_TOP", "BULB_CENTRE", "LED_GLOW", "MOTOR_AXIS",
-                                  "SWITCH_PIVOT", "RESISTOR_AXIS", "FUSE_AXIS", "AC_FACE")}
+    c = {key: py[key] for key in ("DOT_RADIUS", "WIRE_CORE", "WIRE_JACKET", "ELEMENT_CLAMP",
+                                  "CERAMIC_RADIUS", "CERAMIC_LENGTH", "PART_ASSETS", "LEAD_INNER")}
+    # The keys contract.json may override, under the names it has always used.
+    c["wireCore"], c["wireJacket"] = c.pop("WIRE_CORE"), c.pop("WIRE_JACKET")
     number = r"(-?[0-9.]+)"
     c["terminalOffset"] = float(swift(model, r"static let terminalOffset = " + number).group(1))
+    if abs(c["terminalOffset"] - py["TERMINAL_OFFSET"]) > 1e-9:
+        sys.exit("propsheet: circuitparts.py's TERMINAL_OFFSET disagrees with the Swift's")
     c["stageRadius"] = float(swift(model, r"static let stageRadius = " + number).group(1))
     c["stageTop"] = float(swift(model, r"homeStage = Stage\(.*?top: " + number, re.S).group(1))
-    c["contactRadius"] = float(swift(renderer, r"static let contactRadius: Float = " + number).group(1))
-    c["wireCore"] = float(swift(renderer, r"core = ModelEntity\(\s*mesh: Primitives\.cylinder\("
-                                          r"height: 1, radius: " + number).group(1))
-    c["wireJacket"] = float(swift(renderer, r"jacket = ModelEntity\(\s*mesh: Primitives\.cylinder\("
-                                            r"height: 1, radius: " + number).group(1))
-    c["switchPivotX"] = float(swift(renderer, r"static let switchPivot = SIMD3<Float>\(" + number).group(1))
-    c["ceramicRadius"] = float(swift(renderer, r"static let ceramicRadius: Float = " + number).group(1))
-    c["ceramicLength"] = float(swift(renderer, r"static let ceramicLength: Float = " + number).group(1))
-
-    def colour(name):
-        rgb = swift(tokens, r"static let %s = UIColor\(red: %s, green: %s, blue: %s"
-                    % (name, number, number, number))
-        return tuple(float(rgb.group(i)) for i in (1, 2, 3))
-    c["brass"] = colour("contactBrassUI")
-    c["copper"] = colour("copperUI")
-    c["motorAccent"] = colour("motorAccentUI")
-
-    block = swift(renderer, r"static let bodyAssetNames[^=]*= \[(.*?)\]", re.S).group(1)
-    c["bodies"] = dict(re.findall(r"\.(\w+): \"(\w+)\"", block))
-    c["resistorCaps"] = swift(renderer, r"resistorCapsAssetName = \"(\w+)\"").group(1)
-    c["carrier"] = swift(renderer, r"carrierAssetName = \"(\w+)\"").group(1)
 
     kinds = swift(model, r"enum ComponentKind.*?\n((?:\s*case [\w, ]+\n)+)", re.S).group(1)
     c["kinds"] = re.findall(r"\w+", kinds.replace("case", ""))
-    missing = [k for k in c["kinds"] if k != "resistor" and k not in c["bodies"]]
+    missing = [k for k in c["kinds"] if k not in c["PART_ASSETS"]]
     if missing:
         sys.exit("propsheet: no asset named for %s" % missing)
 
@@ -313,22 +299,20 @@ def import_usd(path, parent):
 
 # ----------------------------------------------------------- the modules
 
-class Kit:
-    """The materials the stand-ins wear, made once per scene."""
+# The voltage ramp the bench's wires wear (`CircuitsRenderer.voltageMaterials`,
+# sRGB), at its two ends and its middle: hot is the battery's + side.
+RAMP_HOT, RAMP_MID, RAMP_COLD = (0.97, 0.5, 0.30), (0.66, 0.68, 0.625), (0.35, 0.5, 0.95)
 
-    def __init__(self, c):
-        # Every colour here is Swift's, so sRGB, made linear for Blender.
-        self.brass = material("SI_Brass", linear(c["brass"]), metallic=0.62, roughness=0.28)
-        self.copper = material("SI_Copper", linear(c["copper"]), metallic=0.62, roughness=0.35)
+
+class Kit:
+    """The materials Swift's own pieces wear, made once per scene."""
+
+    def __init__(self):
         self.ceramic = material("SI_Ceramic", linear((0.85, 0.72, 0.55)), roughness=0.6)
-        self.graphite = material("SI_Graphite", linear((0.17, 0.17, 0.18)), metallic=0.2,
-                                 roughness=0.4)
-        self.steel = material("SI_Steel", linear((0.6, 0.6, 0.6)), metallic=0.62, roughness=0.3)
-        self.filament = unlit("SI_FilamentOff", linear((0.35, 0.35, 0.35)))
         self.filamentLit = unlit("SI_FilamentLit", (6.0, 4.2, 2.2))
-        self.rotor = unlit("SI_Rotor", linear(c["motorAccent"]))
-        self.track = unlit("SI_GaugeTrack", linear((0.18, 0.18, 0.18)))
-        self.needle = unlit("SI_Needle", linear((0.10, 0.10, 0.10)))
+        self.jacket = material("SI_Jacket", linear((0.12, 0.12, 0.12)), roughness=0.55, alpha=0.82)
+        self.core = {key: unlit("SI_Core_" + key, linear(rgb))
+                     for key, rgb in (("hot", RAMP_HOT), ("mid", RAMP_MID), ("cold", RAMP_COLD))}
         # The resistor's live bands at the shelf's 470 Ω: yellow, violet,
         # brown, and gold tolerance (CircuitTextures).
         self.bands = [material("SI_Band%d" % i, linear(rgb), roughness=0.6) for i, rgb in enumerate(
@@ -339,73 +323,87 @@ def asset_path(src, name):
     return os.path.join(src, name + ".usdz")
 
 
-def build_module(kind, c, kit, src, bare, lit=False):
-    """One part as `CircuitsRenderer.makeModule` builds it, in its own frame."""
+def found(name, src):
+    """An asset from `src`, or the app's own when a direction mills none."""
+    for folder in (src, MODELS):
+        if os.path.exists(asset_path(folder, name)):
+            return asset_path(folder, name)
+    return None
+
+
+def line(name, a, b, radius_core, radius_jacket, core, jacket, parent):
+    """A lead or a wire as the bench draws one: a voltage-coloured core
+    inside a dark jacket at 0.82 (`CircuitsRenderer.layOut`). a, b are
+    RealityKit points in `parent`'s frame."""
+    a, b = Vector(a), Vector(b)
+    along = b - a
+    if along.length < 1e-6:
+        return
+    direction = Vector((along[0], -along[2], along[1])).normalized()
+    rotation = direction.to_track_quat("Z", "Y").to_euler()
+    middle = (a + b) / 2
+    primitive("cylinder", name + "-core", core, parent, rk(*middle), rotation,
+              radius=radius_core, height=along.length)
+    if radius_jacket > 0:
+        primitive("cylinder", name + "-jacket", jacket, parent, rk(*middle), rotation,
+                  radius=radius_jacket, height=along.length)
+
+
+def build_module(kind, c, kit, src, bare, lit=False, heat=("mid", "mid")):
+    """One part as the bench draws it (contract, 2026-10-30): its milled
+    element and live children, and — unless bare — Swift's own pieces: the
+    two brass dots, the two leads from the terminals to the element, and a
+    resistor's procedural ceramic. `heat` colours each lead by its net."""
     root = bpy.data.objects.new("module-" + kind, None)
     bpy.context.collection.objects.link(root)
     missing = []
-    for name in [c["carrier"], c["resistorCaps"] if kind == "resistor" else c["bodies"][kind]]:
-        path = asset_path(src, name)
-        if os.path.exists(path):
-            import_usd(path, root)
-        else:
-            missing.append(name)
+    path = found(c["PART_ASSETS"][kind], src)
+    if path:
+        import_usd(path, root)
+    else:
+        missing.append(c["PART_ASSETS"][kind])
+    for obj in root.children_recursive:
+        if "blur" in obj.name:      # Swift shows the blur only at speed
+            obj.hide_render = True
+    if kind == "bulb" and lit:
+        for obj in root.children_recursive:
+            if obj.type == "MESH" and obj.name.startswith("filament"):
+                obj.data.materials.clear()
+                obj.data.materials.append(kit.filamentLit)
+        light = bpy.data.lights.new("bulb-light", "POINT")
+        light.energy = 1.2
+        light.color = (1.0, 0.78, 0.5)
+        light.shadow_soft_size = 0.004
+        holder = bpy.data.objects.new("bulb-light", light)
+        bpy.context.collection.objects.link(holder)
+        holder.parent = root
     if bare:
         return root, missing
-    top = c["CARRIER_TOP"]
-    for end in (-1, 1):
-        primitive("sphere", "contact", kit.brass, root, rk(end * c["terminalOffset"], 0, 0),
-                  radius=c["contactRadius"])
-    if kind == "resistor":
-        length, radius = c["ceramicLength"], c["ceramicRadius"]
-        primitive("cylinder", "ceramic", kit.ceramic, root, rk(0, c["RESISTOR_AXIS"], 0),
-                  ALONG_X, radius=radius, height=length)
-        for band, fraction in zip(kit.bands, (0.22, 0.38, 0.54, 0.78)):
-            primitive("cylinder", "band", band, root,
-                      rk(-length / 2 + fraction * length, c["RESISTOR_AXIS"], 0), ALONG_X,
-                      radius=radius + 0.0002, height=length * 12 / 128)
-    elif kind == "bulb":
-        primitive("cylinder", "filament", kit.filamentLit if lit else kit.filament, root,
-                  rk(0, c["BULB_CENTRE"], 0), ALONG_X, radius=0.0009, height=0.010)
-        if lit:
-            light = bpy.data.lights.new("bulb-light", "POINT")
-            light.energy = 1.2
-            light.color = (1.0, 0.78, 0.5)
-            light.shadow_soft_size = 0.004
-            holder = bpy.data.objects.new("bulb-light", light)
+    span = c["terminalOffset"]
+    dot = found("CircuitDot", src)
+    for end, inner in zip((-1, 1), c["LEAD_INNER"][kind]):
+        if dot:
+            holder = bpy.data.objects.new("dot", None)
             bpy.context.collection.objects.link(holder)
             holder.parent = root
-            holder.location = rk(0, c["BULB_CENTRE"], 0)
-    elif kind == "motor":
-        at = rk(0.050, c["MOTOR_AXIS"], 0)
-        primitive("sphere", "hub", kit.steel, root, at, radius=0.006)
-        primitive("box", "blade", kit.rotor, root, at, size=(0.004, 0.036, 0.003))
-        primitive("box", "blade", kit.rotor, root, at, (math.pi / 2, 0, 0),
-                  size=(0.004, 0.036, 0.003))
-    elif kind == "switcher":
-        pivot = (c["switchPivotX"], c["SWITCH_PIVOT"])
-        primitive("box", "blade", kit.brass, root, rk(pivot[0] + 0.033, pivot[1] + 0.0005, 0),
-                  size=(0.066, 0.005, 0.0045))
-        primitive("box", "grip", kit.graphite, root, rk(pivot[0] + 0.064, pivot[1] + 0.003, 0),
-                  size=(0.008, 0.010, 0.008))
-    elif kind == "fuse":
-        for x, height in ((-0.0105, 0.012), (0, 0.009), (0.0105, 0.012)):
-            primitive("cylinder", "fuse-wire", kit.copper, root, rk(x, c["FUSE_AXIS"], 0),
-                      ALONG_X, radius=0.0006, height=height)
-    elif kind == "capacitor":
-        primitive("box", "gauge-track", kit.track, root, rk(0, top + 0.0005, 0.0175),
-                  size=(0.026, 0.0010, 0.0032))
-    elif kind == "acSource":
-        at = (0, c["AC_FACE"] + 0.0010, 0)
-        primitive("box", "needle", kit.needle, root, rk(at[0], at[1], -0.0068),
-                  size=(0.0012, 0.0008, 0.0150))
-        primitive("cylinder", "needle-hub", kit.brass, root, rk(*at), radius=0.0018,
-                  height=0.0012)
+            holder.location = rk(end * span, 0, 0)
+            import_usd(dot, holder)
+            for obj in holder.children_recursive:
+                obj["standin"] = True     # the dots are Swift's: not the element's count
+        line("lead%d" % ((end + 1) // 2), (end * span, 0, 0), (inner, 0, 0), c["wireCore"],
+             c["wireJacket"], kit.core[heat[(end + 1) // 2]], kit.jacket, root)
+    if kind == "resistor":
+        length, radius = c["CERAMIC_LENGTH"], c["CERAMIC_RADIUS"]
+        primitive("cylinder", "ceramic", kit.ceramic, root, rk(0, 0, 0), ALONG_X,
+                  radius=radius, height=length)
+        for band, fraction in zip(kit.bands, (0.22, 0.38, 0.54, 0.78)):
+            primitive("cylinder", "band", band, root, rk(-length / 2 + fraction * length, 0, 0),
+                      ALONG_X, radius=radius + 0.0002, height=length * 12 / 128)
     return root, missing
 
 
 def build_asset(name, src):
-    """An asset alone (the stage, the multimeter, a probe, a bare body)."""
+    """An asset alone (the stage, the multimeter, a probe, a dot)."""
     holder = bpy.data.objects.new("asset-" + name, None)
     bpy.context.collection.objects.link(holder)
     root = holder
@@ -416,18 +414,18 @@ def build_asset(name, src):
         bpy.context.collection.objects.link(root)
         root.parent = holder
         root.rotation_euler = (math.pi / 2, 0, 0)
-    path = asset_path(src, name)
-    missing = [] if os.path.exists(path) else [name]
-    if not missing:
+    path = found(name, src)
+    missing = [] if path else [name]
+    if path:
         import_usd(path, root)
     return holder, missing
 
 
 def kind_for(name, c):
-    for kind, asset in c["bodies"].items():
+    for kind, asset in c["PART_ASSETS"].items():
         if asset == name:
             return kind
-    return "resistor" if name == c["resistorCaps"] else None
+    return None
 
 
 # ------------------------------------------------------------- the stage
@@ -693,7 +691,7 @@ def usd_census(path):
 def stats(c, options):
     rows = []
     names = sorted(f[:-5] for f in os.listdir(options["src"]) if f.endswith(".usdz"))
-    clamp = c["terminalOffset"] - 0.026
+    clamp = c["ELEMENT_CLAMP"]
     for name in names:
         reset()
         path = asset_path(options["src"], name)
@@ -712,8 +710,6 @@ def stats(c, options):
             (lx, ly, lz), (hx, hy, hz) = bounds
             if max(hx, -lx) >= clamp:
                 checks.append("reaches its lead (|x| %.4f ≥ %.3f)" % (max(hx, -lx), clamp))
-            if abs((hz + lz) / 2) > 0.004:
-                checks.append("off the centre line")
         if census.get("unbound"):
             checks.append("%d faces bound to no material" % census["unbound"])
         checks += census.get("fallen", [])
@@ -732,9 +728,9 @@ def stats(c, options):
         lines.append("| %s | %d | %d | %d | %s | %s | %d | %s | %s |" % (
             name, tris, verts, mats, draws, tex, kb, box, check))
     body = sum(r[1] for r in rows if kind_for(r[0], c))
-    lines += ["", "Every part's carrier is `%s` (%d triangles), cloned once per part." % (
-        c["carrier"], next((r[1] for r in rows if r[0] == c["carrier"]), 0)),
-        "The ten bodies together: %d triangles." % body]
+    dot = next((r[1] for r in rows if r[0] == "CircuitDot"), 0)
+    lines += ["", "The ten elements together: %d triangles. Each part also draws two dots "
+              "(%d triangles each) and two leads, which are Swift's." % (body, dot)]
     with open(os.path.join(options["out"], "stats.md"), "w") as handle:
         handle.write("\n".join(lines) + "\n")
     print("\n".join(lines))
@@ -761,9 +757,9 @@ def sheet(c, options):
                 configure(options["samples"])
                 light_room(light)
                 if name in c["kinds"]:
-                    kit = Kit(c)
+                    kit = Kit()
                     root, missing = build_module(name, c, kit, options["src"], options["bare"])
-                    target = rk(0, 0.008, 0)
+                    target = rk(0, 0, 0)
                 else:
                     root, missing = build_asset(name, os.path.dirname(asset_path(options["src"], name)))
                     target = Vector((0, 0, 0))
@@ -793,8 +789,8 @@ def turntable(c, options, names):
                     kind = name if name in c["kinds"] else kind_for(name, c)
                     fit = True
                     if kind:
-                        root, missing = build_module(kind, c, Kit(c), options["src"], options["bare"])
-                        target = rk(0, 0.008, 0)
+                        root, missing = build_module(kind, c, Kit(), options["src"], options["bare"])
+                        target = rk(0, 0, 0)
                         label = kind
                     else:
                         root, missing = build_asset(name, options["src"])
@@ -832,46 +828,41 @@ def loop(c, options):
         reset()
         configure(options["samples"])
         light_room(light)
-        kit = Kit(c)
+        kit = Kit()
         span = c["terminalOffset"]
+        # A terminal is hot when it is the battery's + or wired to it.
+        hot = {(0, 0)}
+        for (a, ea), (b, eb) in c["starterWires"]:
+            if (a, ea) in hot or (b, eb) in hot:
+                hot |= {(a, ea), (b, eb)}
         ends = []
-        for kind, position, axis in c["starter"]:
-            root, _ = build_module(kind, c, kit, options["src"], options["bare"], lit=True)
+        for index, (kind, position, axis) in enumerate(c["starter"]):
+            heat = tuple("hot" if (index, end) in hot else "cold" for end in (0, 1))
+            root, _ = build_module(kind, c, kit, options["src"], options["bare"], lit=True, heat=heat)
             x = Vector(axis).normalized()
-            # `moduleOrientation`: upright when the axis lies off vertical,
-            # else the part's top turns to the stage's front (+z).
-            up = Vector((0, 1, 0))
-            top = up - up.dot(x) * x
-            if top.length < 0.26:
-                front = Vector((0, 0, 1))
-                top = front - front.dot(x) * x
-            top.normalize()
-            z = x.cross(top)
+            # `moduleOrientation` (contract D7): the symbol's plane, local +z,
+            # faces the stage's front (+z) whenever the axis is 15° or more
+            # from it; local +y is then z × x.
+            front = Vector((0, 0, 1))
+            z = front - front.dot(x) * x
+            if z.length < math.sin(math.radians(15)):
+                up = Vector((0, 1, 0))
+                z = x.cross(up - up.dot(x) * x)
+            z.normalize()
+            y = z.cross(x)
             # The module is built in Blender axes: its RealityKit x, y, z are
-            # Blender x, z, −y, so those are the columns that take x, top, z.
+            # Blender x, z, −y, so those are the columns that take x, y, z.
             def to_blender(v):
                 return Vector((v[0], -v[2], v[1]))
-            basis = Matrix((to_blender(x), -to_blender(z), to_blender(top))).transposed()
+            basis = Matrix((to_blender(x), -to_blender(z), to_blender(y))).transposed()
             root.matrix_world = Matrix.Translation(rk(*position)) @ basis.to_4x4()
             centre = Vector(position)
             ends.append((centre - x * span, centre + x * span))
-        # Straight wires, terminal to terminal: a copper-voltage core inside
-        # a dark jacket at 0.82 opacity, as `layOut` draws them. The live
-        # side (from the battery's +) reads warm, the return cool.
-        hot = unlit("WireHot", linear((0.97, 0.5, 0.30)))
-        cold = unlit("WireCold", linear((0.35, 0.5, 0.95)))
-        jacket = material("Jacket", linear((0.12, 0.12, 0.12)), roughness=0.55, alpha=0.82)
+        # Straight wires, terminal to terminal, as `layOut` draws them; the
+        # live side (from the battery's +) warm, the return cool.
         for (a, ea), (b, eb) in c["starterWires"]:
-            start, end = ends[a][ea], ends[b][eb]
-            middle, along = (start + end) / 2, end - start
-            hotside = (a == 0 and ea == 0) or (b == 0 and eb == 0)
-            direction = Vector((along[0], -along[2], along[1])).normalized()
-            rotation = direction.to_track_quat("Z", "Y").to_euler()
-            primitive("cylinder", "cable", hot if hotside else cold, None, rk(*middle), rotation,
-                      radius=c["wireCore"], height=along.length)
-            if c["wireJacket"] > 0:   # a direction may draw the wire bare
-                primitive("cylinder", "jacket", jacket, None, rk(*middle), rotation,
-                          radius=c["wireJacket"], height=along.length)
+            line("wire", ends[a][ea], ends[b][eb], c["wireCore"], c["wireJacket"],
+                 kit.core["hot" if (a, ea) in hot else "cold"], kit.jacket, None)
         stage = bpy.data.objects.new("stage", None)
         bpy.context.collection.objects.link(stage)
         stage.location = rk(0, c["stageTop"], -0.9)
@@ -974,7 +965,8 @@ def main():
     if mode in ("turntable", "all"):
         if mode == "all" or not names:
             names = options["parts"] or list(c["kinds"]) + [
-                c["carrier"], "CircuitStageDeck", "CircuitStageRim", "Multimeter", "MeterProbe"]
+                "CircuitDot", "CircuitElectron", "CircuitStageDeck", "CircuitStageRim",
+                "Multimeter", "MeterProbe"]
         turntable(c, options, names)
 
 

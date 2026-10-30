@@ -89,7 +89,11 @@ def box(name, size, location=(0, 0, 0)):
     obj = bpy.context.active_object
     obj.name = name
     obj.scale = (size[0], size[1], size[2])
-    bpy.ops.object.transform_apply(scale=True)
+    # Scale only. transform_apply's location and rotation default to True,
+    # and baking the location put the origin at the world's: a rotation
+    # set afterwards swung the box about (0, 0, 0) instead of its own
+    # centre, which is how the multimeter's detents left its case.
+    bpy.ops.object.transform_apply(location=False, rotation=False, scale=True)
     return obj
 
 
@@ -136,6 +140,11 @@ def band(name, outer, inner, depth, location=(0, 0, 0), rotation=(0, 0, 0),
     modifier.solver = "EXACT"
     bpy.ops.object.modifier_apply(modifier="cut")
     bpy.data.objects.remove(hole, do_unlink=True)
+    # The boolean leaves an empty material slot every face points at, so
+    # shade()'s material landed in slot 1 and the USD exporter wrote the
+    # ring outside every material subset: it drew in the mesh's FIRST
+    # material (the inductor's copper turns came out champagne). Clear it.
+    outer_obj.data.materials.clear()
 
     outer_obj.rotation_euler = rotation
     outer_obj.location = location
