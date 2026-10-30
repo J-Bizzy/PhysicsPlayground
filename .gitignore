@@ -5,3 +5,6 @@
 
 # Blender/Python bytecode from the Tools/ model generators
 Tools/__pycache__/
+
+# Renders from Tools/propsheet.py — regenerated from the script, never kept
+Tools/propsheets/
