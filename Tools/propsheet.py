@@ -19,6 +19,8 @@ Modes:
                         wearer's eye at 1.6 m, as the lab opens on it
     stats               triangles, vertices, materials, textures, bounds and
                         the contract checks for every USDZ, as stats.md
+    frames Prefix ...   every <Prefix>*.usdz in --src, in name order, through
+                        one close camera: a storyboard of posed assemblies
     all                 stats, sheet, loop and a turntable of every asset
 
 Options:
@@ -29,7 +31,13 @@ Options:
     --out DIR      the output folder (default Tools/propsheets/<label>)
     --light L      room, studio or both (default both)
     --bare         the USDZ alone, without the pieces Swift adds
+    --parts a,b    the sheet's and turntable's parts (default every one)
     --samples N    Cycles samples per tile (default 48)
+
+A folder given by --src may hold a contract.json overriding the numbers
+read from the sources — `terminalOffset`, `wireCore`, `wireJacket`, any
+mount — which is how a direction that moves its contacts is drawn
+wired at the right places.
 
 Everything lands in Tools/propsheets/, which git ignores: a render is
 regenerated from this script, never kept. Nothing is written under
@@ -106,14 +114,14 @@ KEY_COLOUR = (1.0, 0.96, 0.9)
 def arguments():
     argv = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else []
     options = {"src": MODELS, "label": "current", "out": None, "light": "both",
-               "bare": False, "samples": 48}
+               "bare": False, "samples": 48, "parts": None}
     words = []
     index = 0
     while index < len(argv):
         word = argv[index]
         if word == "--bare":
             options["bare"] = True
-        elif word in ("--src", "--label", "--out", "--light", "--samples"):
+        elif word in ("--src", "--label", "--out", "--light", "--samples", "--parts"):
             options[word[2:]] = argv[index + 1]
             index += 1
         else:
@@ -122,6 +130,8 @@ def arguments():
     if not words:
         sys.exit("propsheet: name a mode — sheet, turntable <Name…>, loop, stats or all")
     options["samples"] = int(options["samples"])
+    if options["parts"]:
+        options["parts"] = options["parts"].split(",")
     options["out"] = options["out"] or os.path.join(TOOLS, "propsheets", options["label"])
     options["lights"] = ["room", "studio"] if options["light"] == "both" else [options["light"]]
     return words[0], words[1:], options
@@ -165,6 +175,10 @@ def contract():
     c["stageRadius"] = float(swift(model, r"static let stageRadius = " + number).group(1))
     c["stageTop"] = float(swift(model, r"homeStage = Stage\(.*?top: " + number, re.S).group(1))
     c["contactRadius"] = float(swift(renderer, r"static let contactRadius: Float = " + number).group(1))
+    c["wireCore"] = float(swift(renderer, r"core = ModelEntity\(\s*mesh: Primitives\.cylinder\("
+                                          r"height: 1, radius: " + number).group(1))
+    c["wireJacket"] = float(swift(renderer, r"jacket = ModelEntity\(\s*mesh: Primitives\.cylinder\("
+                                            r"height: 1, radius: " + number).group(1))
     c["switchPivotX"] = float(swift(renderer, r"static let switchPivot = SIMD3<Float>\(" + number).group(1))
     c["ceramicRadius"] = float(swift(renderer, r"static let ceramicRadius: Float = " + number).group(1))
     c["ceramicLength"] = float(swift(renderer, r"static let ceramicLength: Float = " + number).group(1))
@@ -537,7 +551,7 @@ def render(path):
     bpy.ops.render.render(write_still=True)
 
 
-def fit_distance(subject, fov, margin=1.2):
+def fit_distance(subject, fov, margin=1.45):
     """How far back the close camera stands so `subject` fits its frame."""
     meshes = [o for o in subject.children_recursive if o.type == "MESH"]
     bounds = rk_bounds(meshes)
@@ -737,7 +751,7 @@ def caption_for(name, objects_root, missing):
 
 
 def sheet(c, options):
-    names = [k for k in c["kinds"]] + ["Multimeter", "MeterProbe"]
+    names = options["parts"] or [k for k in c["kinds"]] + ["Multimeter", "MeterProbe"]
     for light in options["lights"]:
         for distance, fov, size, tag in ((WEARER_DISTANCE, WEARER_FOV, wearer_size(), "wearer"),
                                          (CLOSE_DISTANCE, CLOSE_FOV, CLOSE_SIZE, "close")):
@@ -854,15 +868,19 @@ def loop(c, options):
             direction = Vector((along[0], -along[2], along[1])).normalized()
             rotation = direction.to_track_quat("Z", "Y").to_euler()
             primitive("cylinder", "cable", hot if hotside else cold, None, rk(*middle), rotation,
-                      radius=0.0032, height=along.length)
-            primitive("cylinder", "jacket", jacket, None, rk(*middle), rotation,
-                      radius=0.0062, height=along.length)
+                      radius=c["wireCore"], height=along.length)
+            if c["wireJacket"] > 0:   # a direction may draw the wire bare
+                primitive("cylinder", "jacket", jacket, None, rk(*middle), rotation,
+                          radius=c["wireJacket"], height=along.length)
         stage = bpy.data.objects.new("stage", None)
         bpy.context.collection.objects.link(stage)
         stage.location = rk(0, c["stageTop"], -0.9)
         for name in ("CircuitStageDeck", "CircuitStageRim"):
-            if os.path.exists(asset_path(options["src"], name)):
-                import_usd(asset_path(options["src"], name), stage)
+            # A direction that mills no stage of its own stands on the app's.
+            for folder in (options["src"], MODELS):
+                if os.path.exists(asset_path(folder, name)):
+                    import_usd(asset_path(folder, name), stage)
+                    break
         if light == "room":
             floor = bpy.data.meshes.new("floor")
             floor.from_pydata([(-4, -6, 0), (4, -6, 0), (4, 2, 0), (-4, 2, 0)], [], [(0, 1, 2, 3)])
@@ -891,9 +909,59 @@ def loop(c, options):
         render(os.path.join(options["out"], "loop-%s.png" % light))
 
 
+def overridden(c, src):
+    """A direction's own numbers, from `<src>/contract.json`, over the app's."""
+    import json
+    path = os.path.join(src, "contract.json")
+    if os.path.exists(path):
+        with open(path) as handle:
+            for key, value in json.load(handle).items():
+                if key not in c:
+                    sys.exit("propsheet: contract.json names %s, which nothing reads" % key)
+                c[key] = value
+    return c
+
+
+def frames(options, prefixes):
+    """A storyboard: posed assemblies milled elsewhere, through one camera
+    fitted to the largest of them, so only the subject moves."""
+    for prefix in prefixes:
+        files = sorted(f[:-5] for f in os.listdir(options["src"])
+                       if f.startswith(prefix) and f.endswith(".usdz"))
+        if not files:
+            sys.exit("propsheet: no %s*.usdz in %s" % (prefix, options["src"]))
+        reset()
+        spans = []
+        for name in files:
+            root, _ = build_asset(name, options["src"])
+            bpy.context.view_layer.update()
+            spans.append(rk_bounds([o for o in root.children_recursive if o.type == "MESH"]))
+        lo = [min(b[0][i] for b in spans) for i in range(3)]
+        hi = [max(b[1][i] for b in spans) for i in range(3)]
+        target = rk(*[(a + b) / 2 for a, b in zip(lo, hi)])
+        half = [(b - a) / 2 for a, b in zip(lo, hi)]
+        distance = 1.25 * max(max(half[0], half[2]) / math.tan(math.radians(CLOSE_FOV[0]) / 2),
+                              max(half[1], half[2]) / math.tan(math.radians(CLOSE_FOV[1]) / 2))
+        rows = []
+        for light in options["lights"]:
+            row = []
+            for name in files:
+                reset()
+                configure(options["samples"])
+                light_room(light)
+                root, _ = build_asset(name, options["src"])
+                bpy.context.view_layer.update()
+                path = os.path.join(options["out"], "tiles", "frame-%s-%s.png" % (name, light))
+                tile(path, root, target, light, distance, CLOSE_FOV, CLOSE_SIZE,
+                     name[len(prefix):].strip("_-") or name, close=True, fit=False)
+                row.append(path)
+            rows.append(row)
+        composite(rows, os.path.join(options["out"], "frames-%s.png" % prefix))
+
+
 def main():
     mode, names, options = arguments()
-    c = contract()
+    c = overridden(contract(), options["src"])
     os.makedirs(os.path.join(options["out"], "tiles"), exist_ok=True)
     if mode in ("stats", "all"):
         stats(c, options)
@@ -901,11 +969,14 @@ def main():
         sheet(c, options)
     if mode in ("loop", "all"):
         loop(c, options)
+    if mode == "frames":
+        frames(options, names)
     if mode in ("turntable", "all"):
         if mode == "all" or not names:
-            names = list(c["kinds"]) + [c["carrier"], "CircuitStageDeck", "CircuitStageRim",
-                                        "Multimeter", "MeterProbe"]
+            names = options["parts"] or list(c["kinds"]) + [
+                c["carrier"], "CircuitStageDeck", "CircuitStageRim", "Multimeter", "MeterProbe"]
         turntable(c, options, names)
 
 
-main()
+if __name__ == "__main__":
+    main()
