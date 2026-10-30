@@ -222,7 +222,7 @@ final class ColliderCriterionTests: XCTestCase {
         assertCollidersFit(renderer.root, "Circuits")
     }
 
-    /// A joint: two parts snapped nose-to-tail, the collar's sphere the one
+    /// A joint: two parts snapped nose-to-tail, the junction dot's sphere the one
     /// target where their leads meet.
     func testCircuitsJointCollidersFit() {
         let model = CircuitsModel()

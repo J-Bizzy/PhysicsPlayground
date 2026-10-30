@@ -22,7 +22,7 @@ nonisolated enum SoundEffects {
 
     /// Every one-shot, by the name `SoundPalette.Sound` uses.
     static let names = ["pop", "whoosh", "thud", "chime", "boom",
-                        "grabTick", "releaseTick", "arrival", "clack", "launch", "gleam"]
+                        "grabTick", "releaseTick", "arrival", "clack", "launch", "gleam", "seat"]
 
     /// One-shot samples, mono, peak-normalised to −6 dBFS (what every
     /// call site's volume was tuned against) times the sound's own trim.
@@ -43,6 +43,7 @@ nonisolated enum SoundEffects {
         // Twenty milliseconds of ring reads quieter than its peak says.
         case "clack": raw = clack(sampleRate); trim = 1.5
         case "launch": raw = launch(sampleRate)
+        case "seat": raw = seat(sampleRate)
         // Rare and meant to be noticed, but never louder than a success.
         case "gleam": raw = gleam(sampleRate); trim = 0.8
         default: raw = []
@@ -243,6 +244,22 @@ nonisolated enum SoundEffects {
             }
             let contact = (noise.next() * 2 - 1) * exp(-t * 4_000) * 0.6
             return (ring + contact) * onset(t, 0.0002)
+        }
+    }
+
+    /// Two dots finding each other (2026-10-30): a short, dense thunk — a
+    /// body falling 300 → 140 Hz in a few milliseconds — under a brass tick
+    /// and the contact's click: a magnet's snap, the seat of a joint.
+    static func seat(_ rate: Double) -> [Double] {
+        var phase = 0.0
+        var noise = AmbientScore.SplitMix64(seed: 0x5E_A7)
+        return samples(0.16, rate) { t in
+            let f = 140 + 160 * exp(-t * 60)
+            phase += f / rate
+            let body = sin(2 * .pi * phase) * exp(-t * 32)
+            let tick = 0.35 * sin(2 * .pi * 3_400 * t) * exp(-t * 180)
+            let contact = 0.25 * (noise.next() * 2 - 1) * exp(-t * 2_500)
+            return (body + tick + contact) * onset(t, 0.0004)
         }
     }
 

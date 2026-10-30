@@ -4,7 +4,7 @@
 //
 //  Wiring made smooth (2026-10-18), the gesture unchanged: a wire's grab
 //  volume never overlaps a lead's; two leads snapped together are one
-//  joint, drawn with a collar that is the one thing to grab there; a pull
+//  joint, drawn as one junction dot that is the one thing to grab there; a pull
 //  lifts the end the hand means; a "these are already connected" refusal
 //  lights the connection it found; and a part snapped onto a neighbour
 //  glides there instead of jumping.
@@ -79,8 +79,9 @@ final class CircuitsConnectionTests: XCTestCase {
     }
 
     /// On a real bench every cable's target is clear of its leads', and at
-    /// a joint the two coincident leads give their targets to the collar.
-    func testAJointsLeadsGiveTheirTargetsToItsCollar() throws {
+    /// a joint the two coincident leads give their targets — and their dots —
+    /// to the one junction dot.
+    func testAJointsLeadsGiveTheirTargetsToItsJunction() throws {
         let model = CircuitsModel()
         let (battery, bulb, wire, _) = joint(model)
         let renderer = CircuitsRenderer()
@@ -97,8 +98,10 @@ final class CircuitsConnectionTests: XCTestCase {
         let cable = try XCTUnwrap(renderer.root.findEntity(named: "w-\(wire.uuidString)"))
         let shape = try XCTUnwrap(cable.components[CollisionComponent.self]?.shapes.first)
         XCTAssertEqual(shape.bounds.extents.x, 2 * CircuitsRenderer.jointGrabRadius, accuracy: 1e-3)
-        let collar = try XCTUnwrap(cable.findEntity(named: "collar"))
-        XCTAssertTrue(collar.isEnabled)
+        let junction = try XCTUnwrap(cable.findEntity(named: "junction"))
+        XCTAssertTrue(junction.isEnabled)
+        XCTAssertTrue(batteryLead.children.allSatisfy { !$0.isEnabled }, "its dot gives way to the junction")
+        XCTAssertTrue(bulbLead.children.allSatisfy { !$0.isEnabled })
         XCTAssertEqual(CircuitsSpaceView.resolveGrab(names: ["w-\(wire.uuidString)"], on: model),
                        .wire(wire))
 
@@ -108,7 +111,8 @@ final class CircuitsConnectionTests: XCTestCase {
         tick(renderer, model)
         XCTAssertNotNil(batteryLead.components[CollisionComponent.self])
         XCTAssertNotNil(bulbLead.components[CollisionComponent.self])
-        XCTAssertFalse(collar.isEnabled)
+        XCTAssertFalse(junction.isEnabled)
+        XCTAssertTrue(batteryLead.children.allSatisfy(\.isEnabled), "its dot is back")
     }
 
     // MARK: Which end a pull lifts
@@ -202,7 +206,7 @@ final class CircuitsConnectionTests: XCTestCase {
 
     /// A released part snapped onto a neighbour's lead is drawn gliding
     /// from where it was let go to where it lands, over `landingDuration`,
-    /// and its joint's collar follows it in.
+    /// and its joint's junction dot follows it in.
     func testASnappedPartGlidesIntoPlace() throws {
         let model = CircuitsModel()
         let (_, bulb, _, before) = joint(model)

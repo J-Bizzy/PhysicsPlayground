@@ -214,6 +214,11 @@ def export(objects, path):
         obj.select_set(True)
     bpy.context.view_layer.objects.active = objects[0]
     os.makedirs(os.path.dirname(path), exist_ok=True)
+    # Triangulated here, by Blender, which ear-clips a concave polygon
+    # properly. RealityKit fans an n-gon from one corner, and a boolean ring
+    # (`band()`) leaves its flat faces as C-shaped half-annuli: fanned, the
+    # C's mouth fills in, so the stage's keyline drew as a champagne disc
+    # over the whole deck (2026-10-30). Cycles never showed it.
     bpy.ops.wm.usd_export(
         filepath=path,
         selected_objects_only=True,
@@ -221,5 +226,7 @@ def export(objects, path):
         convert_orientation=True,
         export_global_forward_selection="NEGATIVE_Z",
         export_global_up_selection="Y",
+        triangulate_meshes=True,
+        ngon_method="BEAUTY",
     )
     print("wrote", path)

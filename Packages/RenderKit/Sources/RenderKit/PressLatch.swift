@@ -24,6 +24,15 @@ public struct PressLatch<Payload>: Sendable where Payload: Sendable {
     /// Whether a press is waiting to see whether it is a drag.
     public var isPending: Bool { pending != nil }
 
+    /// What is pressed, while it waits — for a view that shows the press
+    /// straining before it gives (a joint pulled apart, 2026-10-30).
+    public var pendingPayload: Payload? { pending?.payload }
+
+    /// How far the hand has carried a waiting press, nil if none waits.
+    public func travel(to hand: SIMD3<Double>) -> SIMD3<Double>? {
+        pending.map { hand - $0.hand }
+    }
+
     /// Records a press without acting on the pressed object. The first
     /// press wins: a `targetedToAnyEntity` gesture reports the same entity
     /// every frame, and re-pressing would reset the anchor so `promote`

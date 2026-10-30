@@ -42,4 +42,45 @@ public enum Motion {
         if abs(next - target) < 0.004 { next = target }
         return min(max(next, min(value, target)), max(value, target))
     }
+
+    /// The house throw (2026-10-30): a damped spring, for a part that is
+    /// flung rather than eased — a switch's blade swings past where it stops
+    /// and settles. At the defaults (7 Hz, damping 0.45) it overshoots by a
+    /// fifth and settles in about 0.2 s. Stepped at 240 Hz inside each frame
+    /// so its shape does not depend on the frame rate; under Reduce Motion
+    /// it lands at once.
+    public struct Spring: Equatable, Sendable {
+        public var value: Float
+        public var velocity: Float = 0
+
+        public init(_ value: Float, velocity: Float = 0) {
+            self.value = value
+            self.velocity = velocity
+        }
+
+        public var isSettled: Bool { velocity == 0 }
+
+        @MainActor
+        public mutating func step(toward target: Float, dt: Double,
+                                  frequency: Float = 7, damping: Float = 0.45) {
+            guard !Motion.isReduced else {
+                value = target
+                velocity = 0
+                return
+            }
+            let omega = 2 * Float.pi * frequency
+            var remaining = Float(max(0, Swift.min(dt, 0.1)))
+            while remaining > 0 {
+                let h = Swift.min(remaining, 1 / 240)
+                let pull = -omega * omega * (value - target) - 2 * damping * omega * velocity
+                velocity += pull * h
+                value += velocity * h
+                remaining -= h
+            }
+            if abs(value - target) < 1e-4, abs(velocity) < 1e-3 {
+                value = target
+                velocity = 0
+            }
+        }
+    }
 }

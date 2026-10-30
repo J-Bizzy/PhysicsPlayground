@@ -135,7 +135,19 @@ final class CircuitsModel {
     // component's value. No-load steady speed ω = kV/(bR + k²) — the property the tests pin.
     nonisolated static let motorTorqueConstant = 0.06
     nonisolated static let motorFriction = 0.0008
-    nonisolated static let motorInertia = 0.0009
+    /// kg·m²: the steel flywheel the motor wears (2026-10-30, contract D4) —
+    /// a rim 80 mm across, 26 mm bore, 20 mm thick, on a 4 mm web — so the
+    /// spin-up a wearer watches is the inertia they see turning. It was a
+    /// round 0.0009 with nothing drawn to carry it; `Tools/circuitparts.py`
+    /// refuses to mill a flywheel that disagrees, and `CircuitPropTests`
+    /// holds this to its literal there.
+    nonisolated static let motorInertia = 0.000543
+
+    /// How long a thrown switch's blade takes to fall into its contact, s.
+    /// A real knife switch closes the circuit when the blade lands, not when
+    /// the hand lets go — so the bulb lights on the landing (2026-10-30,
+    /// contract D3). Opening is immediate: the blade leaves at once.
+    nonisolated static let switchCloseDelay = 0.12
 
     /// How near two leads must come to be one point, for both a pull and a
     /// release. One part's two leads are 0.17 m apart, so this cannot reach
@@ -393,6 +405,10 @@ final class CircuitsModel {
         /// Motors only: the spin speed (rad/s) — transient, integrated
         /// each step from torque against back-EMF and friction.
         var motorSpeed = 0.0
+        /// Switches only: seconds until a closing blade lands in its contact
+        /// — transient. A switch is closed only once its blade is there
+        /// (contract D3); 0 when nothing is falling.
+        var closingIn = 0.0
         /// Rated parts only: joules of excess dissipation stored as heat
         /// — transient; past `thermalBudget` the part scorches.
         var thermalEnergy = 0.0
@@ -666,8 +682,8 @@ final class CircuitsModel {
         guard components.contains(where: { $0.id == id }) else { return .nothingNear }
         // Wherever it lands, the stage keeps its clearance under the circuit.
         defer { settleStage() }
-        if let alignment = alignment(for: id),
-           let index = components.firstIndex(where: { $0.id == id }) {
+        let alignment = alignment(for: id)
+        if let alignment, let index = components.firstIndex(where: { $0.id == id }) {
             components[index].position = alignment.position
             components[index].axis = alignment.axis
         }
@@ -694,7 +710,9 @@ final class CircuitsModel {
             emitSound(.thud, at: component.position, volume: 0.5)
             return .refused
         }
-        emitSound(.chime, at: component.position, volume: 0.5)
+        // Two dots meeting seat with a snap; a wire across a gap the clamp
+        // would not let it close lands with the chime.
+        emitSound(alignment == nil ? .chime : .seat, at: component.position, volume: 0.55)
         persistSoon()
         return .joined
     }
@@ -976,9 +994,11 @@ final class CircuitsModel {
     }
 
     /// Two leads nearer than this are one JOINT (2026-10-18): the renderer
-    /// draws a collar there and makes it the one thing to grab, withdrawing
-    /// the two coincident leads' own targets, which overlapped.
-    nonisolated static let jointLength = 0.052
+    /// draws one junction dot there and makes it the one thing to grab,
+    /// withdrawing the two coincident leads' own targets, which overlapped.
+    /// Two 17 mm dots' diameters and 4 mm (0.052 for the lab kit's 24 mm
+    /// balls, until 2026-10-30).
+    nonisolated static let jointLength = 0.038
 
     func isJoint(_ wire: Wire) -> Bool { wireLength(wire) < Self.jointLength }
 
@@ -1222,14 +1242,36 @@ final class CircuitsModel {
         persistSoon()
     }
 
+    /// Throws a switch. Open, it starts its blade falling and closes the
+    /// circuit `switchCloseDelay` later, when the blade lands; closed, or
+    /// still falling, it lifts at once and the circuit opens now.
     func toggleSwitch(id: UUID) {
         guard scrubTime == nil else { return }
         guard let index = components.firstIndex(where: { $0.id == id }),
               components[index].kind == .switcher else { return }
-        components[index].isClosed.toggle()
+        if components[index].isClosed || components[index].closingIn > 0 {
+            components[index].isClosed = false
+            components[index].closingIn = 0
+            emitSound(.clack, at: components[index].position, volume: 0.3)
+        } else {
+            components[index].closingIn = Self.switchCloseDelay
+        }
         selectedID = id
-        emitSound(.thud, at: components[index].position, volume: 0.5)
         persistSoon()
+    }
+
+    /// Lands any falling blade whose time is up: the circuit closes this
+    /// step, before the solve, with the clack of the blade seating. Counted
+    /// in real time even when paused, as an edit is — the hand threw it.
+    private func advanceSwitches(dt: Double) {
+        for index in components.indices where components[index].closingIn > 0 {
+            components[index].closingIn = max(0, components[index].closingIn - dt)
+            if components[index].closingIn == 0 {
+                components[index].isClosed = true
+                emitSound(.clack, at: components[index].position, volume: 0.55)
+                persistSoon()
+            }
+        }
     }
 
     /// True when the part has at least one wire on it.
@@ -1314,6 +1356,7 @@ final class CircuitsModel {
     func step(dt: Double) {
         let isRecordingFrame = !isPaused
         coastStage(dt: dt)
+        advanceSwitches(dt: dt)
         solve(dt: dt)
         if isRecordingFrame {
             recordCapsuleFrame(dt: min(max(dt, 1e-4), 1.0 / 30.0))

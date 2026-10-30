@@ -359,6 +359,27 @@ final class TimeCapsuleRoundTripTests: XCTestCase {
         XCTAssertEqual(model.captureCapsuleSnapshot(), expected)
     }
 
+    /// A switch thrown closed and restored mid-fall lands on the same frame
+    /// it did: the blade's fall is apparatus (contract D3).
+    func testCircuitsReplaysASwitchMidFall() {
+        let model = CircuitsModel()
+        model.clearCapsule()
+        let toggle = model.components.first { $0.kind == .switcher }!
+        model.toggleSwitch(id: toggle.id)
+        for _ in 0..<5 { model.step(dt: dt) }
+        model.toggleSwitch(id: toggle.id)
+        model.step(dt: dt)
+        let snapshot = model.captureCapsuleSnapshot()
+        XCTAssertGreaterThan(snapshot.components.first { $0.id == toggle.id }!.closingIn, 0)
+        for _ in 0..<20 { model.step(dt: dt) }
+        let expected = model.captureCapsuleSnapshot()
+        XCTAssertTrue(expected.components.first { $0.id == toggle.id }!.isClosed)
+
+        model.restoreCapsuleSnapshot(snapshot)
+        for _ in 0..<20 { model.step(dt: dt) }
+        XCTAssertEqual(model.captureCapsuleSnapshot(), expected)
+    }
+
     /// A scrubbed bench must never be written to disk: a rewind you were
     /// only inspecting must not become the bench you find next launch.
     func testCircuitsDoesNotPersistWhileScrubbed() {

@@ -47,44 +47,64 @@ final class CircuitsRenderer {
     /// Parent for the selected component's readout attachment.
     let selectedAnchor = Entity()
 
-    /// The lead's touch target — the bead and the carry target are both sized against it.
-    static let terminalTargetRadius: Float = 0.026
+    /// The lead's touch target — the bead and the carry target are both sized
+    /// against it. The collider rule allows (0.017 + 0.030) / 2 round a dot.
+    static let terminalTargetRadius: Float = 0.023
 
     private struct ComponentVisual {
         let holder: Entity
         let body: ModelEntity
         /// The resistor's procedural ceramic, which wears the live bands.
         var ceramic: ModelEntity?
-        var terminals: [ModelEntity]
+        /// The terminals: each a holder for its brass dot.
+        var terminals: [Entity]
+        /// Each lead's line, coloured by its terminal's net like a wire.
+        var leads: [Entity] = []
+        var leadBuckets: [Int] = [Int.min, Int.min]
         /// Each lead's current accessibility value — unchanged state costs no write.
         var terminalValues: [String] = ["", ""]
-        /// Whether each lead is in a joint, its target withdrawn for the
-        /// joint's collar — changed only when it moves.
+        /// Whether each lead is in a joint: its dot hidden for the junction
+        /// dot and its target withdrawn — changed only when it moves.
         var terminalJoined: [Bool] = [false, false]
         let label: BackedLabel
         let halo: ModelEntity
         var glow: ModelEntity?
-        var filament: ModelEntity?
+        var filament: Entity?
         /// The bulb's own light on the parts round it.
         var light: Entity?
-        var lever: ModelEntity?
-        /// Motors only: the propeller that spins with the shaft.
+        var lever: Entity?
+        /// The drawn blade, rad: thrown open on the house spring, falling on
+        /// the model's own clock when it closes (`closingIn`), bouncing in
+        /// its contact once it lands.
+        var blade = Motion.Spring(0)
+        var bladeFalling = false
+        /// Motors only: the flywheel that turns with the shaft, its blur
+        /// at speed, and the rotor's own materials to put back.
         var rotor: Entity?
-        /// The fuse's middle filament segment, gone when it blows.
-        var fuseBridge: ModelEntity?
-        /// The capacitor's charge gauge, scaled along x by |V|/24.
-        var gaugeFill: ModelEntity?
-        /// The AC source's needle, swung by the EMF.
-        var needle: Entity?
-        /// The LED's lit die, red when it conducts and dark once burned out.
+        var rotorBlur: Entity?
+        var rotorDress: Dress?
+        var blurred = false
+        /// The fuse's middle filament segment, gone when it blows, and its
+        /// glass, scorched with it.
+        var fuseBridge: Entity?
+        var fuseGlass: Entity?
+        var fuseGlassDress: Dress?
+        /// The capacitor's plates, tinted by the charge on them.
+        var plates: [Entity] = []
+        var plateDresses: [Dress] = []
+        var chargeBucket = Int.min
+        /// The AC source's bead, riding the sine at the source's phase.
+        var bead: Entity?
+        /// The LED's epoxy cone, lit red when it conducts and dark once
+        /// burned out, and its own materials to put back.
         var ledCore: Entity?
+        var ledDress: Dress?
         let labelPivot: Entity
         /// The axis and stage yaw the orientation was last built for, the
         /// frame built, and whether the drawn frame is still easing to it.
         var orientedFor: (axis: SIMD3<Float>, yaw: Double)?
         var targetOrientation: simd_quatf?
         var easingOrientation = false
-        var appliedGauge: Float = -1
         var fuseIntact: Bool?
         var ledState = Int.min
         var labelText = ""
@@ -131,8 +151,10 @@ final class CircuitsRenderer {
     /// that the circulation reads as belonging to this wire.
     private static let fieldRingRadius: Double = 0.055
 
-    private static let electronBudget = 200
-    private let electronPool: EntityPool<Void>
+    /// The dots a bench may show at once (contract D5's fallback): one
+    /// draw each, shared out among the wires when a bench wants more.
+    static let electronBudget = 120
+    let electronDots = ElectronDots(capacity: electronBudget)
     private var electronsVisible = false
     private var fieldArrowsVisible = false
     /// The segments the field arrows were last drawn from — nil when the layer
@@ -183,17 +205,7 @@ final class CircuitsRenderer {
         viewRoot.addChild(stageRoot)
         root.addChild(Lighting.keyLight())
 
-        // Electrons you can't miss: a white-hot core inside a cyan glow.
-        let coreMaterial = UnlitMaterial(color: UIColor(red: 0.8, green: 1.0, blue: 1.0, alpha: 1))
-        let haloMaterial = Materials.unlit(DesignTokens.Palette.electronUI, opacity: 0.35)
-        let coreMesh = Primitives.sphere(radius: 0.0034)
-        let haloMesh = Primitives.sphere(radius: 0.0075)
-        electronPool = EntityPool(budget: Self.electronBudget) { container in
-            let core = ModelEntity(mesh: coreMesh, materials: [coreMaterial])
-            core.addChild(ModelEntity(mesh: haloMesh, materials: [haloMaterial]))
-            container.addChild(core)
-        }
-        viewRoot.addChild(electronPool.root)
+        viewRoot.addChild(electronDots.root)
         viewRoot.addChild(fieldArrows.root)
         fieldArrows.hideAll()
 
@@ -212,6 +224,21 @@ final class CircuitsRenderer {
                 activate: { [weak self] in self?.onStageAction?() })
         }
 
+    }
+
+    /// The electron's core and halo: the milled low-poly pair (400
+    /// triangles, contract D5) — `generateSphere` is 8,064 each, whatever
+    /// the radius — or, missing, those spheres.
+    static func electronMeshes() -> (core: MeshResource, halo: MeshResource) {
+        func mesh(_ name: String) -> MeshResource? {
+            PropCache.prototype(named: electronAssetName)?.findEntity(named: name)
+                .flatMap { entity in
+                    entity.components[ModelComponent.self]?.mesh
+                        ?? entity.children.lazy.compactMap { $0.components[ModelComponent.self]?.mesh }.first
+                }
+        }
+        return (mesh("core") ?? Primitives.sphere(radius: 0.0026),
+                mesh("halo") ?? Primitives.sphere(radius: 0.0045))
     }
 
     // MARK: The bench's magnetic field
@@ -319,255 +346,263 @@ final class CircuitsRenderer {
         return simd_distance(point, segment.a + along * t)
     }
 
-    // MARK: Lab-kit modules (2026-10-18)
+    // MARK: The Solid Schematic (2026-10-30)
 
-    /// Where `Tools/circuitparts.py` stands each part's live pieces — keep in
-    /// step with its constants of the same names.
-    nonisolated static let carrierTop: Float = -0.012
-    nonisolated static let carrierBottom: Float = -0.026
-    nonisolated static let bulbCentre: Float = 0.024
-    nonisolated static let ledGlowHeight: Float = 0.013
-    nonisolated static let motorAxis: Float = 0.008
-    nonisolated static let switchPivot = SIMD3<Float>(-0.028, 0.004, 0)
-    nonisolated static let resistorAxis: Float = 0.006
-    nonisolated static let fuseAxis: Float = 0
-    nonisolated static let acFace: Float = -0.0018
-    /// The brass ball at each end: the terminal, as a lab kit's contact.
-    nonisolated static let contactRadius: Float = 0.012
-    static let carrierAssetName = "CircuitCarrier"
+    /// The numbers the assets and this renderer share, as `Tools/circuitparts.py`
+    /// mills them — `CircuitPropTests` holds each to its literal there.
+    /// A terminal's brass dot (`CircuitDot.usdz`).
+    nonisolated static let contactRadius: Float = 0.0085
+    /// A joint's two dots drawn as one junction dot, this much larger.
+    nonisolated static let junctionScale: Float = 1.25
+    /// A wire's core and its dark jacket — and a lead's: leads and wires are
+    /// one line (contract D1).
+    nonisolated static let wireCoreRadius: Float = 0.0022
+    nonisolated static let wireJacketRadius: Float = 0.0037
+    /// Every element stays inside |x| < this; the leads are drawn here.
+    nonisolated static let elementClamp: Float = 0.060
+    /// The switch's blade turns about +z through this point, and opens to
+    /// the symbol's own angle.
+    nonisolated static let switchPivot = SIMD3<Float>(-0.032, 0, 0)
+    nonisolated static let switchOpenAngle: Float = 30 * .pi / 180
+    /// The AC source's wave: half-width, amplitude, and the plane it lies
+    /// in; the bead rides it this far in front.
+    nonisolated static let acWaveHalfWidth: Float = 0.018
+    nonisolated static let acWaveAmplitude: Float = 0.0075
+    nonisolated static let acBeadZ: Float = 0.0069
+    /// Where each part's leads stop, −X end then +X end: the element's own
+    /// surface (`LEAD_INNER`).
+    nonisolated static let leadInner: [CircuitsModel.ComponentKind: SIMD2<Float>] = [
+        .battery: [-0.012, 0.014], .acSource: [-0.035, 0.035],
+        .resistor: [-0.0255, 0.0255], .capacitor: [-0.007, 0.0075],
+        .inductor: [-0.027, 0.027], .bulb: [-0.0345, 0.0345],
+        .led: [-0.012, 0.007], .motor: [-0.014, 0.014],
+        .fuse: [-0.028, 0.028], .switcher: [-0.040, 0.040],
+    ]
+    static let dotAssetName = "CircuitDot"
+    static let electronAssetName = "CircuitElectron"
     /// The shelf shows each module at this fraction of its size, so a whole
-    /// module — carrier, contacts and all — fits a slot.
+    /// module — dots and all — fits a slot.
     nonisolated static let shelfPreviewScale: Float = 0.60
-    /// The capacitor gauge's full scale, V: the bench's tallest source.
+    /// The capacitor's charge, full at the bench's tallest source, V.
     nonisolated static let gaugeFullScale = 24.0
 
     private static let contactMaterial = Materials.machined(
         DesignTokens.Palette.contactBrassUI, roughness: 0.28)
 
-    /// One lab-kit module as built: its carrier, its body and contacts, and
-    /// the pieces that move or light, for `makeVisual`, the shelf and the
-    /// home's diorama to share.
+    /// One part as built: its milled element and the pieces that move or
+    /// light in it, its two dots and two leads, for `makeVisual`, the shelf
+    /// and the home's diorama to share.
     struct Module {
         let root: Entity
-        var carrier: Entity?
         let body: ModelEntity
         var ceramic: ModelEntity?
-        var contacts: [ModelEntity] = []
-        var filament: ModelEntity?
+        var contacts: [Entity] = []
+        var leads: [Entity] = []
+        var filament: Entity?
         var glow: ModelEntity?
         var light: Entity?
         var rotor: Entity?
-        var lever: ModelEntity?
-        var fuseBridge: ModelEntity?
-        var gaugeFill: ModelEntity?
-        var needle: Entity?
+        var rotorBlur: Entity?
+        var lever: Entity?
+        var fuseBridge: Entity?
+        var fuseGlass: Entity?
+        var plates: [Entity] = []
+        var bead: Entity?
         var ledCore: Entity?
     }
 
     static func makeModule(kind: CircuitsModel.ComponentKind) -> Module {
         let root = Entity()
-        var carrier: Entity?
-        if let prototype = PropCache.prototype(named: carrierAssetName) {
-            let mounted = prototype.clone(recursive: true)
-            mounted.name = "carrier"
-            root.addChild(mounted)
-            carrier = mounted
-        }
         let (body, ceramic) = makeBody(kind: kind)
         root.addChild(body)
-        var module = Module(root: root, carrier: carrier, body: body, ceramic: ceramic)
-        let contactMesh = Primitives.sphere(radius: contactRadius)
+        var module = Module(root: root, body: body, ceramic: ceramic)
+        let span = Float(CircuitsModel.terminalOffset)
+        let inner = leadInner[kind] ?? [-0.03, 0.03]
         for end in 0...1 {
-            let contact = ModelEntity(mesh: contactMesh, materials: [contactMaterial])
-            contact.position = [Float(end == 0 ? -1 : 1) * Float(CircuitsModel.terminalOffset), 0, 0]
+            let sign: Float = end == 0 ? -1 : 1
+            let contact = makeDot()
+            contact.position = [sign * span, 0, 0]
             root.addChild(contact)
             module.contacts.append(contact)
+            let lead = makeLine(from: [sign * span, 0, 0], to: [end == 0 ? inner.x : inner.y, 0, 0])
+            lead.name = "lead\(end)"
+            root.addChild(lead)
+            module.leads.append(lead)
+        }
+        // The live pieces are the asset's own named children; renamed here
+        // to the names the bench has always looked them up by.
+        func child(_ name: String, as renamed: String) -> Entity? {
+            let found = body.findEntity(named: name)
+            found?.name = renamed
+            return found
         }
         switch kind {
         case .bulb:
-            // Between the milled supports' tips at ±0.005.
-            let filament = ModelEntity(
-                mesh: Primitives.cylinder(height: 0.010, radius: 0.0009),
-                materials: [Materials.unlit(UIColor(white: 0.35, alpha: 1))])
-            filament.name = "bulb-filament"
-            filament.orientation = simd_quatf(angle: .pi / 2, axis: [0, 0, 1])
-            filament.position = [0, bulbCentre, 0]
-            root.addChild(filament)
-            module.filament = filament
+            module.filament = child("filament", as: "bulb-filament")
             let glow = GlowSprite.make(size: 0.10)
-            glow.position = [0, bulbCentre, 0]
             glow.isEnabled = false
             root.addChild(glow)
             module.glow = glow
             let light = Entity()
-            light.position = [0, bulbCentre, 0]
             root.addChild(light)
             module.light = light
         case .led:
+            module.ledCore = child("core", as: "led-core")
             let glow = GlowSprite.make(size: 0.06)
-            glow.position = [0, ledGlowHeight, 0]
             glow.isEnabled = false
             root.addChild(glow)
             module.glow = glow
             let light = Entity()
-            light.position = [0, ledGlowHeight + 0.006, 0]
+            light.position = [0, 0.010, 0]
             root.addChild(light)
             module.light = light
-            // A skin just over the milled lens and its barrel: the lit die
-            // when it conducts, the dark one once it has burned out.
-            let core = Entity()
-            core.name = "led-core"
-            core.isEnabled = false
-            let dome = ModelEntity(mesh: Primitives.sphere(radius: 0.0060), materials: [])
-            dome.position = [0, 0.014, 0]
-            core.addChild(dome)
-            let barrel = ModelEntity(mesh: Primitives.cylinder(height: 0.008, radius: 0.0060),
-                                     materials: [])
-            barrel.position = [0, 0.010, 0]
-            core.addChild(barrel)
-            root.addChild(core)
-            module.ledCore = core
         case .motor:
-            // A two-blade propeller on the shaft end, spun each frame by the
-            // motor's live speed; its tips clear the carrier's top by 2 mm.
-            let rotor = Entity()
-            rotor.position = [0.050, motorAxis, 0]
-            rotor.addChild(ModelEntity(
-                mesh: Primitives.sphere(radius: 0.006),
-                materials: [Materials.machined(UIColor(white: 0.6, alpha: 1), roughness: 0.3)]))
-            for axis: SIMD3<Float> in [[0, 1, 0], [0, 0, 1]] {
-                let blade = ModelEntity(
-                    mesh: Primitives.box(size: [0.004, 0.036, 0.003], cornerRadius: 0.0015),
-                    materials: [Materials.unlit(DesignTokens.Palette.motorAccentUI)])
-                blade.orientation = rotation(from: [0, 1, 0], to: axis)
-                rotor.addChild(blade)
-            }
-            root.addChild(rotor)
-            module.rotor = rotor
+            module.rotor = child("rotor", as: "motor-rotor")
+            module.rotorBlur = child("rotor_blur", as: "motor-rotor-blur")
+            module.rotorBlur?.isEnabled = false
         case .switcher:
-            // The knife switch's blade, pivoting between the brass cheeks.
-            let pivot = ModelEntity()
-            pivot.position = switchPivot
-            // Long enough to pass through the spring contact at +0.028, so
-            // its grip stands clear of the springs.
-            let blade = ModelEntity(
-                mesh: Primitives.box(size: [0.066, 0.005, 0.0045], cornerRadius: 0.0015),
-                materials: [Materials.machined(DesignTokens.Palette.contactBrassUI, roughness: 0.3)])
-            blade.position = [0.033, 0.0005, 0]
-            pivot.addChild(blade)
-            let grip = ModelEntity(
-                mesh: Primitives.box(size: [0.008, 0.010, 0.008], cornerRadius: 0.003),
-                materials: [Materials.graphite()])
-            grip.position = [0.064, 0.003, 0]
-            pivot.addChild(grip)
-            root.addChild(pivot)
-            module.lever = pivot
+            module.lever = child("blade", as: "switch-blade")
         case .fuse:
-            // The filament in three segments, so a blown fuse loses its middle.
-            for (index, x) in [Float(-0.0105), 0, 0.0105].enumerated() {
-                let segment = ModelEntity(
-                    mesh: Primitives.cylinder(height: index == 1 ? 0.009 : 0.012, radius: 0.0006),
-                    materials: [copperMaterial])
-                segment.orientation = simd_quatf(angle: .pi / 2, axis: [0, 0, 1])
-                segment.position = [x, fuseAxis, 0]
-                root.addChild(segment)
-                if index == 1 {
-                    segment.name = "fuse-bridge"
-                    module.fuseBridge = segment
-                }
-            }
+            module.fuseBridge = child("fuse_bridge", as: "fuse-bridge")
+            module.fuseGlass = child("fuse_glass", as: "fuse-glass")
         case .capacitor:
-            // The charge gauge, a champagne bar on the carrier's top in front
-            // of the can, filling from the left.
-            let track = ModelEntity(
-                mesh: Primitives.box(size: [0.026, 0.0010, 0.0032]),
-                materials: [Materials.unlit(UIColor(white: 0.18, alpha: 1))])
-            track.position = [0, carrierTop + 0.0005, 0.0175]
-            root.addChild(track)
-            let fill = ModelEntity(
-                mesh: Primitives.box(size: [1, 0.0014, 0.0034]),
-                materials: [Materials.machined(DesignTokens.Palette.contactBrassUI, roughness: 0.25)])
-            fill.name = "capacitor-gauge"
-            fill.position = [-0.013, carrierTop + 0.0007, 0.0175]
-            fill.scale = [0.0001, 1, 1]
-            root.addChild(fill)
-            module.gaugeFill = fill
+            module.plates = [child("plate0", as: "capacitor-plate-0"),
+                             child("plate1", as: "capacitor-plate-1")].compactMap { $0 }
         case .acSource:
-            // The dial's needle, pointing away at zero, swung ±60° by the EMF.
-            let needle = Entity()
-            needle.name = "ac-needle"
-            needle.position = [0, acFace + 0.0010, 0]
-            let pointer = ModelEntity(
-                mesh: Primitives.box(size: [0.0012, 0.0008, 0.0150], cornerRadius: 0.0003),
-                materials: [Materials.unlit(UIColor(white: 0.10, alpha: 1))])
-            pointer.position = [0, 0, -0.0068]
-            needle.addChild(pointer)
-            let hub = ModelEntity(mesh: Primitives.cylinder(height: 0.0012, radius: 0.0018),
-                                  materials: [Materials.machined(DesignTokens.Palette.contactBrassUI)])
-            needle.addChild(hub)
-            root.addChild(needle)
-            module.needle = needle
+            module.bead = child("bead", as: "ac-bead")
         default:
             break
         }
         return module
     }
 
-    /// How far from vertical a part's axis must lie (the sine of its angle
-    /// from the vertical) before "its top toward the sky" means anything.
-    nonisolated static let uprightThreshold: Float = 0.26
+    /// A terminal's brass dot, the milled one or, missing, a sphere.
+    static func makeDot() -> Entity {
+        let holder = Entity()
+        if let dot = PropCache.instance(named: dotAssetName) {
+            holder.addChild(dot)
+        } else {
+            holder.addChild(ModelEntity(mesh: Primitives.sphere(radius: contactRadius),
+                                        materials: [contactMaterial]))
+        }
+        return holder
+    }
 
-    /// The angle of a module's frame: x along its axis and, wherever the axis
-    /// lies far enough from vertical, its carrier's top toward the sky — as a
-    /// real part sits on a turning table, so a part laid end-for-end shows its
-    /// back chamfer (whose symbol reads the right way from behind) rather than
-    /// hanging upside down, which the shortest-arc rotation this replaces
-    /// (2026-10-18) did to every part swung near −X.
+    /// The line the bench draws for a lead or a wire: a voltage-coloured
+    /// core in a dark jacket, a unit segment stretched by its transform.
+    static func makeLine(from a: SIMD3<Float>, to b: SIMD3<Float>) -> Entity {
+        let line = Entity()
+        let core = ModelEntity(mesh: Primitives.cylinder(height: 1, radius: wireCoreRadius),
+                               materials: [voltageMaterials[3]])
+        core.name = "cable"
+        let jacket = ModelEntity(mesh: Primitives.cylinder(height: 1, radius: wireJacketRadius),
+                                 materials: [wireJacketMaterial])
+        jacket.name = "jacket"
+        core.addChild(jacket)
+        line.addChild(core)
+        let direction = b - a
+        let length = simd_length(direction)
+        if length > 1e-6 {
+            core.position = (a + b) / 2
+            core.orientation = VectorFieldArrows.rotationFromYAxis(to: direction / length)
+            core.scale = SIMD3(1, length, 1)
+        } else {
+            core.isEnabled = false
+        }
+        return line
+    }
+
+    /// Every material a piece wears, to put back after a state has dressed it.
+    struct Dress {
+        private var saved: [(entity: Entity, materials: [RealityKit.Material])] = []
+
+        init(_ entity: Entity?) {
+            guard let entity else { return }
+            var stack = [entity]
+            while let next = stack.popLast() {
+                if let model = next.components[ModelComponent.self] {
+                    saved.append((next, model.materials))
+                }
+                stack.append(contentsOf: next.children)
+            }
+        }
+
+        func restore() {
+            for (entity, materials) in saved {
+                guard var model = entity.components[ModelComponent.self] else { continue }
+                model.materials = materials
+                entity.components.set(model)
+            }
+        }
+    }
+
+    /// Dresses every mesh under `entity` in one material.
+    static func dress(_ entity: Entity?, _ material: RealityKit.Material) {
+        guard let entity else { return }
+        if var model = entity.components[ModelComponent.self] {
+            model.materials = model.materials.map { _ in material }
+            entity.components.set(model)
+        }
+        for child in entity.children { dress(child, material) }
+    }
+
+    /// How far from the stage's front a part's axis must lie (the sine of
+    /// the angle between them) before "its face toward the front" means
+    /// anything.
+    nonisolated static let faceThreshold: Float = 0.26
+
+    /// The angle of a part's frame (contract D7): x along its axis and, so
+    /// that a symbol drawn in the part's face plane reads from where the
+    /// wearer stands, its face (+z) toward the stage's front — lying or
+    /// standing. A part lying along x keeps its +y to the sky; one standing
+    /// on end turns its face to the front and its +y to the side. (Until
+    /// 2026-10-30 the rule turned a lab-kit carrier's TOP to the sky, which
+    /// put a standing part's face plane edge-on to the wearer.)
     ///
-    /// Within 15° of vertical "up" can no longer be its top — the top would
-    /// wheel round the axis as a hand wobbled it — so there the frame is the
-    /// `previous` one carried onto the new axis by the shortest arc, keeping
-    /// whatever roll it had. With no previous frame (a part made standing),
-    /// its top turns to the stage's `front`. Turns rigidly with the stage.
+    /// Within 15° of pointing at the front a face can no longer face it — it
+    /// would wheel round the axis as a hand wobbled — so there the frame is
+    /// the `previous` one carried onto the new axis by the shortest arc,
+    /// keeping its roll; with none, its face turns to the sky. Turns rigidly
+    /// with the stage.
     nonisolated static func moduleOrientation(axis: SIMD3<Float>, front: SIMD3<Float>,
                                               previous: simd_quatf? = nil) -> simd_quatf {
         let x = simd_normalize(axis)
-        let up = SIMD3<Float>(0, 1, 0)
-        let upPerpendicular = up - simd_dot(up, x) * x
-        if simd_length(upPerpendicular) >= uprightThreshold {
-            return frame(x: x, top: upPerpendicular)
+        let facing = front - simd_dot(front, x) * x
+        if simd_length(facing) >= faceThreshold {
+            return frame(x: x, face: facing)
         }
         if let previous {
             let carried = rotation(from: previous.act([1, 0, 0]), to: x) * previous
-            return frame(x: x, top: carried.act([0, 1, 0]))
+            return frame(x: x, face: carried.act([0, 0, 1]))
         }
-        var top = front - simd_dot(front, x) * x
-        if simd_length(top) < 1e-4 {
-            let fallback = SIMD3<Float>(0, 0, 1)
-            top = fallback - simd_dot(fallback, x) * x
+        let up = SIMD3<Float>(0, 1, 0)
+        var face = up - simd_dot(up, x) * x
+        if simd_length(face) < 1e-4 {
+            face = SIMD3<Float>(1, 0, 0) - simd_dot(SIMD3<Float>(1, 0, 0), x) * x
         }
-        return frame(x: x, top: top)
+        return frame(x: x, face: face)
     }
 
-    private nonisolated static func frame(x: SIMD3<Float>, top: SIMD3<Float>) -> simd_quatf {
-        let y = simd_normalize(top - simd_dot(top, x) * x)
-        return simd_quatf(simd_float3x3(columns: (x, y, simd_cross(x, y))))
+    private nonisolated static func frame(x: SIMD3<Float>, face: SIMD3<Float>) -> simd_quatf {
+        let z = simd_normalize(face - simd_dot(face, x) * x)
+        return simd_quatf(simd_float3x3(columns: (x, simd_cross(z, x), z)))
     }
 
     /// A frame change bigger than this eases rather than snaps: a swing
-    /// across the upright threshold, a part flipped end-for-end. A hand's
-    /// own motion moves a part a few degrees a frame.
+    /// across the threshold, a part flipped end-for-end. A hand's own motion
+    /// moves a part a few degrees a frame.
     nonisolated static let orientationEaseThreshold: Float = 10 * .pi / 180
 
     /// Where a part's value hangs, in the room, from its centre: below it,
-    /// or beside it once it stands nearly on end and below is its own lower
-    /// contact.
+    /// clear of the largest element (the motor's 40 mm flywheel), or beside
+    /// it once it stands nearly on end and below is its own lower dot — on
+    /// the side away from a switch's knob.
     nonisolated static func labelOffset(for orientation: simd_quatf) -> SIMD3<Float> {
         let x = orientation.act([1, 0, 0])
-        let side = orientation.act([0, 0, 1])
+        let side = orientation.act([0, -1, 0])
         let t = min(max((abs(x.y) - 0.70) / 0.25, 0), 1)
         let w = t * t * (3 - 2 * t)
-        return (1 - w) * SIMD3(0, -0.050, 0) + w * side * 0.060
+        return (1 - w) * SIMD3(0, -0.056, 0) + w * side * 0.060
     }
 
     /// The direction the stage faces you from, turned with the stage.
@@ -811,6 +846,7 @@ final class CircuitsRenderer {
     /// The glow stays until `flashRelease`.
     func flashPickup(id: UUID) {
         landings[id] = nil
+        carriedID = id
         guard let holder = visuals[id]?.holder else { return }
         if let previous = pulsedGrabEntity, previous !== holder {
             LiveGlow.set(false, on: previous)
@@ -822,6 +858,7 @@ final class CircuitsRenderer {
 
     /// Answer a release, on whatever was last picked up.
     func flashRelease() {
+        carriedID = nil
         guard let entity = pulsedGrabEntity else { return }
         LiveGlow.set(false, on: entity)
         SoundPalette.play(.releaseTick, on: entity, volume: 0.18)
@@ -910,6 +947,7 @@ final class CircuitsRenderer {
 
     private func render(_ model: CircuitsModel, dt: Double) {
         advanceLandings(dt: dt)
+        advanceFeel(model, dt: dt)
         advanceRefusal(model, dt: dt)
         syncStage(model, dt: dt)
         if appliedResistorTextureVersion != CircuitTextures.version {
@@ -1061,8 +1099,10 @@ final class CircuitsRenderer {
     }
 
     private func growTower() {
-        let column = ModelEntity(mesh: Primitives.box(
-            size: [0.012, 0.1, 0.012], cornerRadius: 0.003))
+        // Square-cornered: a rounded `generateBox` is 13k triangles whatever
+        // its size, so three towers out-cost the circuit they stand over
+        // (CircuitBudgetTests).
+        let column = ModelEntity(mesh: Primitives.box(size: [0.012, 0.1, 0.012]))
         skylineRoot.addChild(column)
         towers.append(column)
 
@@ -1090,15 +1130,24 @@ final class CircuitsRenderer {
 
     // MARK: Components
 
-    /// Turn each motor's propeller at its live angular speed (rad/s),
-    /// accumulating on the rotor's own orientation — direction and all,
-    /// so reversing the battery reverses the spin.
+    /// Turn each motor's flywheel at its live angular speed (rad/s) about
+    /// its face normal, accumulating on the rotor's own orientation —
+    /// direction and all, so reversing the battery reverses the spin. Above
+    /// `rotorBlurTurnsPerSecond` the marker becomes the smeared band the eye
+    /// would see, and the rotor goes plain steel under it.
     private func spinMotors(_ model: CircuitsModel, dt: Double) {
         for component in model.components where component.kind == .motor {
-            guard let rotor = visuals[component.id]?.rotor else { continue }
+            guard var visual = visuals[component.id], let rotor = visual.rotor else { continue }
+            let blurred = Self.rotorBlurred(motorSpeed: component.motorSpeed)
+            if visual.blurred != blurred {
+                visual.blurred = blurred
+                visual.rotorBlur?.isEnabled = blurred
+                if blurred { Self.dress(rotor, Self.plainSteel) } else { visual.rotorDress?.restore() }
+                visuals[component.id] = visual
+            }
             let delta = Float(component.motorSpeed * dt)
             guard abs(delta) > 1e-6 else { continue }
-            rotor.orientation = simd_quatf(angle: delta, axis: [1, 0, 0]) * rotor.orientation
+            rotor.orientation = simd_quatf(angle: delta, axis: [0, 0, 1]) * rotor.orientation
         }
     }
 
@@ -1152,6 +1201,77 @@ final class CircuitsRenderer {
         return joined
     }
 
+    // MARK: The feel (2026-10-30)
+
+    /// How high a held part rides above where the hand holds it — the small
+    /// lift of taking an object up — and how near one of its leads must
+    /// come to a joinable terminal before the part leans in to seat. All of
+    /// it is drawn only: the model's part is where the hand is.
+    nonisolated static let liftHeight: Float = 0.006
+    nonisolated static let pullInDistance = 0.010
+
+    /// How far a held part leans toward the pose `alignment(for:)` would
+    /// give it: nothing beyond `pullInDistance`, everything at contact,
+    /// smoothstepped between.
+    nonisolated static func pullInWeight(distance: Double) -> Double {
+        let t = 1 - min(max(distance / pullInDistance, 0), 1)
+        return t * t * (3 - 2 * t)
+    }
+
+    /// The part a hand holds; each part's lift, 0…1, easing up while held
+    /// and back down after; the pose a held part leans toward this frame.
+    private var carriedID: UUID?
+    private var lifts: [UUID: Float] = [:]
+    private var leans: [UUID: (position: SIMD3<Double>, axis: SIMD3<Double>, weight: Double)] = [:]
+
+    /// A joint pulled at whose press has not yet given: its wire and how
+    /// far the hand has carried it. Its junction strains toward the hand.
+    var jointStrain: (wire: UUID, travel: SIMD3<Float>)?
+    private var strainedJunction: UUID?
+
+    private func advanceFeel(_ model: CircuitsModel, dt: Double) {
+        for id in Set(lifts.keys).union(carriedID.map { [$0] } ?? []) {
+            let target: Float = id == carriedID && !Motion.isReduced ? 1 : 0
+            let next = Motion.ease(lifts[id] ?? 0, toward: target, dt: dt, rate: 14)
+            lifts[id] = next == 0 ? nil : next
+        }
+        leans = [:]
+        guard let id = carriedID, !Motion.isReduced, model.leadPull == nil,
+              let component = model.components.first(where: { $0.id == id }),
+              let alignment = model.alignment(for: id),
+              let target = model.components.first(where: { $0.id == alignment.target.componentID })?
+                .terminalPosition(alignment.target.end) else { return }
+        let distance = min(simd_distance(component.terminalPosition(0), target),
+                           simd_distance(component.terminalPosition(1), target))
+        let weight = Self.pullInWeight(distance: distance)
+        if weight > 0 { leans[id] = (alignment.position, alignment.axis, weight) }
+    }
+
+    /// A joint's junction stretched toward the hand pulling it apart, up to
+    /// 1.6× when the press gives at `PressLatch.tapTravel` — volume kept, so
+    /// it reads as a pull against the seat rather than a swelling.
+    private func strain(_ junction: Entity, wire: UUID, at centre: SIMD3<Float>) {
+        let travel = jointStrain?.wire == wire ? jointStrain!.travel : .zero
+        let length = simd_length(travel)
+        let reach = min(length / Float(PressLatch<Int>.tapTravel), 1)
+        guard reach > 0, !Motion.isReduced else {
+            if strainedJunction == wire {
+                strainedJunction = nil
+                junction.orientation = simd_quatf(angle: 0, axis: [0, 1, 0])
+                junction.scale = SIMD3(repeating: Self.junctionScale)
+                junction.position = centre
+            }
+            return
+        }
+        strainedJunction = wire
+        let direction = travel / length
+        let stretch = 1 + 0.6 * reach
+        junction.orientation = VectorFieldArrows.rotationFromYAxis(to: direction)
+        junction.scale = SIMD3(1 / stretch.squareRoot(), stretch, 1 / stretch.squareRoot())
+            * Self.junctionScale
+        junction.position = centre + direction * (stretch - 1) * Self.contactRadius * Self.junctionScale
+    }
+
     // MARK: The landing
 
     /// A released part snapped onto a neighbour's lead glides the last few
@@ -1165,6 +1285,10 @@ final class CircuitsRenderer {
         var elapsed: Double
     }
     private var landings: [UUID: Landing] = [:]
+    /// `-circSnapAt <s>`: every landing held that many seconds in, for a
+    /// still of a part mid-snap — the glide is over in 0.12 s, which no
+    /// screenshot can catch.
+    var pinnedLandingTime: Double?
 
     /// Called around `CircuitsModel.release(id:)` with the pose the part
     /// had before it: what is drawn eases from there to where the model put
@@ -1176,6 +1300,10 @@ final class CircuitsRenderer {
 
     private func advanceLandings(dt: Double) {
         for id in Array(landings.keys) {
+            if let pinned = pinnedLandingTime {
+                landings[id]?.elapsed = min(pinned, Self.landingDuration * 0.999)
+                continue
+            }
             landings[id]?.elapsed += dt
             if let landing = landings[id], landing.elapsed >= Self.landingDuration {
                 landings[id] = nil
@@ -1183,18 +1311,29 @@ final class CircuitsRenderer {
         }
     }
 
-    /// Where a part is drawn: the model's pose, or partway through a landing.
+    /// Where a part is drawn: the model's pose, partway through a landing,
+    /// leaning in to seat, and lifted while held.
     func displayPose(of component: CircuitsModel.Component)
     -> (position: SIMD3<Double>, axis: SIMD3<Double>) {
-        guard let landing = landings[component.id] else {
-            return (component.position, component.axis)
+        var position = component.position, axis = component.axis
+        if let landing = landings[component.id] {
+            let t = min(max(landing.elapsed / Self.landingDuration, 0), 1)
+            let e = t * t * (3 - 2 * t)
+            position = landing.position + (component.position - landing.position) * e
+            let from = simd_normalize(landing.axis), to = simd_normalize(component.axis)
+            let turn = simd_slerp(simd_quatd(angle: 0, axis: [0, 1, 0]), simd_quatd(from: from, to: to), e)
+            axis = turn.act(from)
         }
-        let t = min(max(landing.elapsed / Self.landingDuration, 0), 1)
-        let e = t * t * (3 - 2 * t)
-        let position = landing.position + (component.position - landing.position) * e
-        let from = simd_normalize(landing.axis), to = simd_normalize(component.axis)
-        let turn = simd_slerp(simd_quatd(angle: 0, axis: [0, 1, 0]), simd_quatd(from: from, to: to), e)
-        return (position, turn.act(from))
+        if let lean = leans[component.id] {
+            position += (lean.position - position) * lean.weight
+            let from = simd_normalize(axis), to = simd_normalize(lean.axis)
+            axis = simd_slerp(simd_quatd(angle: 0, axis: [0, 1, 0]), simd_quatd(from: from, to: to),
+                              lean.weight).act(from)
+        }
+        if let lift = lifts[component.id] {
+            position.y += Double(lift * Self.liftHeight)
+        }
+        return (position, axis)
     }
 
     private func syncComponents(_ model: CircuitsModel, dt: Double) {
@@ -1233,12 +1372,13 @@ final class CircuitsRenderer {
                     SpatialActions.republish(value: spokenValue, on: terminal)
                 }
                 let isLit = litTerminals.contains(key)
-                // A lead in a joint gives its target to the joint's collar:
-                // two coincident leads' targets overlapped, and which one a
-                // pinch took was hit order.
+                // A lead in a joint gives its target and its dot to the
+                // joint's one junction dot: two coincident leads' targets
+                // overlapped, and which one a pinch took was hit order.
                 let inJoint = joined.contains(key)
                 if visual.terminalJoined[end] != inJoint {
                     visual.terminalJoined[end] = inJoint
+                    terminal.children.forEach { $0.isEnabled = !inJoint }
                     if inJoint {
                         terminal.components.remove(CollisionComponent.self)
                     } else {
@@ -1252,6 +1392,24 @@ final class CircuitsRenderer {
                     ? Float(1.6 + (Motion.isReduced ? 0 : 0.35 * sin(pendingPulsePhase)))
                     : (previewTargets.contains(key) ? 1.5
                         : ((isProbed || isLit) ? 1.35 : 1.0)))
+            }
+
+            // Each lead wears its terminal's potential, as a wire does — the
+            // lead and the wires on that terminal are one net, one line — and
+            // a lit net lights it too.
+            let span = model.voltageSpan
+            let width = max(span.max - span.min, 0.5)
+            for end in 0..<min(visual.leads.count, 2) {
+                let key = CircuitsModel.Terminal(componentID: component.id, end: end)
+                let t = ((model.terminalVoltages[key] ?? 0) - span.min) / width
+                let bucket = litTerminals.contains(key) ? -1 : min(max(Int(t * 7.999), 0), 7)
+                if visual.leadBuckets[end] != bucket {
+                    visual.leadBuckets[end] = bucket
+                    let material: RealityKit.Material = bucket < 0
+                        ? Self.netHighlightMaterial : Self.voltageMaterials[bucket]
+                    (visual.leads[end].findEntity(named: "cable") as? ModelEntity)?
+                        .model?.materials = [material]
+                }
             }
 
             // Live label. `BackedLabel` self-gates on unchanged text.
@@ -1275,40 +1433,43 @@ final class CircuitsRenderer {
             switch component.kind {
             case .bulb:
                 let watts = model.readouts[component.id]?.watts ?? 0
-                let bucket = min(max(Int((watts / 3.0) * 5), 0), 5)
-                if visual.glowBucket != bucket {
-                    visual.glowBucket = bucket
+                let step = Self.filamentStep(watts: watts)
+                if visual.glowBucket != step {
+                    visual.glowBucket = step
                     Self.paintBulb(filament: visual.filament, glow: visual.glow,
-                                   light: visual.light, level: bucket)
+                                   light: visual.light, watts: watts)
                 }
             case .led:
                 let amps = abs(model.readouts[component.id]?.amps ?? 0)
                 let state = component.failed ? -1 : min(Int(amps / 0.004), 5)
                 if visual.ledState != state {
                     visual.ledState = state
-                    Self.paintLED(core: visual.ledCore, glow: visual.glow,
+                    Self.paintLED(core: visual.ledCore, rest: visual.ledDress, glow: visual.glow,
                                   light: visual.light, state: state)
                 }
             case .switcher:
-                visual.lever?.orientation = simd_quatf(
-                    angle: component.isClosed ? 0 : 0.6, axis: [0, 0, 1])
+                let before = visual.blade.value
+                Self.throwBlade(&visual, component: component, dt: dt)
+                if visual.blade.value != before {
+                    visual.lever?.orientation = simd_quatf(angle: visual.blade.value, axis: [0, 0, 1])
+                }
             case .fuse:
                 let intact = !component.failed
                 if visual.fuseIntact != intact {
                     visual.fuseIntact = intact
                     visual.fuseBridge?.isEnabled = intact
+                    if intact { visual.fuseGlassDress?.restore() } else {
+                        Self.dress(visual.fuseGlass, Self.scorchedGlass)
+                    }
                 }
             case .capacitor:
-                let charge = Float(Self.gaugeFill(volts: model.readouts[component.id]?.volts ?? 0))
-                if abs(charge - visual.appliedGauge) > 0.004 {
-                    visual.appliedGauge = charge
-                    visual.gaugeFill?.isEnabled = charge > 0.004
-                    visual.gaugeFill?.scale = [max(charge, 0.0001) * Self.gaugeLength, 1, 1]
-                    visual.gaugeFill?.position.x = -Self.gaugeLength / 2 + charge * Self.gaugeLength / 2
+                let bucket = Self.chargeBucket(volts: model.readouts[component.id]?.volts ?? 0)
+                if visual.chargeBucket != bucket {
+                    visual.chargeBucket = bucket
+                    Self.tintPlates(visual.plates, rests: visual.plateDresses, bucket: bucket)
                 }
             case .acSource:
-                visual.needle?.orientation = simd_quatf(
-                    angle: Self.needleAngle(phase: model.acPhase(of: component)), axis: [0, 1, 0])
+                visual.bead?.position = Self.beadPosition(phase: model.acPhase(of: component))
             case .resistor:
                 // Heat: the ceramic glows by I²R against its rating, in four
                 // steps, and goes black when it scorches.
@@ -1390,52 +1551,146 @@ final class CircuitsRenderer {
 
     // MARK: Live states
 
-    /// The capacitor gauge's bar, m, at full charge.
-    nonisolated static let gaugeLength: Float = 0.026
+    /// The most a landed blade bounces, rad: 2°, which at the contact ring
+    /// (64 mm from the pivot) is 2.2 mm — inside its 6 mm, so the blade
+    /// never leaves the contact the circuit closed through.
+    nonisolated static let bladeBounceLimit: Float = 2 * .pi / 180
 
-    /// How full the capacitor's gauge reads, 0…1: |V| against the bench's
-    /// tallest source.
+    /// How the drawn blade moves (contract D3). Opening: the house spring,
+    /// past 30° and back. Closing: a fall timed by the model's own
+    /// `closingIn`, accelerating as a dropped blade does, so it reaches the
+    /// contact on the frame the model closes the circuit — then a small
+    /// bounce. Under Reduce Motion the blade is where the switch is.
+    private static func throwBlade(_ visual: inout ComponentVisual,
+                                   component: CircuitsModel.Component, dt: Double) {
+        let open = switchOpenAngle
+        let delay = Float(CircuitsModel.switchCloseDelay)
+        if component.closingIn > 0, !Motion.isReduced {
+            let fallen = 1 - Float(component.closingIn) / delay
+            visual.blade = Motion.Spring(open * (1 - fallen * fallen),
+                                         velocity: -2 * open * fallen / delay)
+            visual.bladeFalling = true
+        } else if component.isClosed {
+            if visual.bladeFalling {
+                // Landed at 2·open/delay; it comes back up a little.
+                visual.bladeFalling = false
+                visual.blade = Motion.Spring(0, velocity: 0.3 * 2 * open / delay)
+            }
+            visual.blade.step(toward: 0, dt: dt, frequency: 12, damping: 0.35)
+            if visual.blade.value < 0 {
+                // The contact stops it: it bounces rather than passing through.
+                visual.blade = Motion.Spring(0, velocity: abs(visual.blade.velocity) * 0.3)
+            }
+            visual.blade.value = min(visual.blade.value, bladeBounceLimit)
+        } else {
+            visual.bladeFalling = false
+            visual.blade.step(toward: open, dt: dt)
+        }
+    }
+
+    /// How full the capacitor's charge reads, 0…1: |V| (so |Q| = C|V|)
+    /// against the bench's tallest source.
     nonisolated static func gaugeFill(volts: Double) -> Double {
         min(abs(volts) / gaugeFullScale, 1)
     }
 
-    /// The AC dial's needle for a phase of the source's cycle: ±60° at the
-    /// crests, straight up the dial at zero.
-    nonisolated static func needleAngle(phase: Double) -> Float {
-        Float(.pi / 3 * sin(phase))
+    /// The capacitor's charge as a tint step: the sign of the charge on
+    /// plate 0 (terminal 0's side) times 0…7 by |V|. Plate 0 wears red when
+    /// it holds +Q, plate 1 the blue of the −Q facing it — the physics
+    /// colours, on the physics.
+    nonisolated static func chargeBucket(volts: Double) -> Int {
+        let level = min(Int(gaugeFill(volts: volts) * 7.999), 7)
+        return volts < 0 ? -level : level
     }
 
-    private static let warmLight = UIColor(red: 1, green: 0.82, blue: 0.5, alpha: 1)
-    private static let litFilament = Materials.unlit(UIColor(red: 1, green: 0.78, blue: 0.36, alpha: 1))
-    private static let darkFilament = Materials.unlit(UIColor(white: 0.35, alpha: 1))
+    /// Where the AC source's bead rides its sine for a phase of the cycle:
+    /// its height is the EMF's, so it crests when the source does.
+    nonisolated static func beadPosition(phase: Double) -> SIMD3<Float> {
+        var u = (phase / (2 * .pi)).truncatingRemainder(dividingBy: 1)
+        if u < 0 { u += 1 }
+        return [-acWaveHalfWidth + 2 * acWaveHalfWidth * Float(u),
+                acWaveAmplitude * Float(sin(2 * .pi * u)), acBeadZ]
+    }
 
-    /// A bulb at a brightness, 0…5: its filament, the glow round its glass
-    /// and its light on the parts beside it.
-    static func paintBulb(filament: ModelEntity?, glow: ModelEntity?, light: Entity?, level: Int) {
-        filament?.model?.materials = [level > 0 ? litFilament : darkFilament]
-        guard level > 0 else {
+    /// A filament's temperature at a power: radiation carries a lamp's
+    /// power away, so P ∝ T⁴ and T = T_ref·(P / P_ref)^¼, 2700 K at 3 W (the
+    /// bench's bulb at full brightness), capped at tungsten's 3200 K.
+    nonisolated static let filamentReference = (watts: 3.0, kelvin: 2700.0)
+    nonisolated static func filamentTemperature(watts: Double) -> Double {
+        guard watts > 0 else { return 0 }
+        return min(filamentReference.kelvin * pow(watts / filamentReference.watts, 0.25), 3200)
+    }
+
+    /// The filament's state in one of 16 steps between first visible glow
+    /// (900 K) and 3200 K, so its material changes only when the step does.
+    /// −1 is dark.
+    nonisolated static let filamentSteps = 16
+    nonisolated static func filamentStep(watts: Double) -> Int {
+        let t = filamentTemperature(watts: watts)
+        guard t >= 900 else { return -1 }
+        return min(Int((t - 900) / (3200 - 900) * Double(filamentSteps)), filamentSteps - 1)
+    }
+
+    /// A step's colour and brightness: the blackbody at the step's middle
+    /// temperature through `StellarColour` (Planck against the CIE 1931
+    /// observer, at full chroma — a filament is not a star seen by
+    /// starlight), and its luminance against the reference filament's.
+    nonisolated static let filamentLooks: [(colour: SIMD3<Double>, brightness: Double)] = {
+        func luminance(_ t: Double) -> Double {
+            stride(from: 380.0, through: 780.0, by: 5).reduce(0) {
+                $0 + StellarColour.planck(wavelength: $1 * 1e-9, temperature: t)
+                    * StellarColour.colourMatching(nanometres: $1).y
+            }
+        }
+        let reference = luminance(filamentReference.kelvin)
+        return (0..<filamentSteps).map { step in
+            let t = 900 + (Double(step) + 0.5) / Double(filamentSteps) * (3200 - 900)
+            return (StellarColour.displayColour(temperature: t, chroma: 1), luminance(t) / reference)
+        }
+    }()
+
+    private static let darkFilament = Materials.unlit(UIColor(white: 0.30, alpha: 1))
+
+    /// A bulb at a power: its filament in the colour of its temperature, the
+    /// glow round its glass and its light on the parts beside it, both as
+    /// bright as the filament's luminance against the reference.
+    static func paintBulb(filament: Entity?, glow: ModelEntity?, light: Entity?, watts: Double) {
+        let step = filamentStep(watts: watts)
+        guard step >= 0 else {
+            dress(filament, darkFilament)
             glow?.isEnabled = false
             light?.components.remove(PointLightComponent.self)
             return
         }
-        let strength = Float(level) / 5
+        let look = filamentLooks[step]
+        // Dim steps are drawn darker as well as redder; the glow and the
+        // light carry the rest of the brightness.
+        let level = min(look.brightness, 1)
+        let shade = 0.35 + 0.65 * pow(level, 1 / 2.2)
+        let colour = UIColor(red: look.colour.x * shade, green: look.colour.y * shade,
+                             blue: look.colour.z * shade, alpha: 1)
+        dress(filament, Materials.unlit(colour))
+        let strength = Float(level)
+        let tint = UIColor(red: look.colour.x, green: look.colour.y, blue: look.colour.z, alpha: 1)
         if let glow {
-            glow.isEnabled = true
-            GlowSprite.paint(glow, warmLight, strength: strength)
+            glow.isEnabled = strength > 0.02
+            GlowSprite.paint(glow, tint, strength: max(strength, 0.125))
         }
-        light?.components.set(PointLightComponent(
-            color: warmLight, intensity: 1100 * strength, attenuationRadius: 0.25))
+        if strength > 0.02 {
+            light?.components.set(PointLightComponent(
+                color: tint, intensity: 1100 * strength, attenuationRadius: 0.25))
+        } else {
+            light?.components.remove(PointLightComponent.self)
+        }
     }
 
     private static let ledOff = Materials.unlit(UIColor(white: 0.06, alpha: 1))
 
-    /// An LED in a state: −1 burned out (a dark die), 0 dark, 1…5 lit red at
-    /// 625 nm, the colour a red LED emits.
-    static func paintLED(core: Entity?, glow: ModelEntity?, light: Entity?, state: Int) {
-        let skins = core?.children.compactMap { $0 as? ModelEntity } ?? []
+    /// An LED in a state: −1 burned out (a dark die), 0 its own red epoxy
+    /// at rest, 1…5 lit at 625 nm, the colour a red LED emits.
+    static func paintLED(core: Entity?, rest: Dress?, glow: ModelEntity?, light: Entity?, state: Int) {
         guard state > 0 else {
-            core?.isEnabled = state < 0
-            skins.forEach { $0.model?.materials = [ledOff] }
+            if state < 0 { dress(core, ledOff) } else { rest?.restore() }
             glow?.isEnabled = false
             light?.components.remove(PointLightComponent.self)
             return
@@ -1446,10 +1701,8 @@ final class CircuitsRenderer {
         var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
         red.getRed(&r, green: &g, blue: &b, alpha: &a)
         let w = CGFloat(0.35 * strength)
-        let lit = Materials.unlit(UIColor(red: r + (1 - r) * w, green: g + (1 - g) * w,
-                                          blue: b + (1 - b) * w, alpha: 1))
-        core?.isEnabled = true
-        skins.forEach { $0.model?.materials = [lit] }
+        dress(core, Materials.unlit(UIColor(red: r + (1 - r) * w, green: g + (1 - g) * w,
+                                            blue: b + (1 - b) * w, alpha: 1)))
         if let glow {
             glow.isEnabled = true
             GlowSprite.paint(glow, red, strength: strength)
@@ -1457,6 +1710,52 @@ final class CircuitsRenderer {
         light?.components.set(PointLightComponent(
             color: red, intensity: 700 * strength, attenuationRadius: 0.18))
     }
+
+    /// A charge step on the capacitor's two plates (`chargeBucket`).
+    private static func tintPlates(_ plates: [Entity], rests: [Dress], bucket: Int) {
+        guard bucket != 0 else {
+            rests.forEach { $0.restore() }
+            return
+        }
+        let f = CGFloat(abs(bucket)) / 7
+        let grey = UIColor(white: 0.36, alpha: 1)
+        func mix(_ to: UIColor) -> UIColor {
+            var r0: CGFloat = 0, g0: CGFloat = 0, b0: CGFloat = 0, a0: CGFloat = 0
+            var r1: CGFloat = 0, g1: CGFloat = 0, b1: CGFloat = 0, a1: CGFloat = 0
+            grey.getRed(&r0, green: &g0, blue: &b0, alpha: &a0)
+            to.getRed(&r1, green: &g1, blue: &b1, alpha: &a1)
+            return UIColor(red: r0 + (r1 - r0) * f, green: g0 + (g1 - g0) * f,
+                           blue: b0 + (b1 - b0) * f, alpha: 1)
+        }
+        let positive = Materials.machined(mix(DesignTokens.Palette.positiveUI), roughness: 0.45)
+        let negative = Materials.machined(mix(DesignTokens.Palette.negativeUI), roughness: 0.45)
+        for (index, plate) in plates.enumerated() {
+            // Plate 0 holds +Q when the charge is positive, plate 1 the −Q.
+            let holdsPositive = (index == 0) == (bucket > 0)
+            dress(plate, holdsPositive ? positive : negative)
+        }
+    }
+
+    /// A motor's flywheel above this many turns a second is drawn as the eye
+    /// sees one: its marker smeared into a band (`rotor_blur`). Its one
+    /// marker passes at most 20 times a second there, under half of 90 Hz,
+    /// so below it the turn the wearer sees is the true one.
+    nonisolated static let rotorBlurTurnsPerSecond = 20.0
+
+    nonisolated static func rotorBlurred(motorSpeed: Double) -> Bool {
+        abs(motorSpeed) / (2 * .pi) > rotorBlurTurnsPerSecond
+    }
+
+    private static let plainSteel = Materials.machined(UIColor(white: 0.6, alpha: 1), roughness: 0.22)
+
+    /// A blown fuse's glass, smoked by the filament that went.
+    private static let scorchedGlass: PhysicallyBasedMaterial = {
+        var material = PhysicallyBasedMaterial()
+        material.baseColor = .init(tint: UIColor(white: 0.10, alpha: 1))
+        material.roughness = 0.5
+        material.blending = .transparent(opacity: .init(floatLiteral: 0.7))
+        return material
+    }()
 
     private func resistorKey(_ ohms: Double) -> String {
         guard let code = CircuitSolver.colorBands(ohms: ohms) else { return "?" }
@@ -1511,26 +1810,22 @@ final class CircuitsRenderer {
         SpatialActions.describe(holder, label: component.kind.displayName)
         viewRoot.addChild(holder)
 
-        // The module: the part on its carrier, its two brass contacts and its
-        // live pieces. Everything solid shadows the stage below.
+        // The module: the part's milled element and its live pieces, its two
+        // brass dots and its two leads. Everything solid shadows the stage.
         let module = Self.makeModule(kind: component.kind)
         holder.addChild(module.root)
         GroundingShadows.cast(on: module.body)
-        if let carrier = module.carrier { GroundingShadows.cast(on: carrier) }
 
-        // The carry target is the body and its carrier, measured from them
-        // (the holder collects a bulb's glow and a halo), with its x
-        // half-extent clamped inside the contact target's inner edge so a
-        // body pinch cannot swallow a lead.
-        var bounds = module.body.visualBounds(relativeTo: holder)
-        if let carrier = module.carrier {
-            bounds = bounds.union(carrier.visualBounds(relativeTo: holder))
-        }
+        // The carry target runs the line from lead's end to lead's end — the
+        // old carrier's reach — clamped inside the dots' targets, so a body
+        // pinch cannot swallow a lead; across the line it is the element's
+        // own size (the holder collects a bulb's glow and a halo).
+        let bounds = module.body.visualBounds(relativeTo: holder)
         let clearOfLead = Float(CircuitsModel.terminalOffset) - Self.terminalTargetRadius - 0.002
         let half = SIMD3<Float>(
-            min(bounds.extents.x / 2 + Grabbable.reach, clearOfLead),
-            bounds.extents.y / 2 + Grabbable.reach,
-            bounds.extents.z / 2 + Grabbable.reach)
+            clearOfLead,
+            max(bounds.extents.y, 2 * Self.wireJacketRadius) / 2 + Grabbable.reach,
+            max(bounds.extents.z, 2 * Self.wireJacketRadius) / 2 + Grabbable.reach)
         Grabbable.configureTouchTarget(
             holder, box: half * 2, offset: [0, bounds.center.y, bounds.center.z],
             activate: { [weak self, weak holder] in
@@ -1538,10 +1833,10 @@ final class CircuitsRenderer {
                 self?.onTap?(holder)
             })
 
-        // The contacts are the terminals: the only thing at each end.
+        // The dots are the terminals: the only thing at each end.
         for (end, terminal) in module.contacts.enumerated() {
             terminal.name = "t\(end)-\(component.id.uuidString)"
-            // The only target at this end; the far contact is 0.17 m away.
+            // The only target at this end; the far dot is 0.17 m away.
             terminal.components.set(InputTargetComponent())
             terminal.components.set(CollisionComponent(
                 shapes: [Primitives.collisionSphere(radius: Self.terminalTargetRadius)]))
@@ -1558,10 +1853,13 @@ final class CircuitsRenderer {
             GroundingShadows.cast(on: terminal)
         }
 
-        // Selection halo: a rounded slab the module's own shape.
+        // Selection halo: a rounded slab round the line and the element.
+        let span = Float(CircuitsModel.terminalOffset) + Self.contactRadius
         let halo = SelectionHalo.make(mesh: Primitives.box(
-            size: [0.215, 0.085, 0.090], cornerRadius: 0.030))
-        halo.position = [0, 0.008, 0]
+            size: [2 * span + 0.02, max(bounds.extents.y, 0.02) + 0.02,
+                   max(bounds.extents.z, 0.02) + 0.02],
+            cornerRadius: 0.012))
+        halo.position = [0, bounds.center.y, bounds.center.z]
         holder.addChild(halo)
 
         // The value beneath, billboarded over the dark backing. Its pivot is
@@ -1577,38 +1875,46 @@ final class CircuitsRenderer {
             holder: holder, body: module.body, ceramic: module.ceramic,
             terminals: module.contacts, label: label, halo: halo,
             labelPivot: labelPivot)
+        visual.leads = module.leads
         visual.glow = module.glow
         visual.filament = module.filament
         visual.light = module.light
         visual.rotor = module.rotor
+        visual.rotorBlur = module.rotorBlur
+        visual.rotorDress = Dress(module.rotor)
         visual.fuseBridge = module.fuseBridge
-        visual.gaugeFill = module.gaugeFill
-        visual.needle = module.needle
+        visual.fuseGlass = module.fuseGlass
+        visual.fuseGlassDress = Dress(module.fuseGlass)
+        visual.plates = module.plates
+        visual.plateDresses = module.plates.map { Dress($0) }
+        visual.bead = module.bead
         visual.ledCore = module.ledCore
+        visual.ledDress = Dress(module.ledCore)
 
-        if component.kind == .switcher, let pivot = module.lever {
-            // The blade pivots between the cheeks; the tap target is the
-            // pivot, so the whole blade is pinchable.
-            pivot.name = "k-\(component.id.uuidString)"
-            // Measured after the blade exists, so it does not bulge below the
-            // switch and take the pinches meant for the contacts. Set
-            // directly: the pivot is not a carried object.
-            let leverBounds = pivot.visualBounds(relativeTo: pivot)
-            pivot.components.set(InputTargetComponent())
-            pivot.components.set(CollisionComponent(shapes: [
-                Primitives.collisionBox(size: leverBounds.extents
-                             + SIMD3<Float>(repeating: 2 * Grabbable.reach), offset: leverBounds.center),
+        if component.kind == .switcher, let blade = module.lever {
+            // The blade turns about the pivot (its own origin); it is the tap
+            // target, so the whole blade and its knob are pinchable.
+            blade.name = "k-\(component.id.uuidString)"
+            // Measured with the blade closed, so it does not bulge below the
+            // switch and take the pinches meant for the dots. Set directly:
+            // the blade is not a carried object.
+            let bladeBounds = blade.visualBounds(relativeTo: blade)
+            blade.components.set(InputTargetComponent())
+            blade.components.set(CollisionComponent(shapes: [
+                Primitives.collisionBox(size: bladeBounds.extents
+                             + SIMD3<Float>(repeating: 2 * Grabbable.reach), offset: bladeBounds.center),
             ]))
-            pivot.components.set(HoverEffectComponent())
+            blade.components.set(HoverEffectComponent())
             // A dedicated callback, not `onTap`: the physical tap path only selects
             // a lever, so VoiceOver's activate needs its own route.
             SpatialActions.attach(
-                to: pivot, label: "Switch",
+                to: blade, label: "Switch",
                 activate: { [weak self] in
                     self?.onLeverAction?(component.id)
                 })
-            GroundingShadows.cast(on: pivot)
-            visual.lever = pivot
+            visual.lever = blade
+            visual.blade = Motion.Spring(component.isClosed ? 0 : Self.switchOpenAngle)
+            blade.orientation = simd_quatf(angle: visual.blade.value, axis: [0, 0, 1])
         }
 
         visuals[component.id] = visual
@@ -1618,11 +1924,11 @@ final class CircuitsRenderer {
     // MARK: Modeled bodies (Blender-authored USDZ, procedural fallback)
 
     /// Each part clones the shared `PropCache` prototype, milled by
-    /// `Tools/circuitparts.py` to stand on the carrier. The resistor's ceramic
-    /// stays procedural: its colour bands are a live texture painted from the
-    /// value; only its steel caps and legs are milled. The procedural bodies
-    /// below are the fallback for a missing asset, which `CircuitPropTests`
-    /// fails.
+    /// `Tools/circuitparts.py` as its own symbol on the line, live pieces and
+    /// all. The resistor's ceramic stays procedural: its colour bands are a
+    /// live texture painted from the value; only its steel caps and zigzag
+    /// are milled. The procedural bodies below are the fallback for a missing
+    /// asset, which `CircuitPropTests` fails.
     static let bodyAssetNames: [CircuitsModel.ComponentKind: String] = [
         .battery: "CircuitBattery", .acSource: "CircuitACSource",
         .capacitor: "CircuitCapacitor", .inductor: "CircuitInductor",
@@ -1630,7 +1936,7 @@ final class CircuitsRenderer {
         .fuse: "CircuitFuse", .switcher: "CircuitSwitch",
     ]
     static let resistorCapsAssetName = "CircuitResistorCaps"
-    /// The resistor's ceramic, between the milled caps at ±0.0225.
+    /// The resistor's ceramic, on the line between the milled caps at ±0.0225.
     nonisolated static let ceramicRadius: Float = 0.012
     nonisolated static let ceramicLength: Float = 0.050
 
@@ -1652,7 +1958,6 @@ final class CircuitsRenderer {
                                                roughness: 0.6)])
             ceramic.name = "ceramic"
             ceramic.orientation = simd_quatf(angle: .pi / 2, axis: [0, 0, 1])
-            ceramic.position = [0, resistorAxis, 0]
             shell.addChild(ceramic)
             if let caps = PropCache.prototype(named: resistorCapsAssetName) {
                 shell.addChild(caps.clone(recursive: true))
@@ -1665,7 +1970,7 @@ final class CircuitsRenderer {
         return (fallbackBody(for: kind), nil)
     }
 
-    /// A plain stand-in on the carrier, in the part's own colour.
+    /// A plain stand-in on the line, in the part's own colour.
     private static func fallbackBody(for kind: CircuitsModel.ComponentKind) -> ModelEntity {
         let colour: UIColor = switch kind {
         case .battery: UIColor(red: 0.35, green: 0.45, blue: 0.35, alpha: 1)
@@ -1677,7 +1982,6 @@ final class CircuitsRenderer {
         let body = ModelEntity(
             mesh: Primitives.box(size: [0.070, 0.024, 0.030], cornerRadius: 0.006),
             materials: [Materials.machined(colour, roughness: 0.4)])
-        body.position = [0, carrierTop + 0.012, 0]
         return body
     }
 
@@ -1744,7 +2048,7 @@ final class CircuitsRenderer {
 
     /// How far short of a lead's centre a cable's target stops: the lead's
     /// own target radius and 2 mm of daylight.
-    nonisolated static let wireGrabInset: Float = 0.028
+    nonisolated static let wireGrabInset: Float = 0.025
     nonisolated static let wireGrabRadius: Float = 0.016
     nonisolated static let jointGrabRadius: Float = 0.022
 
@@ -1786,43 +2090,27 @@ final class CircuitsRenderer {
         entity.components.set(HoverEffectComponent())
     }
 
-    /// A joint's collar: a champagne sleeve round the two meeting contacts,
-    /// what says "these are joined, and you can pull them apart here".
-    private static let collarMaterial = Materials.machined(
-        UIColor(red: 0.83, green: 0.70, blue: 0.45, alpha: 1), roughness: 0.30)
-    nonisolated static let collarRadius: Float = 0.015
-    nonisolated static let collarLength: Float = 0.016
-
-    /// Shows or hides a wire's collar, sleeved along the line between its two
-    /// parts — the joint's own axis when they lie end to end.
-    private func syncCollar(_ entity: ModelEntity, _ wire: CircuitsModel.Wire,
-                            model: CircuitsModel, at a: SIMD3<Float>, _ b: SIMD3<Float>) {
+    /// A joint's junction dot (2026-10-30): the two meeting dots drawn as
+    /// one, a size larger, as a schematic marks a junction — what says
+    /// "these are joined, and you can pull them apart here". It replaced the
+    /// lab kit's champagne collar.
+    private func syncJunction(_ entity: ModelEntity, at a: SIMD3<Float>, _ b: SIMD3<Float>) {
         let isJoint = simd_distance(a, b) < Float(CircuitsModel.jointLength)
-        var collar = entity.children.first { $0.name == "collar" } as? ModelEntity
+        var junction = entity.children.first { $0.name == "junction" }
         guard isJoint else {
-            collar?.isEnabled = false
+            junction?.isEnabled = false
             return
         }
-        if collar == nil {
-            let made = ModelEntity(
-                mesh: Primitives.cylinder(height: Self.collarLength, radius: Self.collarRadius),
-                materials: [Self.collarMaterial])
-            made.name = "collar"
+        if junction == nil {
+            let made = Self.makeDot()
+            made.name = "junction"
+            made.scale = SIMD3(repeating: Self.junctionScale)
             GroundingShadows.cast(on: made)
             entity.addChild(made)
-            collar = made
+            junction = made
         }
-        guard let collar else { return }
-        collar.isEnabled = true
-        collar.position = (a + b) / 2
-        let centres = [wire.from, wire.to].compactMap { terminal in
-            model.components.first { $0.id == terminal.componentID }
-                .map { SIMD3<Float>(displayPose(of: $0).position) }
-        }
-        if centres.count == 2, simd_distance(centres[0], centres[1]) > 1e-4 {
-            collar.orientation = VectorFieldArrows.rotationFromYAxis(
-                to: simd_normalize(centres[1] - centres[0]))
-        }
+        junction?.isEnabled = true
+        junction?.position = (a + b) / 2
     }
 
     /// Stretches a wire's one segment taut between its endpoints: a copper
@@ -1831,11 +2119,11 @@ final class CircuitsRenderer {
                         from a: SIMD3<Float>, to b: SIMD3<Float>) {
         if !entity.children.contains(where: { $0.name == "cable" }) {
             let core = ModelEntity(
-                mesh: Primitives.cylinder(height: 1, radius: 0.0032),
+                mesh: Primitives.cylinder(height: 1, radius: Self.wireCoreRadius),
                 materials: [Self.copperMaterial])
             core.name = "cable"
             let jacket = ModelEntity(
-                mesh: Primitives.cylinder(height: 1, radius: 0.0062),
+                mesh: Primitives.cylinder(height: 1, radius: Self.wireJacketRadius),
                 materials: [Self.wireJacketMaterial])
             jacket.name = "jacket"
             core.addChild(jacket)
@@ -1905,10 +2193,15 @@ final class CircuitsRenderer {
                 wireLaidEndpoints[wire.id] = (a, b)
                 layOut(segmentsOf: entity, from: a, to: b)
                 reshapeCollider(entity, id: wire.id, from: a, to: b)
-                syncCollar(entity, wire, model: model, at: a, b)
+                syncJunction(entity, at: a, b)
                 // A re-lay can mint the segment in bare copper, and stretching changes
                 // no voltage; forget the bucket so the repaint covers it.
                 wireVoltBuckets[wire.id] = nil
+            }
+
+            if let junction = entity.children.first(where: { $0.name == "junction" }),
+               junction.isEnabled {
+                strain(junction, wire: wire.id, at: (a + b) / 2)
             }
 
             // The wire wears its potential: warm = high, cool = low —
@@ -1931,8 +2224,8 @@ final class CircuitsRenderer {
                 for segment in entity.children where segment.name == "cable" {
                     (segment as? ModelEntity)?.model?.materials = [material]
                 }
-                (entity.children.first { $0.name == "collar" } as? ModelEntity)?
-                    .model?.materials = [lit ? Self.netHighlightMaterial : Self.collarMaterial]
+                Self.dress(entity.children.first { $0.name == "junction" },
+                           lit ? Self.netHighlightMaterial : Self.contactMaterial)
             }
         }
     }
@@ -1942,7 +2235,8 @@ final class CircuitsRenderer {
         else { return nil }
         // The model owns where a lead is, carried or not; a landing eases
         // what is drawn, wires and electrons with it.
-        guard landings[component.id] != nil else {
+        guard landings[component.id] != nil || leans[component.id] != nil
+                || lifts[component.id] != nil else {
             return SIMD3<Float>(component.terminalPosition(terminal.end))
         }
         let pose = displayPose(of: component)
@@ -2054,36 +2348,50 @@ final class CircuitsRenderer {
         syncTrueSpeed(model, dt: dt)
         guard model.showElectronFlow else {
             if electronsVisible {
-                electronPool.hideAll()
+                electronDots.show([])
                 electronsVisible = false
             }
             return
         }
         electronsVisible = true
 
-        var dotIndex = 0
+        // Each conducting wire's run and the dots it would carry, then the
+        // pool shared out in proportion, so a bench that wants more dots
+        // than there are thins every wire rather than starving the last.
+        var runs: [(a: SIMD3<Float>, b: SIMD3<Float>, phase: Double, count: Int)] = []
         for wire in model.wires {
             guard let entity = wireEntities[wire.id], entity.isEnabled,
                   let a = terminalWorld(wire.from, model),
-                  let b = terminalWorld(wire.to, model) else { continue }
-            driftDots(key: wire.id, from: a, to: b,
-                      current: model.wireFlows[wire.id] ?? 0,
-                      model: model, dt: dt, dotIndex: &dotIndex)
+                  let b = terminalWorld(wire.to, model),
+                  let drift = drift(key: wire.id, from: a, to: b,
+                                    current: model.wireFlows[wire.id] ?? 0,
+                                    model: model, dt: dt)
+            else { continue }
+            runs.append((a, b, drift.phase, drift.count))
         }
-        for index in dotIndex..<electronPool.budget {
-            electronPool.slots[index].entity.isEnabled = false
+        let counts = Self.shareDots(runs.map(\.count), capacity: electronDots.capacity)
+        var dots: [SIMD3<Float>] = []
+        dots.reserveCapacity(electronDots.capacity)
+        for (run, count) in zip(runs, counts) {
+            for dot in 0..<count {
+                var t = (run.phase + Double(dot) / Double(count)).truncatingRemainder(dividingBy: 1)
+                if t < 0 { t += 1 }
+                dots.append(run.a + (run.b - run.a) * Float(t))
+            }
         }
+        electronDots.show(dots)
     }
 
-    /// Lays drifting electron dots along a taut wire, advancing their
-    /// shared phase by the drift speed (− to +) over real elapsed time.
-    private func driftDots(
+    /// Advances a taut wire's drift phase by the drift speed (− to +) over
+    /// real elapsed time, and says how many dots it would carry; nil for a
+    /// wire carrying no current worth drawing.
+    private func drift(
         key: UUID, from a: SIMD3<Float>, to b: SIMD3<Float>,
-        current: Double, model: CircuitsModel, dt: Double, dotIndex: inout Int
-    ) {
-        guard abs(current) > 5e-4 else { return }
+        current: Double, model: CircuitsModel, dt: Double
+    ) -> (phase: Double, count: Int)? {
+        guard abs(current) > 5e-4 else { return nil }
         let total = simd_distance(a, b)
-        guard total > 1e-6 else { return }
+        guard total > 1e-6 else { return nil }
         let length = Double(total)
         // Bead count grows with zoom sublinearly: the beads scale with the
         // wire, so flat spacing is right and only the cap starves Electron
@@ -2091,21 +2399,74 @@ final class CircuitsRenderer {
         let zoom = Double(max(benchScale, 1))
         let spacing = 0.045 / zoom.squareRoot()
         let cap = Int((9 * zoom).rounded())
-        let dots = min(max(Int(length / spacing), 2), cap)
+        let count = min(max(Int(length / spacing), 2), cap)
         let speed = Self.electronDisplaySpeed(current: current, model: model)
         if !model.isPaused {
             wirePhases[key] = ((wirePhases[key] ?? 0)
                 + speed / max(length, 0.05) * dt).truncatingRemainder(dividingBy: 1)
         }
-        let phase = wirePhases[key] ?? 0
+        return (wirePhases[key] ?? 0, count)
+    }
 
-        for dot in 0..<dots where dotIndex < electronPool.budget {
-            var t = (phase + Double(dot) / Double(dots)).truncatingRemainder(dividingBy: 1)
-            if t < 0 { t += 1 }
-            let slot = electronPool.slots[dotIndex]
-            slot.entity.isEnabled = true
-            slot.entity.position = a + (b - a) * Float(t)
-            dotIndex += 1
+    /// Shares `capacity` dots among wires that want `wanted` each: all of
+    /// them when they fit, otherwise each in proportion, never fewer than
+    /// two on a wire that carries current (one dot cannot show a drift).
+    nonisolated static func shareDots(_ wanted: [Int], capacity: Int) -> [Int] {
+        let total = wanted.reduce(0, +)
+        guard total > capacity else { return wanted }
+        let floor = min(2, capacity / max(wanted.count, 1))
+        let share = Double(capacity - floor * wanted.count) / Double(total - floor * wanted.count)
+        return wanted.map { floor + Int(Double($0 - floor) * share) }
+    }
+}
+
+/// The bench's electron dots: one pale bead per dot, as wide as the old
+/// halo so it stands proud of the wire's dark jacket it rides inside (the
+/// core alone, 2.6 mm in a 3.7 mm jacket, all but vanishes). Instancing
+/// them (contract D5) was tried first and measured: a `LowLevelInstanceData`
+/// written every frame waits on the renderer's in-flight limit — the main
+/// thread in `freeListWait` half the time, 70 long frames in every 5 s at
+/// 4× — so this is D5's fallback, a pool of plain entities that move by
+/// transform alone, one draw each.
+@MainActor
+final class ElectronDots {
+    let root = Entity()
+    let capacity: Int
+    private(set) var positions: [SIMD3<Float>] = []
+    private let pool: EntityPool<Void>
+    /// The bead's radius: the old halo's, 0.8 mm proud of the jacket.
+    static let beadRadius: Float = 0.0045
+    private static let coreRadius: Float = 0.0026
+
+    init(capacity: Int) {
+        self.capacity = capacity
+        root.name = "electron-dots"
+        let material = UnlitMaterial(color: UIColor(red: 0.8, green: 1.0, blue: 1.0, alpha: 1))
+        let mesh = CircuitsRenderer.electronMeshes().core
+        let scale = Self.beadRadius / Self.coreRadius
+        pool = EntityPool(budget: capacity) { container in
+            let bead = ModelEntity(mesh: mesh, materials: [material])
+            bead.scale = SIMD3(repeating: scale)
+            container.addChild(bead)
+        }
+        root.addChild(pool.root)
+    }
+
+    /// Draws a dot at each position (bench frame), up to `capacity`. A
+    /// paused bench's unchanged dots write nothing.
+    func show(_ dots: [SIMD3<Float>]) {
+        let dots = Array(dots.prefix(capacity))
+        guard dots != positions else { return }
+        let shown = positions.count
+        positions = dots
+        for index in 0..<max(shown, dots.count) {
+            let entity = pool.slots[index].entity
+            if index < dots.count {
+                if index >= shown { entity.isEnabled = true }
+                entity.position = dots[index]
+            } else {
+                entity.isEnabled = false
+            }
         }
     }
 }

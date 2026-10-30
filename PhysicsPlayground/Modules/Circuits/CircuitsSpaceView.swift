@@ -240,8 +240,10 @@ struct CircuitsSpaceView: View {
             }
             // `-circAlign 1` drops two parts a few centimetres apart and fires the
             // release on the second, so the snapped chain is what the screenshot
-            // holds.
-            if UserDefaults.standard.bool(forKey: "circAlign") {
+            // holds. `-circSnapAt <s>` stages the same drop and holds the bulb's
+            // glide onto its seat that many seconds in (0 … 0.12): a part mid-snap.
+            let snapAt = UserDefaults.standard.double(forKey: "circSnapAt")
+            if UserDefaults.standard.bool(forKey: "circAlign") || snapAt > 0 {
                 model.clearBench()
                 let anchor = CircuitsModel.buildCenter
                 model.add(.battery, at: anchor)
@@ -250,8 +252,13 @@ struct CircuitsSpaceView: View {
                     // exercise the rotation.
                     let landing = battery.terminalPosition(1)
                         + SIMD3(0.03 + CircuitsModel.terminalOffset, 0.02, 0)
-                    if let bulb = model.add(.bulb, at: landing) {
+                    if let bulb = model.add(.bulb, at: landing),
+                       let before = model.components.first(where: { $0.id == bulb }) {
                         model.release(id: bulb)
+                        if snapAt > 0 {
+                            renderer.pinnedLandingTime = snapAt
+                            renderer.easeLanding(id: bulb, from: before.position, axis: before.axis)
+                        }
                     }
                 }
             }
@@ -449,6 +456,13 @@ struct CircuitsSpaceView: View {
                     if let id = partPress.promote(hand: hand) {
                         beginCarrying(id, hand: hand, renderer: renderer)
                     }
+                    // A joint pulled at strains toward the hand until the
+                    // press gives: drawn only, the model's joint is whole.
+                    if let press = wirePress.pendingPayload, let travel = wirePress.travel(to: hand) {
+                        renderer.jointStrain = (press.wire, SIMD3<Float>(travel))
+                    } else {
+                        renderer.jointStrain = nil
+                    }
                     if let grabbed = wirePress.promote(hand: hand),
                        let end = model.endToLift(of: grabbed.wire,
                                                  pressedAt: grabbed.pressedAt, hand: hand) {
@@ -525,6 +539,7 @@ struct CircuitsSpaceView: View {
                         stagePress.cancel()
                         stageDrag = nil
                         renderer?.previewComponentID = nil
+                        renderer?.jointStrain = nil
                         leadPress.cancel()
                         partPress.cancel()
                         wirePress.cancel()

@@ -193,6 +193,7 @@ def stocks():
         "epoxy": glass("CircuitEpoxy", (0.90, 0.20, 0.15), 0.80, roughness=0.15),
         "filament": material("CircuitFilament", (0.30, 0.28, 0.26), roughness=0.4, metallic=0.6),
         "blur": glass("CircuitRotorBlur", (0.60, 0.61, 0.64), 0.30, roughness=0.4),
+        "blurBand": glass("CircuitRotorBlurBand", (0.78, 0.62, 0.32), 0.45, roughness=0.35),
         "electron": material("CircuitElectron", (0.20, 0.80, 0.95), roughness=0.5),
     }
 
@@ -497,6 +498,13 @@ def build_motor(s):
     bpy.data.objects.remove(blurhole, do_unlink=True)
     blur.data.materials.clear()
     shade(blur, s["blur"])
+    # The marker smeared round its circle: what a spinning marker is to an
+    # eye, and what Swift shows (over a plain-steel rotor) above 20 rev/s.
+    band_z = f["centre_z"] + f["thickness"] / 2 + 0.0012
+    smear = band("BlurBand", 0.036, 0.030, 0.0006, location=P(0, 0, band_z), rotation=FACING,
+                 vertices=64)
+    shade(smear, s["blurBand"])
+    blur = join("rotor_blur", [blur, smear])
     origin_at(blur, P(0, 0, 0))
     return [join("CircuitMotor", parts), rotor, blur]
 

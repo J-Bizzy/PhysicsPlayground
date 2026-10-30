@@ -742,37 +742,34 @@ extension HubVignettes {
     /// The circuit the lab opens on (`CircuitsModel.starterParts` and
     /// `starterWires`), as the lab stands it: an upright rectangle facing the
     /// reader, the battery along the bottom, the bulb at the top, the switch
-    /// upright on the right, joined by straight copper wires terminal to
-    /// terminal. Every part is the lab's own lab-kit module.
+    /// upright on the right, joined by straight wires terminal to terminal.
+    /// Every part is the lab's own module, its symbol made solid (2026-10-30).
     static func circuitsDiorama() -> Built {
         let diorama = Diorama()
         let bench = diorama.bench(yaw: 0.3)
         let lead = Float(CircuitsModel.terminalOffset)
-        let copper = Materials.machined(DesignTokens.Palette.copperUI, roughness: 0.35)
 
         // Placed as the lab places them, relative to the battery, whose
-        // carrier stands on the stage.
+        // lowest point (its copper plate's rim) stands on the stage.
         let parts = CircuitsModel.starterParts
-        let origin = SIMD3<Float>(parts[0].position) - [0, -CircuitsRenderer.carrierBottom, 0]
-        var modules: [CircuitsRenderer.Module] = []
+        let modules = parts.map { CircuitsRenderer.makeModule(kind: $0.kind) }
+        let batteryBottom = modules[0].body.visualBounds(relativeTo: modules[0].root).min.y
+        let origin = SIMD3<Float>(parts[0].position) + [0, batteryBottom, 0]
         var ends: [[SIMD3<Float>]] = []
-        for part in parts {
+        for (part, module) in zip(parts, modules) {
             let centre = SIMD3<Float>(part.position) - origin
             let axis = SIMD3<Float>(part.axis)
-            let module = CircuitsRenderer.makeModule(kind: part.kind)
             module.root.name = "circuit-\(part.kind)"
             module.root.position = centre
             module.root.orientation = CircuitsRenderer.moduleOrientation(axis: axis, front: [0, 0, 1])
             bench.addChild(module.root)
-            modules.append(module)
             // Terminal 0 at −axis, terminal 1 at +axis, as `terminalPosition`.
             ends.append([centre - axis * lead, centre + axis * lead])
         }
         for wire in CircuitsModel.starterWires {
-            let segment = ModelEntity(mesh: unitCylinder, materials: [copper])
-            stretch(segment, from: ends[wire.from.part][wire.from.end],
-                    to: ends[wire.to.part][wire.to.end], radius: 0.0045)
-            bench.addChild(segment)
+            // The bench's own line: a core in a dark jacket.
+            bench.addChild(CircuitsRenderer.makeLine(from: ends[wire.from.part][wire.from.end],
+                                                     to: ends[wire.to.part][wire.to.end]))
         }
         let lever = modules[1].lever
         let bulb = modules[2]
@@ -793,8 +790,12 @@ extension HubVignettes {
             return road[leg] + (road[leg + 1] - road[leg]) * blend
         }
         let electronMaterial = Materials.energized(DesignTokens.Palette.electronUI, glow: 0.9)
+        // The bench's own low-poly electron, drawn at the diorama's 7.5 mm:
+        // fourteen 8,064-triangle spheres were most of the home's triangles.
+        let electronMesh = CircuitsRenderer.electronMeshes().core
         let electrons = (0..<14).map { _ -> ModelEntity in
-            let electron = ModelEntity(mesh: Primitives.sphere(radius: 0.0075), materials: [electronMaterial])
+            let electron = ModelEntity(mesh: electronMesh, materials: [electronMaterial])
+            electron.scale = SIMD3(repeating: 0.0075 / 0.0026)
             bench.addChild(electron)
             return electron
         }
@@ -812,12 +813,14 @@ extension HubVignettes {
             case ..<(period - throwTime): openness = 1
             default: openness = (period - t) / throwTime
             }
-            lever?.orientation = simd_quatf(angle: Float(0.6 * openness), axis: [0, 0, 1])
+            lever?.orientation = simd_quatf(
+                angle: CircuitsRenderer.switchOpenAngle * Float(openness), axis: [0, 0, 1])
             let lit = openness < 0.05
             if lit != wasLit {
                 wasLit = lit
+                // The lab's bulb at the starter loop's 9 V across 24 Ω.
                 CircuitsRenderer.paintBulb(filament: bulb.filament, glow: glow,
-                                           light: bulb.light, level: lit ? 4 : 0)
+                                           light: bulb.light, watts: lit ? 81.0 / 24 : 0)
             }
             glow?.scale = SIMD3(repeating: 0.92 + 0.08 * Float(sin(time * 2.1)))
             // The carriers move only while the loop is closed, riding just in

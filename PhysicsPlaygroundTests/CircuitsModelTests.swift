@@ -265,6 +265,40 @@ final class CircuitsModelTests: XCTestCase {
         XCTAssertEqual(model.totalSourcePower, 0, accuracy: 1e-6)
     }
 
+    /// A switch closes the circuit when its blade lands in the contact,
+    /// `switchCloseDelay` after the throw, not at the tap — and opens it at
+    /// once, since the blade leaves at once (contract D3).
+    func testASwitchClosesWhenItsBladeLands() {
+        let model = CircuitsModel()
+        let toggle = model.components.first { $0.kind == .switcher }!
+        let bulb = model.components.first { $0.kind == .bulb }!
+        model.toggleSwitch(id: toggle.id)
+        model.step(dt: 1.0 / 90.0)
+        // 1 µA: an open element leaks the solver's tiny conductance, as the
+        // other switch tests allow.
+        XCTAssertEqual(abs(model.readouts[bulb.id]?.amps ?? 1), 0, accuracy: 1e-6, "opening is immediate")
+
+        model.toggleSwitch(id: toggle.id)
+        var elapsed = 0.0
+        while elapsed + 1.0 / 90 < CircuitsModel.switchCloseDelay - 1e-9 {
+            model.step(dt: 1.0 / 90.0)
+            elapsed += 1.0 / 90
+            XCTAssertEqual(abs(model.readouts[bulb.id]?.amps ?? 1), 0, accuracy: 1e-6,
+                           "lit \(elapsed) s after the throw, before the blade landed")
+        }
+        model.step(dt: 1.0 / 90.0)
+        model.step(dt: 1.0 / 90.0)
+        XCTAssertTrue(model.components.first { $0.id == toggle.id }!.isClosed)
+        XCTAssertGreaterThan(abs(model.readouts[bulb.id]?.amps ?? 0), 0.05, "lit once it landed")
+
+        // Thrown back open mid-fall, it never closes.
+        model.toggleSwitch(id: toggle.id)
+        model.toggleSwitch(id: toggle.id)
+        model.toggleSwitch(id: toggle.id)
+        for _ in 0..<30 { model.step(dt: 1.0 / 90.0) }
+        XCTAssertFalse(model.components.first { $0.id == toggle.id }!.isClosed)
+    }
+
     /// The solver keeps running while a component is being carried — the
     /// starter loop never freezes mid-move.
     func testCarryingAComponentKeepsTheCircuitLive() {
@@ -1055,11 +1089,14 @@ final class CircuitsModelTests: XCTestCase {
         model.connectTerminals(.init(componentID: switcher, end: 1), .init(componentID: bulb, end: 0))
         model.connectTerminals(.init(componentID: bulb, end: 1), .init(componentID: battery, end: 1))
 
-        // Closed switch, no meter: the reference loop.
+        // Closed switch, no meter: the reference loop — stepped past the
+        // blade's fall, since a closing switch closes when it lands.
         if model.components.first(where: { $0.id == switcher })?.isClosed == false {
             model.toggleSwitch(id: switcher)
         }
-        model.step(dt: 1.0 / 60)
+        for _ in 0..<Int((CircuitsModel.switchCloseDelay * 60).rounded(.up)) + 1 {
+            model.step(dt: 1.0 / 60)
+        }
         let undisturbed = try XCTUnwrap(model.readouts[bulb]?.amps)
 
         // Open switch, meter bridging the gap: the same loop, through

@@ -35,6 +35,9 @@ enum SoundPalette {
         case clack
         /// The launcher's pneumatic thump (it borrowed `pop` too).
         case launch
+        /// Two circuit dots finding each other: a part set down onto a
+        /// neighbour's lead seats with it (2026-10-30; it borrowed `chime`).
+        case seat
         /// A remarkable moment, through `Remark` and nowhere else.
         case gleam
     }
@@ -239,7 +242,7 @@ enum SoundPalette {
     /// will hear the change. Version 2 is the 2026-10-14 re-voicing; 3, the
     /// opening re-scored for "Birth of a System" (2026-10-20); 4, the
     /// arrival's one soft tone (2026-10-21).
-    private nonisolated static let oneShotVersion = 4
+    private nonisolated static let oneShotVersion = 5
 
     private nonisolated static func writeIfNeeded(_ sound: Sound) throws -> URL {
         let directory = try soundsDirectory()

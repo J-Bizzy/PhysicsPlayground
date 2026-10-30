@@ -206,3 +206,28 @@ Milling refined the approved table in these places:
 | Electron | — | `core` (320 tris) and `halo` (80) in `CircuitElectron.usdz` | — |
 | Ten elements, all together | — | **52,032 triangles**, every element inside its ceiling (the largest is the bulb at 11,700) | — |
 | Capacitor plates | plain plates | **an ink rim with a champagne edge on each** | Seen nearly edge-on, bare metal mirrored a white wall and the "\| (" never read. |
+
+## As integrated (Phase 5, 2026-10-30)
+
+Integration changed the approved table in these places. Each was measured, not estimated.
+
+| Value | Approved | As integrated | Why |
+|---|---|---|---|
+| Electron dots (D5) | one instanced entity, 2 draws, 200 dots | **D5's fallback: one entity per dot, a pool of 120, one draw each** | Instancing was built and measured first. A `LowLevelInstanceData` written every frame waits on RealityKit's in-flight limit. At 4× the main thread spent 2,992 of 4,423 samples in `freeListWait` (87% busy) and the frame log showed 62–77 long frames in every 5 s. The fallback measures 4.4–4.8% busy with none, matching the Phase 1 baseline. |
+| The fallback's dot | the core alone, no halo | **one bead at the halo's radius, 4.5 mm** (the core mesh scaled) | The 2.6 mm core rides inside the 3.7 mm jacket and all but vanished. The bead stands 0.8 mm proud. |
+| Dots per wire | the first wires fill the pool | **shared in proportion** (`shareDots`), at least two on every conducting wire | With 120 dots, a bench at 4× that wanted more would have drawn its last wires as dead. |
+| Skyline tower | a rounded `generateBox` | **a square-cornered box**, 12 triangles | A rounded `generateBox` is 13,068 triangles at any size. Three towers put the starter loop at 92k, over its 70k ceiling. |
+| Element draws | ≤ 5 | **≤ 6** | The bulb's filament and the motor's rotor carry their own material. The bench totals are the budget that binds. |
+| Motor blur | `rotor_blur` swapped in | **plus a translucent brass band** in `CircuitMotor.usdz`, over a plain-steel rotor | The brass marker smeared round its circle, which is what a spinning marker is to the eye. |
+| Every Circuits asset | exported as Blender left it | **re-milled with `triangulate_meshes`** (`blenderprops.export`); `propsheet stats` now flags any face over four corners | RealityKit fans every polygon from one corner. A boolean ring (`band()`) leaves its flat faces as C-shaped half-annuli, and fanned, the C's mouth fills in: the stage's 2 mm keyline drew as a champagne disc over the whole deck. The motor's flywheel and blur band, the AC source and the rim carried the same faces. Cycles triangulates correctly, so no propsheet render showed it. Triangle and draw counts are unchanged. |
+| `CircuitsLiveStateTests` | a new file | **in `CircuitsModuleTests`**, beside the module tests they extend | — |
+
+**Measured** by `CircuitBudgetTests` (which counts what the renderer actually builds) and in the simulator with `-frameLog 1` and a 6 s `sample`:
+
+| | Ceiling | Measured | Phase 1 |
+|---|---:|---:|---:|
+| Starter loop, skyline, 4× | 70,000 tris / 120 draws | **50,400 / 109** | 682k |
+| Ten parts, full pool, skyline, 4× | 250,000 / 400 | **154,316 / 308** | 3.2M |
+| Frames, 4×, skyline (± `-trueSpeed`) | 90 Hz | **0 long frames after settling**; worst 11.2–16.3 ms | 0 long |
+| Main thread busy | — | **4.4–4.8%**, no renderer waits | 3–4% |
+| Props warm | — | **0.79–0.88 s** | 0.76–0.93 s |

@@ -651,7 +651,7 @@ def usd_census(path):
     except ImportError:
         return None
     stage = Usd.Stage.Open(path)
-    meshes = draws = unbound = 0
+    meshes = draws = unbound = polygons = 0
     fallen = []
     textures = []
     for prim in stage.Traverse():
@@ -664,7 +664,11 @@ def usd_census(path):
             continue
         meshes += 1
         mesh = UsdGeom.Mesh(prim)
-        faces = len(mesh.GetFaceVertexCountsAttr().Get() or [])
+        counts = mesh.GetFaceVertexCountsAttr().Get() or []
+        faces = len(counts)
+        # RealityKit fans every polygon from one corner, which fills a
+        # concave one; `blenderprops.export` triangulates so none arrive.
+        polygons += sum(1 for n in counts if n > 4)
         binding = UsdShade.MaterialBindingAPI(prim)
         subsets = binding.GetMaterialBindSubsets()
         direct = binding.ComputeBoundMaterial()[0]
@@ -685,6 +689,7 @@ def usd_census(path):
             if not direct:
                 unbound += faces
     return {"meshes": meshes, "draws": draws, "unbound": unbound, "fallen": fallen,
+            "polygons": polygons,
             "textures": sorted(set(textures))}
 
 
@@ -713,6 +718,8 @@ def stats(c, options):
         if census.get("unbound"):
             checks.append("%d faces bound to no material" % census["unbound"])
         checks += census.get("fallen", [])
+        if census.get("polygons"):
+            checks.append("%d faces of five or more corners" % census["polygons"])
         rows.append((name, tris, verts, len(materials), census.get("draws", "?"),
                      ", ".join(census.get("textures", [])) or "—",
                      os.path.getsize(path) // 1024, bounds, "; ".join(checks) or "ok"))
