@@ -410,6 +410,57 @@ working session:
 
 ## Circuit Workshop
 
+### ⟳ 2026-10-30 — the Solid Schematic kit: parts you want to play with
+
+Each part is now its own schematic symbol made solid: ink with a
+champagne keyline, floating on its two brass dots, no carrier. Its leads
+are the wire's own line. Do these first. Stills for comparison, each from
+a cleared bench (`defaults delete …circuits.savedBench.v1`, CLAUDE.md):
+`-openModule circuits` (the starter loop), `-circSnapAt 0.06` (a part
+mid-snap), `-seedCircuits 1 -seedMotor 1` (the motor), `-circFault fuse`,
+`-viewScale 4` (Electron View), `-skyline 1`, `-circKit 1` (all ten).
+
+- [ ] **Throw the switch.** Tap the blade. It swings down, bounces a
+      couple of degrees off the contact, and the bulb lights as it LANDS,
+      not as you tap. Tap again: it opens and the bulb goes out at once.
+      Does the throw feel like a real switch? Is 0.12 s too slow?
+- [ ] **The filament's colour is its temperature.** Turn a bulb's battery
+      down and up: the filament runs from a dull red to warm white at 3 W,
+      in steps too fine to see. The glow and the light it throws follow.
+- [ ] **Pick a part up.** Pinch a bulb: it rises a few millimetres, glows,
+      and your hand never changes its size. Let go in the air: it settles
+      back down.
+- [ ] **Set one down beside a lead.** Carry a bulb to within a finger's
+      width of a battery's dot: in the last centimetre it leans in toward
+      its seat. Let go: it glides home, the two dots become one larger
+      brass junction, and you hear a short, solid seat (not the chime).
+- [ ] **Pull a joint apart.** Pinch the junction and pull: it stretches
+      toward your hand before it gives, then the wire comes out of the
+      other part's dot. Let go before it gives: it is round again.
+- [ ] **Read the leads.** Every lead and wire is a dark jacket over a core
+      in the voltage ramp's colour. Is that line legible against a white
+      wall AND in Deep space?
+- [ ] **The symbol faces you.** Carry a part round you in a circle: its
+      symbol keeps turning to face you, and it never hangs upside down.
+- [ ] **Each part shows its own state:**
+      - an LED lights red only one way round, and goes dark reversed;
+      - a capacitor's plates tint red and blue as it charges, deeper with
+        the voltage;
+      - an AC source's bead runs along the sine wave on its face;
+      - a blown fuse loses its filament's middle and its glass scorches.
+- [ ] **The motor.** `-seedMotor` spins it at 500 rpm and its one brass
+      marker turns. Raise the voltage and cut the resistance until it
+      passes 20 rev/s: the marker smears into a brass band over plain steel.
+      Does it ever read as turning backwards? It must not.
+- [ ] **Electron View.** Spread to 4×: the electrons are pale beads riding
+      inside every live wire, and none sits still on a conducting one.
+- [ ] **The skyline.** `-skyline 1`: the towers are square columns now.
+- [ ] **The home and the shelf** show the same parts, lit the same way.
+- [ ] **Reduce Motion.** With it on, the switch snaps shut, nothing lifts
+      or leans, and a landing jumps straight to its seat.
+- [ ] **Is it fun?** Build the starter loop from the shelf without looking
+      at anything but the parts. Say what you reached for and missed.
+
 ### ⟳ 2026-10-18 — the turntable turns and carries the circuit
 
 - [ ] **Turn it by the rim.** Pinch the knurled edge and walk your hand
@@ -446,6 +497,9 @@ working session:
       net that already connects it lights.
 
 ### ⟳ 2026-10-18 — the parts are lab-kit modules
+
+(History: the carrier, the collar and the brass gauge went with the
+2026-10-30 kit above, which is current where the two disagree.)
 
 - [ ] **Read a part from where you stand.** Each part sits on a graphite
       carrier with its symbol on the chamfer facing you. Do the 13 mm

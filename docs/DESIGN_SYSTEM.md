@@ -85,7 +85,7 @@ More.
 | **The object itself** | — | When the quantity *is* a size, a length, a direction or a place: Projectiles' aim bead is the launch velocity (its direction the aim, its distance from the launcher the speed); a capacitor plate dragged sets the gap; the dielectric slab slides in. |
 | **Ring + grip** | `DesignSystem/Bloom`, `RingState` | Per-object controls, unfolded by **tap** (never gaze). Discrete actions are petals (Flip, Delete, Mass, Fire…); the value is a **handle pulled out of the object** on a stalk — `Bloom.Grip.Stretch`: `.surface` for a sphere drawn with volume ∝ value (a planet's mass, a charge's \|q\|), so it swells under the hand; `.track` for an object whose size is not its value (a circuit part, a bar magnet), a stalk out of its underside toward the viewer's right; a pendulum's length runs along its own cable. |
 | **Well** | `DesignSystem/Well` | Creation as a physical act — reach in and pull the object out, born at your fingertips. Given a `visibleCount`, `facing` and `windowTitle` it becomes a **shelf** (Circuit Workshop's parts): a window of slots with the title above and a hairline spine beside, and on the spine a knurled **crown** (`Models/Shell/ShelfCrown.usdz`) that is the one thing that scrolls — roll it and the column rides the hand one to one, with flick, rubber-banded ends and a detent per slot; it **turns with the column**, so at rest it is a readout of where the shelf is. Never a caret, never a scrollbar. |
-| **Joint** | `CircuitsRenderer.wireGrabShape` | Where two of Circuit Workshop's contacts meet (2026-10-18): a champagne collar that is the one target there — the two coincident contacts withdraw theirs — and a pull on it takes the wire out of the side pulled away from. A cable's own target stops short of both its contacts, so a contact and its cable never compete for a pinch. |
+| **Joint** | `CircuitsRenderer.wireGrabShape` | Where two of Circuit Workshop's contacts meet (2026-10-18): one brass junction, the two dots made one (a champagne collar until 2026-10-30), that is the one target there — the two coincident contacts withdraw theirs — and a pull on it takes the wire out of the side pulled away from. A cable's own target stops short of both its contacts, so a contact and its cable never compete for a pinch. |
 | **Turntable** | `CircuitsModel.Stage`, `CircuitsRenderer.stageRoot` | Circuit Workshop's floating circuit stands over a disc that is both its container and its handle (2026-10-18; ARCHITECTURE.md's one exception to "no tables"): the knurled rim turns the whole circuit, one to one, with a detent every 30° and a coast — the same knurl that says "this turns" on the shelf's crown — and the deck's outer band carries it. Its middle takes no hand. |
 | **Fan** | `DesignSystem/SpatialPicker` | A momentary N-way choice opened from a petal: Projectiles' ball fan and the hoop's Low/High arc. The current choice is lit. |
 | **Rail** | `RenderKit/SpatialTrackControl` | Only where a continuous quantity has to stand at its object: the Time Capsule's scrub, and an AC source's frequency under the part. The family's slider on glass. |
@@ -183,19 +183,37 @@ this is the pass that is probably missing.**
 Lighting is `RenderKit/Lighting.keyLight()` — one warm key from upper front-left,
 supplementing (never replacing) the room's own image-based light.
 
-**A part shows its own state (Circuit Workshop's lab-kit modules,
-2026-10-18).** Every part is the real component on one graphite carrier,
-its ANSI symbol inlaid in champagne on the chamfer facing you (and
-mirrored on the back one), wired by brass traces to two brass contacts
-(`DesignTokens.Palette.contactBrassUI`): brass is where a wire goes,
-copper is the wire. Its label is its number and nothing else; what it is
-doing is on the part — a lit filament and the warm light it throws, an LED
-lit at its own 625 nm, a fuse's filament broken behind clear glass, a
-capacitor's brass gauge, an AC dial's needle, a switch's blade. A word in
-the room repeating what the object already shows is the clutter the
-subtraction pass removed. **Glass from Blender must set Transmission
-Weight:** the USD exporter writes opacity as 1 − Transmission and ignores
-Alpha, which is how every glass part shipped opaque until that pass.
+**A part shows its own state (Circuit Workshop's Solid Schematic,
+2026-10-30; the lab-kit carriers of 2026-10-18 before it).**
+
+**The part is its symbol.** Every part is its own ANSI symbol made solid:
+ink with a champagne keyline, so the drawing reads against a white wall
+and against space. It floats on two brass dots that are its terminals
+(`DesignTokens.Palette.contactBrassUI`). Brass is where a wire goes, and
+the line is the wire: a part's leads and its wires are one dark jacket
+over a core in the voltage ramp's colour. Its face turns toward the
+wearer.
+
+**Its label is its number and nothing else.** What it is doing is on the
+part, and every state comes from the model's value:
+- **Bulb:** the filament glows at the colour of its temperature.
+- **LED:** lights at its own 625 nm, and only forward.
+- **Capacitor:** its plates take the physics red and blue as they charge.
+- **AC source:** a bead rides its sine wave.
+- **Fuse:** a blown one is broken and scorched.
+- **Motor:** its marker turns as fast as it truly does, and smears to a
+  band where the eye would.
+- **Switch:** the blade is thrown, and the circuit closes when it lands.
+
+A word in the room repeating what the object already shows is the
+clutter the subtraction pass removed.
+
+**Asset rules.**
+- **Glass from Blender must set Transmission Weight.** The USD exporter
+  writes opacity as 1 − Transmission and ignores Alpha, which is how every
+  glass part shipped opaque until 2026-10-18.
+- **Export triangulated.** RealityKit fans an n-gon from one corner and
+  fills a boolean ring's C-shaped faces (`blenderprops.export`).
 
 ---
 
@@ -294,6 +312,8 @@ All hub motion ticks from `SceneEvents.Update` — never `RealityView`'s
 | Wordmark | Arrives by physics (Physics drops and bounces, Playground swings in, the dot lands last), then a travelling wave a few millimetres high and a glint every 9 s; a pinch hops a letter (`Hub/HubTitleMotion.swift`) | wave 3.5 mm, hop 7 cm |
 | Enter | The portal swells toward you and the home dissolves — an arrival, never a hard cut | scale 1.35, +0.25 m, 0.42 s |
 | Live | `LiveGlow` fades up around what the hand takes and out when it lets go | 0.15 s |
+| Lift and seat | A circuit part rides up while held. In the last centimetre it leans toward its seat, glides home on release, and the two dots meet with a seat sound. A pulled joint strains before it gives. All of it is drawn only (`CircuitsRenderer.displayPose`) | 6 mm, 10 mm, 0.12 s |
+| Throw | `Motion.Spring`, for a part that is flung rather than eased: the switch's blade falls, bounces a couple of degrees off its contact and settles there, and swings back past open when thrown open | 7 Hz, damping 0.45; on the contact 12 Hz, 0.35 |
 
 **Selection** is tap/pinch on the portal; hover is the system's.
 

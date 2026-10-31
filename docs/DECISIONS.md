@@ -16,6 +16,56 @@ A running log of consequential decisions — architectural, physical, or product
 
 (The template sat stranded at line 309, mid-log between two 2026-07-29 entries, until 2026-08-01.)
 
+## 2026-10-30 — Circuit Workshop's parts are the Solid Schematic: each part its own symbol, made solid
+
+**Decision:** Every part is its own schematic symbol, made solid. It floats on two brass dots that are its terminals, with no carrier under it, and its leads are drawn as the wire's own line. The owner picked this direction (C, "the one without any base… it can be seen as floating") from three that were milled and rendered. The work ran in six phases, each stopping for the owner: audit, directions, contract, mill, integrate, record. Commits: e31b390, 3ff5509, c914e98, 37a30f4, 5d5349a.
+
+**Context:** The owner asked to make Circuit Workshop *fun*: "a kit you want to grab, snap together and play with," without giving up any of its honesty. The audit (`docs/circuits-kit-audit.md`) found:
+- **The symbol was the faintest thing on each part:** a 1.1 mm stroke.
+- **Ten parts shared one silhouette,** and the switch read as nothing.
+- **The motor's four-armed rotor aliased** at 90 Hz above 45 blade passes a second: it turned backwards at 12 V and stood still at 24 V.
+- **The bulb had six brightness steps** and no colour temperature.
+- **The bench was over Apple's budget:** the starter loop drew 682k triangles in Electron View, because every electron dot was a pair of 8,064-triangle spheres.
+
+**Consequences:**
+- **Each part shows its own state, from the model's value:**
+  - **Bulb:** the filament's colour is its temperature. T = 2700 K·(P/3 W)^¼, capped at 3200 K, through PhysicsCore's Planck colour, in 16 steps.
+  - **LED:** lights only in forward bias.
+  - **Capacitor:** its plates tint with the sign and size of the charge.
+  - **AC source:** a bead runs its sine wave with the phase.
+  - **Fuse:** loses its middle and its glass scorches.
+  - **Motor:** a flywheel that IS its inertia (J = 0.000543 kg·m², milled to within 1%). Its one marker turns by ω·dt and smears to a band above 20 rev/s, so the turn you see is never an alias.
+  - **Switch:** the blade is thrown on `Motion.Spring`, and the circuit closes when it LANDS, 0.12 s after the tap. A real switch closes on contact. Opening is immediate.
+- **Feel, all drawn only.** The model's part is always where the hand put it.
+  - A held part lifts 6 mm.
+  - Over the last centimetre it leans toward the seat `alignment(for:)` would give it, and the two dots meet as one junction with a new `.seat` sound.
+  - A pulled joint strains toward the hand through the 12 mm press grace.
+  - Reduce Motion turns all of it off.
+- **The budget holds,** measured by `CircuitBudgetTests` from what the renderer builds:
+  - the starter loop at 4× is 50.4k triangles and 109 draws (from 682k);
+  - the worst bench is 154k and 308;
+  - the simulator holds 90 Hz with no long frames, with the main thread 4–5% busy.
+- **The contract changed in four measured places** (`docs/circuits-kit-contract.md`, "As integrated"):
+  - **Electron dots are a pool of 120 beads,** shared out among the wires. One instanced entity waited on RealityKit's in-flight limit every frame (87% busy).
+  - **The skyline's towers are square boxes.** A rounded `generateBox` is 13k triangles.
+  - **The bulb and motor are six draws each.**
+  - **Every asset is exported triangulated** (below).
+- **RealityKit fans n-gons.** A boolean ring's flat faces export as C-shaped polygons, and fanned, the C's mouth fills in: the stage's 2 mm keyline drew as a disc over the whole deck. Cycles never showed it. `blenderprops.export` now triangulates, and `propsheet stats` flags any face over four corners. PickupCoil (and TimeReel, for the material fault) still need re-milling.
+- **Kept from the lab-kit modules of 2026-10-18,** because they were right:
+  - contacts that ARE the terminals, with terminal 0 as the battery's + at −X;
+  - one `makeModule` for the bench, the shelf and the home;
+  - state shown on the part, never in words;
+  - straight wires in a dark jacket, coloured by voltage;
+  - the resistor's procedural colour bands;
+  - the turntable and its knurled "this turns" rim.
+  
+  The carrier, its chamfered symbol and the joint's collar are gone. The symbol is now the part itself.
+- **Not done here:** the device pass (`ON_DEVICE_TESTS.md`, the 2026-10-30 section) is the owner's.
+- **Tools:**
+  - `Tools/propsheet.py` renders any Circuits USDZ headless at the headset's pixels per degree, in a bright room and in Deep space, with a stats census;
+  - `Tools/circuitparts.py` holds the contract's numbers as literals;
+  - the tests read those literals.
+
 ## 2026-10-27 — A readability and accessibility pass before submission
 
 **Decision:** Four read-only audits (window UI, type in the room, VoiceOver in the room, motion and colour) and one pass of fixes. The owner asked to "make sure all UI is readable and accessible."
