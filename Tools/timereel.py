@@ -102,6 +102,9 @@ def cut(target, tool):
     modifier.solver = "EXACT"
     bpy.ops.object.modifier_apply(modifier="cut")
     bpy.data.objects.remove(tool, do_unlink=True)
+    # The same empty material slot `band()` clears: left in, the flanges'
+    # faces point at it and export outside every material subset.
+    target.data.materials.clear()
     return target
 
 
