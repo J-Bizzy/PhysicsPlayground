@@ -1297,6 +1297,30 @@ final class CircuitsModel {
         }
     }
 
+    /// The values a part's track clicks into: the ones parts are sold in.
+    /// Cells stack in 1.5 V; resistors, bulbs and motors follow E6 (10, 15,
+    /// 22, 33, 47, 68 per decade); capacitors and inductors the 1–2.2–4.7
+    /// steps they are stocked in; fuses their usual fast-blow ratings.
+    /// Every one lies inside `valueRange(for:)`.
+    static func valueDetents(for kind: ComponentKind) -> [Double] {
+        let e6 = [1.0, 1.5, 2.2, 3.3, 4.7, 6.8]
+        let range = valueRange(for: kind)
+        func series(_ steps: [Double], decades: [Double]) -> [Double] {
+            decades.flatMap { decade in steps.map { ($0 * decade * 1e6).rounded() / 1e6 } }
+                .filter { range.contains($0) }
+        }
+        switch kind {
+        case .battery, .acSource: return [1.5, 3, 4.5, 6, 9, 12, 24]
+        case .resistor: return series(e6, decades: [10, 100, 1000])
+        case .bulb: return series(e6, decades: [1, 10, 100])
+        case .motor: return series(e6, decades: [1, 10])
+        case .capacitor: return series([1, 2.2, 4.7], decades: [1e-4, 1e-3, 1e-2])
+        case .inductor: return series([1, 2.2, 4.7], decades: [0.01, 0.1, 1])
+        case .fuse: return [0.05, 0.1, 0.25, 0.5, 1, 2, 3.15, 5]
+        case .led, .switcher: return []
+        }
+    }
+
     static func formatValue(_ value: Double, for kind: ComponentKind) -> String {
         switch kind {
         case .battery, .acSource: PhysicsFormat.measurement(value, "V", decimals: 1)

@@ -652,6 +652,10 @@ final class CircuitsRenderer {
 
     /// While this part is carried, ghost wires show what a release would connect.
     var previewComponentID: UUID?
+    /// The part whose ring is open. Its bead's callout carries its number
+    /// there, so where the part's own label says the same thing it stands
+    /// down: the track runs under the part, through where the label hangs.
+    var ringPartID: UUID?
     /// Terminals currently highlighted as connection targets.
     private(set) var previewTargets: Set<CircuitsModel.Terminal> = []
     private var previewWireEntities: [ModelEntity] = []
@@ -1418,7 +1422,9 @@ final class CircuitsRenderer {
                visual.label.setText(text, color: UIColor(white: 0.95, alpha: 1)) {
                 visual.labelText = text
             }
-            visual.labelPivot.isEnabled = !text.isEmpty
+            let echoed = component.id == ringPartID
+                && text == CircuitsModel.formatValue(component.value, for: component.kind)
+            visual.labelPivot.isEnabled = !text.isEmpty && !echoed
             // Its value and its state, spoken — a switch's open or closed
             // and a blown fuse are otherwise only seen.
             let spoken = Self.spokenState(for: component)

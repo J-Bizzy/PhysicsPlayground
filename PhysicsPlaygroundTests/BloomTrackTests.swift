@@ -207,7 +207,10 @@ final class BloomTrackTests: XCTestCase {
             ("test charge", FieldModel.probeChargeRange, FieldSpaceView.probeTrack),
             ("star", OrbitalMechanicsModel.primaryMassRangeSuns, OrbitalMechanicsSpaceView.starTrack),
             ("planet", OrbitalMechanicsModel.massRangeEarths, OrbitalMechanicsSpaceView.planetTrack),
-        ]
+            ("magnet", MagnetismModel.strengthRange, MagnetismSpaceView.strengthTrack),
+        ] + CircuitsModel.ComponentKind.allCases
+            .filter { !CircuitsModel.valueDetents(for: $0).isEmpty }
+            .map { ($0.rawValue, CircuitsModel.valueRange(for: $0), CircuitsSpaceView.valueTrack(for: $0)) }
         for (name, range, track) in labs {
             let grip = Bloom.Grip(name: name, range: range, read: { range.lowerBound },
                                   write: { _ in }, format: { "\($0)" }, radius: { 0.03 },
@@ -232,5 +235,54 @@ final class BloomTrackTests: XCTestCase {
         XCTAssertEqual(PhysicsFormat.compact(0.05), "0.05")
         XCTAssertEqual(PhysicsFormat.compact(100), "100")
         XCTAssertEqual(PhysicsFormat.compact(1e-9 * 1e9), "1")
+    }
+
+    // MARK: Under the object (2026-11-02)
+
+    /// A circuit part's or a magnet's track runs under it, starting straight
+    /// below its centre, so it stays clear of the leads or poles along its
+    /// own axis; a charge's starts at its surface, level with it.
+    func testADroppedTrackRunsUnderTheObject() throws {
+        var value = 100.0
+        let grip = Bloom.Grip(name: "Value", range: 10...4700,
+                              read: { value }, write: { value = $0 }, format: { "\($0)" },
+                              radius: { 0.05 }, track: CircuitsSpaceView.valueTrack(for: .resistor))
+        let bloom = openRing(grip)
+        let track = try child("bloom-track", of: bloom)
+        let bead = try child("bloom-grip", of: bloom)
+        XCTAssertEqual(track.position.y, -Bloom.calmTrackDrop, accuracy: 1e-6)
+        XCTAssertEqual(bead.position.y, -Bloom.calmTrackDrop, accuracy: 1e-4)
+        XCTAssertLessThan(track.position.x, 0.03,
+                          "a dropped track starts under the part, not past its surface")
+
+        let charge = openRing(chargeGrip(value: { 1 }, write: { _ in }))
+        XCTAssertEqual(try child("bloom-track", of: charge).position.y, 0, accuracy: 1e-6)
+    }
+
+    /// The whole reason for the change: a resistor's everyday 10–470 Ω
+    /// had the first 1.3 cm of a linear 14 cm handle. On the track it is
+    /// nearly two thirds of the travel, about 9.5 cm, and doubling any
+    /// value takes exactly as far as doubling any other.
+    func testAResistorsEverydayValuesHaveMostOfTheTravel() {
+        let grip = Bloom.Grip(name: "Value", range: CircuitsModel.valueRange(for: .resistor),
+                              read: { 10 }, write: { _ in }, format: { "\($0)" },
+                              radius: { 0.05 }, track: CircuitsSpaceView.valueTrack(for: .resistor))
+        XCTAssertGreaterThan(grip.fraction(of: 470) * travel, 0.09)
+        XCTAssertEqual(grip.fraction(of: 20) - grip.fraction(of: 10),
+                       grip.fraction(of: 2000) - grip.fraction(of: 1000), accuracy: 1e-12)
+    }
+
+    /// The numbers a part's track carries: each decade, the top of the
+    /// series, and every cell size but 4.5 V.
+    func testEachPartsTrackIsNumberedAtItsDecades() {
+        func labels(_ kind: CircuitsModel.ComponentKind) -> [String] {
+            CircuitsSpaceView.valueTrack(for: kind).detents.compactMap(\.label)
+        }
+        XCTAssertEqual(labels(.resistor), ["10", "100", "1k", "4.7k"])
+        XCTAssertEqual(labels(.capacitor), ["100µ", "1m", "10m"])
+        XCTAssertEqual(labels(.battery), ["1.5", "3", "6", "9", "12", "24"])
+        XCTAssertEqual(labels(.fuse), ["0.1", "1", "5"])
+        XCTAssertEqual(CircuitsModel.valueDetents(for: .resistor).count, 17, "E6 across 10 Ω–4.7 kΩ")
+        XCTAssertTrue(CircuitsModel.valueDetents(for: .switcher).isEmpty)
     }
 }

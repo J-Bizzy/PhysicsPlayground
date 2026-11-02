@@ -36,15 +36,23 @@ final class Bloom {
         /// `armWindow`.
         var confirms: Bool = false
 
+        /// For a petal that changes a state rather than doing a thing (a
+        /// mass, a winding, a colour): what that state is now, read after
+        /// the action and spoken to VoiceOver, which otherwise hears only
+        /// the petal's own name.
+        var announce: (() -> String)?
+
         init(name: String, symbol: String, tint: UIColor,
              isAvailable: @escaping () -> Bool = { true },
              confirms: Bool = false,
+             announce: (() -> String)? = nil,
              action: @escaping () -> Void) {
             self.name = name
             self.symbol = symbol
             self.tint = tint
             self.isAvailable = isAvailable
             self.confirms = confirms
+            self.announce = announce
             self.action = action
         }
     }
@@ -95,6 +103,16 @@ final class Bloom {
             /// Its length at one metre, scaled with distance like the
             /// rest of the ring.
             var length: Float = Bloom.calmTrackLength
+            /// How far below the object the track runs, at one metre; 0
+            /// starts it at the object's surface. For an object whose size
+            /// is not its value (a circuit part, a bar magnet) the track
+            /// starts straight under it instead, clear of the leads or poles
+            /// that join it to its neighbours along its own axis.
+            var drop: Float = 0
+
+            /// Where along the rail the track starts, for an object of
+            /// `radius`: its surface, or under its centre when dropped.
+            func start(radius: Float) -> Float { drop > 0 ? 0 : radius }
         }
 
         /// How an object stretches, in the ring's parent frame — the frame
@@ -109,29 +127,6 @@ final class Bloom {
             /// The value a hand at this point asks for.
             let value: (_ hand: SIMD3<Float>, _ axis: SIMD3<Float>) -> Double
 
-            /// For an object whose size is not its value (a circuit part, a
-            /// bar magnet): the stalk drops out of the object's underside —
-            /// clear of the leads or poles that join it to its neighbours
-            /// along its own axis — and runs toward the viewer's right, as
-            /// long as the value is far through its range.
-            static func track(range: ClosedRange<Double>,
-                              under center: @escaping () -> SIMD3<Float>,
-                              read: @escaping () -> Double) -> Stretch {
-                let drop = SIMD3<Float>(0, -0.065, 0)
-                let gap: Float = 0.018
-                let reach: Float = 0.14
-                let span = max(range.upperBound - range.lowerBound, .leastNonzeroMagnitude)
-                return Stretch(
-                    origin: { center() + drop },
-                    handle: { axis in
-                        let t = Float(min(max((read() - range.lowerBound) / span, 0), 1))
-                        return center() + drop + axis * (gap + reach * t)
-                    },
-                    value: { hand, axis in
-                        let along = simd_dot(hand - (center() + drop), axis) - gap
-                        return range.lowerBound + Double(min(max(along / reach, 0), 1)) * span
-                    })
-            }
         }
 
         init(name: String, range: ClosedRange<Double>,
@@ -239,6 +234,9 @@ final class Bloom {
     private static let gripGap: Float = 0.018
     /// The calm track's length at one metre: about 15 cm at arm's length.
     static let calmTrackLength: Float = 0.19
+    /// How far under an object a dropped track runs, at one metre: below a
+    /// lying circuit part's body and leads, or a bar magnet's.
+    static let calmTrackDrop: Float = 0.065
     /// How near a detent, as a share of the track, the bead falls into it:
     /// about 3 mm of hand travel at arm's length.
     static let detentWindow: Double = 0.018
@@ -317,7 +315,8 @@ final class Bloom {
             // The handle is dragged, not pressed, so it needs VoiceOver
             // increment/decrement.
             SpatialActions.attach(
-                to: handle, label: grip.name, value: grip.format(grip.read()),
+                to: handle, label: grip.name,
+                value: PhysicsFormat.spoken(grip.format(grip.read())),
                 adjust: { [weak self] delta in self?.nudgeGrip(by: delta) })
             let stalk = Self.makeStalk()
             root.addChild(stalk)
@@ -444,16 +443,22 @@ final class Bloom {
             origin = stretch.origin()
             handle = stretch.handle(railAxis)
         } else if let track = grip.track {
-            // Out of the object's surface to a bead on the calm track, which
-            // starts where the surface stood when the hand took it.
-            let start = gripDrag?.trackStart ?? grip.radius()
+            // Out of the object's surface (or from under it, when dropped) to
+            // a bead on the calm track, which starts where the surface stood
+            // when the hand took it.
+            let surface = track.start(radius: grip.radius())
+            let start = gripDrag?.trackStart ?? surface
             let t = Float(grip.fraction(of: grip.read()))
-            origin = anchor + railAxis * grip.radius()
-            handle = anchor + railAxis * (start + (Self.gripGap + track.length * t) * scale)
+            // The ring only yaws, so its own down is the parent frame's.
+            let below = SIMD3<Float>(0, -track.drop * scale, 0)
+            origin = anchor + below + railAxis * surface
+            handle = anchor + below
+                + railAxis * (start + (Self.gripGap + track.length * t) * scale)
             if let trackEntity {
                 // The ring's root is the anchor scaled by `scale` and turned
                 // so its +x is the rail: the track's start, in its own units.
-                trackEntity.position = [start / max(scale, 0.001) + Self.gripGap, 0, 0]
+                trackEntity.position = [start / max(scale, 0.001) + Self.gripGap,
+                                        -track.drop, 0]
                 trackEntity.scale = [max(reveal, 0.001), 1, 1]
                 trackEntity.isEnabled = reveal > 0.02
                 let interactive = reveal > 0.85
@@ -513,7 +518,7 @@ final class Bloom {
         // component write per frame per bead is a cost this app refuses.
         if reading != lastGripSpoken {
             lastGripSpoken = reading
-            SpatialActions.republish(value: reading, on: gripEntity)
+            SpatialActions.republish(value: PhysicsFormat.spoken(reading), on: gripEntity)
         }
         label?.root.components.set(OpacityComponent(
             opacity: max(0, min((reveal - 0.35) / 0.5, 1))))
@@ -560,6 +565,9 @@ final class Bloom {
         // fire in silence, so Delete made no sound at all.
         SoundPalette.play(.pop, on: petal, volume: 0.35)
         petals[index].action()
+        if let announce = petals[index].announce {
+            AccessibilityNotification.Announcement(announce()).post()
+        }
         return true
     }
 
@@ -605,9 +613,30 @@ final class Bloom {
         let name = Self.ownName(of: entity, under: root)
         guard name == gripEntity.name || (trackEntity != nil && name == trackEntity?.name)
         else { return false }
-        gripDrag = (hand, grip.read(), grip.radius())
+        gripDrag = (hand, grip.read(), grip.track?.start(radius: grip.radius()) ?? grip.radius())
         lastDetent = grip.detent(near: grip.fraction(of: grip.read()), window: 1e-9)?.value
+        // A bead already at an end has already stopped there: only pulling
+        // past it again, after leaving it, sounds.
+        let startFraction = grip.fraction(of: grip.read())
+        lastStop = startFraction <= 0 ? .minus : startFraction >= 1 ? .plus : nil
+        // Taken as anything in the room is taken: a tick under the glow.
+        SoundPalette.play(.grabTick, on: gripEntity, volume: 0.2)
         return true
+    }
+
+    /// The end of the range the bead last stopped against, so the stop
+    /// sounds once as it arrives there.
+    private var lastStop: FloatingPointSign?
+
+    /// A soft stop as the hand pulls past either end of the range: the
+    /// bead stays put, and says why. `fraction` is where the hand asks for,
+    /// unclamped.
+    private func stop(at fraction: Double) {
+        let end: FloatingPointSign? = fraction <= 0 ? .minus : fraction >= 1 ? .plus : nil
+        if let end, end != lastStop, let gripEntity {
+            SoundPalette.play(.thud, on: gripEntity, volume: 0.12)
+        }
+        lastStop = end
     }
 
     /// Pull the handle. A stretching object takes its value from where the
@@ -625,6 +654,7 @@ final class Bloom {
         if let track = grip.track {
             let travel = Double(track.length * max(lastScale, 0.001))
             let fraction = grip.fraction(of: gripDrag.startValue) + Double(along) / travel
+            stop(at: fraction)
             let detent = grip.detent(near: fraction, window: Self.detentWindow)
             grip.write(detent?.value ?? grip.value(at: fraction))
             // One click as the bead drops into a round value.
@@ -637,6 +667,7 @@ final class Bloom {
         let span = grip.range.upperBound - grip.range.lowerBound
         let worldTrack = Double(Self.gripTrackLength * max(lastScale, 0.001))
         let delta = Double(along) / worldTrack * span
+        stop(at: (gripDrag.startValue + delta - grip.range.lowerBound) / max(span, .leastNonzeroMagnitude))
         grip.write(min(max(gripDrag.startValue + delta,
                            grip.range.lowerBound), grip.range.upperBound))
         return true
@@ -667,11 +698,19 @@ final class Bloom {
             grip.write(min(max(next, grip.range.lowerBound), grip.range.upperBound))
         }
         if let gripEntity {
-            SpatialActions.republish(value: grip.format(grip.read()), on: gripEntity)
+            SpatialActions.republish(value: PhysicsFormat.spoken(grip.format(grip.read())),
+                                     on: gripEntity)
         }
     }
 
-    func endGrip() { gripDrag = nil }
+    /// Lets go of the bead: a tick, as any release in the room ticks —
+    /// only after a drag, so the views' cleanup calls stay silent.
+    func endGrip() {
+        if gripDrag != nil, let gripEntity {
+            SoundPalette.play(.releaseTick, on: gripEntity, volume: 0.2)
+        }
+        gripDrag = nil
+    }
 
     var isGripping: Bool { gripDrag != nil }
 

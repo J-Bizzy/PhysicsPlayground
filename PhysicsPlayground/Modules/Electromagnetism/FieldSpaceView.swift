@@ -198,7 +198,11 @@ struct FieldSpaceView: View {
                     .init(name: "Flip", symbol: "plusminus",
                           tint: charge.isPositive
                               ? DesignTokens.Palette.negativeUI
-                              : DesignTokens.Palette.positiveUI) {
+                              : DesignTokens.Palette.positiveUI,
+                          announce: {
+                              model.charges.first { $0.id == id }?.isPositive == true
+                                  ? "Positive" : "Negative"
+                          }) {
                         model.flipCharge(id: id)
                     },
                     .init(name: "Delete", symbol: "trash",
@@ -227,7 +231,8 @@ struct FieldSpaceView: View {
                     .init(name: "Flip", symbol: "plusminus",
                           tint: model.probeIsPositive
                               ? DesignTokens.Palette.probeNegativeUI
-                              : DesignTokens.Palette.probePositiveUI) {
+                              : DesignTokens.Palette.probePositiveUI,
+                          announce: { model.probeIsPositive ? "Positive" : "Negative" }) {
                         model.probeIsPositive.toggle()
                     },
                     .init(name: "Delete", symbol: "trash",

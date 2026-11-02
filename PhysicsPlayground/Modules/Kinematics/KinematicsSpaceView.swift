@@ -420,7 +420,11 @@ struct KinematicsSpaceView: View {
                         aimPicker.toggle()
                     },
                     .init(name: "Drop when fired", symbol: "arrow.down.to.line",
-                          tint: DesignTokens.Palette.neutralActionUI) {
+                          tint: DesignTokens.Palette.neutralActionUI,
+                          announce: {
+                              model.rings.first { $0.id == id }?.dropOnFire == true
+                                  ? "Drops when fired" : "Stays when fired"
+                          }) {
                         let armed = model.rings.first { $0.id == id }?.dropOnFire ?? false
                         model.setDropOnFire(id: id, !armed)
                     },

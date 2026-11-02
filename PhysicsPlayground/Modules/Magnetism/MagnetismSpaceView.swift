@@ -388,7 +388,8 @@ struct MagnetismSpaceView: View {
             uuid,
             petals: [
                 .init(name: "Flip poles", symbol: "arrow.triangle.2.circlepath",
-                      tint: DesignTokens.Palette.neutralActionUI) {
+                      tint: DesignTokens.Palette.neutralActionUI,
+                      announce: { "Poles flipped" }) {
                     model.flipMagnet(id: uuid)
                 },
                 .init(name: "Delete", symbol: "trash",
@@ -403,12 +404,7 @@ struct MagnetismSpaceView: View {
                 write: { model.setStrength(id: uuid, $0) },
                 format: { PhysicsFormat.measurement($0, "A\u{00B7}m\u{00B2}", decimals: 1) },
                 radius: { Float(MagnetismModel.magnetLength) * 0.6 },
-                // Out of the underside, not a pole: attracted magnets sit nose to
-                // tail, so a handle off the north pole was buried in its partner.
-                stretch: .track(range: MagnetismModel.strengthRange, under: {
-                    model.magnets.first(where: { $0.id == uuid })
-                        .map { SIMD3<Float>($0.position) } ?? .zero
-                }, read: { model.strength(id: uuid) })))
+                track: Self.strengthTrack))
 
         let viewer = appModel.room.headPosition.map {
             renderer.viewRoot.convert(position: SIMD3<Float>($0), from: nil)
@@ -418,6 +414,18 @@ struct MagnetismSpaceView: View {
     }
 
 
+    /// A magnet's calm track (2026-11-02): even steps, since its range is
+    /// barely a decade, clicking at every whole A·m² and numbered at 1, 3,
+    /// 6, 9 and 12. It runs under the magnet, not off a pole: attracted
+    /// magnets sit nose to tail, so a handle off the north pole was buried
+    /// in its partner.
+    static let strengthTrack = Bloom.Grip.Track(
+        detents: MagnetismModel.strengthDetents.map {
+            .init(value: $0, label: [1, 3, 6, 9, 12].contains($0) ? PhysicsFormat.compact($0) : nil)
+        },
+        logarithmic: false,
+        drop: Bloom.calmTrackDrop)
+
     /// A coil offers its winding, a quarter turn, and to go. What it does
     /// is shown by its LED, not by a number.
     private func syncCoilBloom(_ coil: MagnetismModel.Coil, renderer: MagnetismRenderer, dt: Double) {
@@ -426,7 +434,10 @@ struct MagnetismSpaceView: View {
             id,
             petals: [
                 .init(name: "Turns", symbol: "circle.dotted.circle",
-                      tint: DesignTokens.Palette.neutralActionUI) { model.cycleTurns(id: id) },
+                      tint: DesignTokens.Palette.neutralActionUI,
+                      announce: {
+                          "\(model.coils.first { $0.id == id }?.turns ?? 0) turns"
+                      }) { model.cycleTurns(id: id) },
                 .init(name: "Turn", symbol: "rotate.right",
                       tint: DesignTokens.Palette.neutralActionUI) { model.turnCoil(id: id) },
                 .init(name: "Delete", symbol: "trash",

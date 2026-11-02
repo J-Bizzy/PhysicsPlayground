@@ -27,6 +27,8 @@ final class MagnetismModel {
     nonisolated static let magnetLength = 0.16
     nonisolated static let magnetBudget = 4
     nonisolated static let strengthRange = 1.0...12.0
+    /// The moments a magnet's track clicks into: every whole A·m².
+    nonisolated static let strengthDetents = (1...12).map(Double.init)
     nonisolated static let defaultStrength = 6.0
 
     // Overdamped glide tuning — direction from the physics, speed capped.

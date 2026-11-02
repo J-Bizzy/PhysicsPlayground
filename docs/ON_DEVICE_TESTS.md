@@ -145,6 +145,28 @@ contradicts this section, this section is current.
 - [ ] **The cut test:** enter all seven labs in sequence; the room's
       brightness moves only at Orbital Mechanics, and ramps rather than steps.
 
+## ⟳ 2026-11-02 — the calm track on parts and magnets (batch 2)
+
+- [ ] **A resistor clicks through its real values.** Open a resistor's
+      ring and draw the bead out under it: it clicks at 10, 15, 22, 33,
+      47, 68, 100 Ω and so on to 4.7 kΩ, numbered at 10, 100, 1k and
+      4.7k. Going from 47 Ω to 470 Ω takes about as far as going from
+      470 Ω to 4.7 kΩ, and a steady hand holds a value without it
+      wandering. Judge: calm, or too many clicks?
+- [ ] **A battery stacks cells:** 1.5, 3, 4.5, 6, 9, 12, 24 V. A capacitor
+      clicks at 100, 220, 470 µF to 10 mF; a fuse at 0.05, 0.1, 0.25, 0.5,
+      1, 2, 3.15 and 5 A.
+- [ ] **The track runs under the part,** clear of its leads and of a
+      neighbour joined to it; the part's own number hides while the
+      ring is open, so the bead's number is the only one.
+- [ ] **A magnet's strength** clicks at every whole A·m² from 1 to 12,
+      on a track under the magnet, not off a pole.
+- [ ] **The bead answers:** a tick as you take it and as you let go, a
+      soft thud the first time you pull past either end.
+- [ ] **VoiceOver:** the bead says "470 ohms", not "omega". Mass says
+      "Mass 1.5 kilograms" after it fires; Turns, Colour, Beam, Light,
+      Flip and Drop when fired each say their new state.
+
 ## ⟳ 2026-11-02 — what was broken (the November polish pass, batch 1)
 
 - [ ] **The ammeter reads.** In Circuit Workshop, pull the meter, turn

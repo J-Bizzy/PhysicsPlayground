@@ -16,6 +16,35 @@ A running log of consequential decisions — architectural, physical, or product
 
 (The template sat stranded at line 309, mid-log between two 2026-07-29 entries, until 2026-08-01.)
 
+## 2026-11-02 — The calm track wherever a value lives on an object
+
+**Decision:** A circuit part's value and a magnet's strength move onto the calm track that charges and masses took on 2026-10-24. It runs under the object rather than out of its surface, and it clicks at real values: the cells you can stack, E6 resistors, bulbs and motors, 1–2.2–4.7 capacitors and inductors, and fast-blow fuse ratings, with a magnet clicking at every whole A·m². This is the second batch of the November polish pass. The owner had already picked the track for charges ("very clunky" before it); this applies the same answer to the two values that still had the old handle.
+
+**Context:**
+- **The old handle was linear and absolute.** `Bloom.Grip.Stretch.track` mapped a part's whole range onto 14 cm of hand travel, measured from where the hand was.
+- **Most of a part's useful range sat in the first centimetre.** A resistor runs 10 Ω to 4.7 kΩ, so its everyday 10–470 Ω was the first 1.3 cm; a capacitor's 100 µF–1 mF and a fuse's sub-amp ratings likewise. Hand-tracking jitter moved the number.
+- **The bead gave nothing back.** It made no sound on taking or letting go, gave nothing at the ends of its range, and VoiceOver read its value as symbols ("Ω" as "omega").
+- **Petals that change a state said nothing.** Mass, Turns, Colour, Beam, Light, Flip and Drop when fired spoke only their own names.
+
+**Consequences:**
+- **`Bloom.Grip.Track` gains `drop`.** A dropped track starts straight under its object, `Bloom.calmTrackDrop` (6.5 cm at one metre) below it, clear of the leads or poles along the object's axis, as the old handle was.
+- **`Stretch.track` is deleted.** The calm track is the one control for a value an object carries; `Stretch` stays for a pendulum's cable length, where the hand's position IS the value.
+- **The values:**
+  - `CircuitsModel.valueDetents(for:)` lists each part's preferred values, all inside `valueRange(for:)`.
+  - `CircuitsSpaceView.valueTrack(for:)` numbers each decade and the top of the series: "10 · 100 · 1k · 4.7k" for a resistor, "100µ · 1m · 10m" for a capacitor, and every cell size but 4.5 V for a battery.
+  - `MagnetismSpaceView.strengthTrack` is linear, since a magnet's 1–12 A·m² is barely a decade.
+- **No duplicate number.** A part whose label only repeats the bead's number hides it while its ring is open, because the track now runs where the label hangs (`CircuitsRenderer.ringPartID`). The motor's rpm label stays.
+- **The bead answers like everything in the room:**
+  - a grab tick on taking and a release tick on letting go (none from the views' cleanup calls);
+  - a soft thud once at each end of its range;
+  - its value spoken through `PhysicsFormat.spoken`.
+- **`Bloom.Petal.announce`:** a petal that changes a state says the new state to VoiceOver after it fires ("Mass 1.5 kilograms", "5000 turns", "Green, 532 nanometres", "Drops when fired").
+- **`-circRing 1`** opens the selected part's ring, so `-circHeat 1 -circRing 1` photographs a resistor's track.
+- **Tests:**
+  - `BloomTrackTests` holds every part's and the magnet's clicks to their tracks, the drop, the resistor's travel and the labels;
+  - `BloomPetalTests` checks that an announcement reads the state after the action.
+- **Seen in the simulator, not yet on device:** the battery's, a resistor's and a magnet's track. The feel of the clicks is for the headset.
+
 ## 2026-11-02 — What was broken: the ammeter, held objects, a ghost and controls that did nothing
 
 **Decision:** The first batch of the November polish pass fixes six things that did not work, and changes nothing you can see. The owner asked to "keep on working on the user experience and polish"; three read-only surveys of the shell, the home and the seven labs found these, and each was checked against the code before it was fixed.

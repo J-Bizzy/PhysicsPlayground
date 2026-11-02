@@ -270,6 +270,13 @@ struct OpticsSpaceView: View {
 
     // MARK: The ring
 
+    /// The laser's colour as VoiceOver says it after the Colour petal: its
+    /// name and the line it lases at (`OpticsModel.laserColours`).
+    static func spokenColour(nanometres: Double) -> String {
+        let name = nanometres >= 620 ? "Red" : nanometres >= 495 ? "Green" : "Violet"
+        return "\(name), \(Int(nanometres.rounded())) nanometres"
+    }
+
     /// A light offers its colour or its beam, and its switch; a piece offers
     /// to go. Everything a piece does is done by moving or turning it.
     private func syncBloom(renderer: OpticsRenderer, dt: Double) {
@@ -284,16 +291,28 @@ struct OpticsSpaceView: View {
         case OpticsModel.laserID:
             petals = [
                 .init(name: "Colour", symbol: "paintpalette",
-                      tint: DesignTokens.Palette.neutralActionUI) { model.cycleLaserColour() },
+                      tint: DesignTokens.Palette.neutralActionUI,
+                      announce: { Self.spokenColour(nanometres: model.laserNanometers) }) {
+                    model.cycleLaserColour()
+                },
                 .init(name: "Light", symbol: "power",
-                      tint: DesignTokens.Palette.neutralActionUI) { model.toggleLight(id: id) },
+                      tint: DesignTokens.Palette.neutralActionUI,
+                      announce: { model.laser.isOn ? "Laser on" : "Laser off" }) {
+                    model.toggleLight(id: id)
+                },
             ]
         case OpticsModel.torchID:
             petals = [
                 .init(name: "Beam", symbol: "rays",
-                      tint: DesignTokens.Palette.neutralActionUI) { model.toggleTorchBeam() },
+                      tint: DesignTokens.Palette.neutralActionUI,
+                      announce: { model.torchBeam == .slit ? "Narrow beam" : "Broad beam" }) {
+                    model.toggleTorchBeam()
+                },
                 .init(name: "Light", symbol: "power",
-                      tint: DesignTokens.Palette.neutralActionUI) { model.toggleLight(id: id) },
+                      tint: DesignTokens.Palette.neutralActionUI,
+                      announce: { model.torch.isOn ? "Torch on" : "Torch off" }) {
+                    model.toggleLight(id: id)
+                },
             ]
         default:
             petals = [

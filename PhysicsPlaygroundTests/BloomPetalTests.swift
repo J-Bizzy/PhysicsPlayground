@@ -266,4 +266,24 @@ final class BloomPetalTests: XCTestCase {
         XCTAssertTrue(bloom.handleTap(try entity(bloom, named: "Fire")))
         XCTAssertEqual(counter.fired, ["Fire"])
     }
+
+    /// A petal that changes a state says what the state is now: its
+    /// announcement is read after the action, so it speaks the new state,
+    /// not the one the tap left behind.
+    func testAStatePetalAnnouncesTheStateItLeft() throws {
+        var mass = 0.5
+        var heard: [String] = []
+        let bloom = Bloom()
+        bloom.configure(petals: [
+            .init(name: "Mass", symbol: "scalemass", tint: .white,
+                  announce: {
+                      let said = "Mass \(mass)"
+                      heard.append(said)
+                      return said
+                  }) { mass = 1.5 },
+        ], grip: nil)
+        reveal(bloom)
+        XCTAssertTrue(bloom.handleTap(try entity(bloom, named: "Mass")))
+        XCTAssertEqual(heard, ["Mass 1.5"])
+    }
 }

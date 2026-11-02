@@ -362,10 +362,12 @@ struct PendulumsSpaceView: View {
         if pendulum.kind == .simple {
             couplePetal = [coupled
                 ? .init(name: "Uncouple", symbol: "scissors",
-                        tint: DesignTokens.Palette.neutralActionUI) { model.uncouple(id: uuid) }
+                        tint: DesignTokens.Palette.neutralActionUI,
+                        announce: { "Uncoupled" }) { model.uncouple(id: uuid) }
                 : .init(name: "Couple", symbol: "link",
                         tint: DesignTokens.Palette.neutralActionUI,
-                        isAvailable: { model.couplingCandidate(for: uuid) != nil }) {
+                        isAvailable: { model.couplingCandidate(for: uuid) != nil },
+                        announce: { "Coupled by a spring" }) {
                     model.couple(id: uuid)
                 }]
         }
@@ -373,7 +375,12 @@ struct PendulumsSpaceView: View {
             "\(uuid.uuidString)-\(coupled)",
             petals: couplePetal + [
                 .init(name: "Mass", symbol: "scalemass",
-                      tint: DesignTokens.Palette.neutralActionUI) {
+                      tint: DesignTokens.Palette.neutralActionUI,
+                      announce: {
+                          let mass = model.pendulums.first { $0.id == uuid }?.mass ?? 0
+                          return "Mass " + PhysicsFormat.spoken(
+                              PhysicsFormat.measurement(mass, "kg", decimals: 1))
+                      }) {
                     // Cycle light → medium → heavy → light. The period
                     // doesn't change — which is the lesson.
                     let masses = [0.5, 1.5, 3.0]

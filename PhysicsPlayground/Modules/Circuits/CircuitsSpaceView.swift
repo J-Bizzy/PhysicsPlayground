@@ -215,11 +215,12 @@ struct CircuitsSpaceView: View {
             #endif
 
             #if DEBUG
-            // `-circRing 1` opens the first component's control ring
-            // at launch, for CLI screenshots.
+            // `-circRing 1` opens the selected part's control ring at launch
+            // (the one `-circHeat`, `-circLED` and the like select), or the
+            // first part's, for CLI screenshots.
             if UserDefaults.standard.bool(forKey: "circRing"),
-               let first = model.components.first {
-                ring.openID = first.id
+               let part = model.selectedComponent ?? model.components.first {
+                ring.openID = part.id
             }
             // `-circSameNet 1` holds the refusal on screen: a lead pulled
             // onto a terminal already on its own net (recoils red, no wire).
@@ -615,6 +616,7 @@ struct CircuitsSpaceView: View {
            !model.components.contains(where: { $0.id == openID }) {
             ring.openID = nil     // deleted out from under the ring
         }
+        renderer.ringPartID = ring.openID
         guard let uuid = ring.openID,
               let part = model.components.first(where: { $0.id == uuid }) else {
             bloom.update(anchor: .zero, viewer: nil, revealTarget: 0, dt: dt)
@@ -653,10 +655,7 @@ struct CircuitsSpaceView: View {
                         write: { model.setComponentValue(id: uuid, $0) },
                         format: { CircuitsModel.formatValue($0, for: part.kind) },
                         radius: { 0.05 },
-                        stretch: .track(range: range, under: {
-                            model.components.first { $0.id == uuid }
-                                .map { SIMD3<Float>($0.position) } ?? .zero
-                        }, read: { model.componentValue(id: uuid) }))
+                        track: Self.valueTrack(for: part.kind))
                 : nil)
 
         let viewer = appModel.room.headPosition.map {
@@ -664,6 +663,42 @@ struct CircuitsSpaceView: View {
         }
         bloom.update(anchor: SIMD3<Float>(part.position),
                      viewer: viewer, revealTarget: 1, dt: dt)
+    }
+
+    /// A part's calm track (2026-11-02): logarithmic, clicking at the values
+    /// parts are sold in (`CircuitsModel.valueDetents`), numbered at each
+    /// decade, and run under the part, clear of its leads. It replaced a
+    /// linear 14 cm handle that put a resistor's 10–470 Ω in its first
+    /// 1.3 cm.
+    static func valueTrack(for kind: CircuitsModel.ComponentKind) -> Bloom.Grip.Track {
+        Bloom.Grip.Track(
+            detents: CircuitsModel.valueDetents(for: kind).map {
+                .init(value: $0, label: tickLabel($0, for: kind))
+            },
+            drop: Bloom.calmTrackDrop)
+    }
+
+    /// A tick's number, where it carries one: every cell size a battery
+    /// stacks to but 4.5 V (too near its neighbours to read), and elsewhere
+    /// each decade and the top of the series, with its SI prefix.
+    static func tickLabel(_ value: Double, for kind: CircuitsModel.ComponentKind) -> String? {
+        switch kind {
+        case .battery, .acSource:
+            return value == 4.5 ? nil : PhysicsFormat.compact(value)
+        case .led, .switcher:
+            return nil
+        default:
+            let detents = CircuitsModel.valueDetents(for: kind)
+            let exponent = log10(value)
+            guard abs(exponent - exponent.rounded()) < 1e-9 || value == detents.last
+            else { return nil }
+            switch value {
+            case ..<1e-3 where kind == .capacitor: return PhysicsFormat.compact(value * 1e6) + "µ"
+            case ..<1 where kind == .capacitor: return PhysicsFormat.compact(value * 1e3) + "m"
+            case 1000...: return PhysicsFormat.compact(value / 1000) + "k"
+            default: return PhysicsFormat.compact(value)
+            }
+        }
     }
 
     /// What a pinch landed on: a pure static over entity names (the
