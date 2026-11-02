@@ -119,7 +119,8 @@ enum HubTitleMotion {
     // MARK: The arrival's clock
 
     /// Seconds after the home's arrival starts that the first "Physics"
-    /// letter is let go: the line lands as the labs rise into place.
+    /// letter is let go: after the breath, so the wordmark has its own
+    /// beat, down before the labs rise (2026-11-02).
     static let dropStart = Opening.titleStart
     /// Between successive "Physics" letters.
     static let dropStagger = 0.055

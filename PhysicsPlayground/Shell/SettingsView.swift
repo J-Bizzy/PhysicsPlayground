@@ -3,7 +3,7 @@
 //  Physics Playground — Shell
 //
 //  The settings window. Every row does something the moment it is
-//  flipped: volume and room tone apply instantly, the capsule switch
+//  flipped: volume and music apply instantly, the capsule switch
 //  gates the recording. Opens from the palette bead's gear petal or
 //  `-settingsOpen 1`.
 //
@@ -32,7 +32,7 @@ struct SettingsView: View {
                                   write: { settings.masterVolume = $0 },
                                   format: { "\(Int(($0 * 100).rounded())) %" },
                                   speak: { "\(Int(($0 * 100).rounded())) percent" })
-                    ControlToggle("Lab room tone", systemImage: "waveform",
+                    ControlToggle("Music", systemImage: "music.note",
                                   presentation: .row, isOn: $settings.ambientAudio)
                 }
 

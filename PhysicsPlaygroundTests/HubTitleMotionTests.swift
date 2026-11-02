@@ -122,19 +122,28 @@ final class HubTitleMotionTests: XCTestCase {
 
     // MARK: The arrival's clock
 
-    /// "Physics" lands while the labs rise into place, and both lines are
-    /// at rest within a couple of seconds of their arriving — the first
-    /// glint after the letters are down.
-    func testTheTitleArrivesWithTheLabsAndSettles() {
-        let firstLanding = HubTitleMotion.dropRelease(0)
-            + (2 * HubTitleMotion.dropHeight / g).squareRoot()
-        let lastLanding = HubTitleMotion.dropRelease(6)
-            + (2 * HubTitleMotion.dropHeight / g).squareRoot()
-        XCTAssertGreaterThan(firstLanding, 0.2)
-        XCTAssertLessThan(lastLanding, Opening.labsArrived)
+    /// The wordmark has its own beat (2026-11-02): no letter is let go
+    /// before the breath is over, and by the time the first lab rises
+    /// "Physics" has stopped bouncing, the i's particle is down and
+    /// "Playground" hangs within a degree of still. Both lines are at rest
+    /// before the labs are in, and the first glint comes after.
+    func testTheWordmarkIsDownBeforeTheLabsRise() throws {
+        XCTAssertGreaterThanOrEqual(HubTitleMotion.dropRelease(0), Opening.breath)
+        XCTAssertGreaterThanOrEqual(HubTitleMotion.swingRelease(0), Opening.breath)
+        let lastBounceOver = HubTitleMotion.dropRelease(6)
+            + HubTitleMotion.bounceDuration(height: HubTitleMotion.dropHeight)
+        XCTAssertLessThan(lastBounceOver, Opening.labsStart)
+        let i = try XCTUnwrap(Array("Physics").firstIndex(of: "i"))
+        let dotDown = HubTitleMotion.dotRelease(after: HubTitleMotion.dropRelease(i))
+            + HubTitleMotion.bounceDuration(height: HubTitleMotion.dotHeight)
+        XCTAssertLessThan(dotDown, Opening.labsStart, "the i's particle is still falling")
+        // The swing's envelope bounds the angle whatever a letter's shape.
+        let sinceLast = Opening.labsStart - HubTitleMotion.swingRelease(9)
+        let envelope = HubTitleMotion.swingAmplitude * exp(-HubTitleMotion.swingDamping * sinceLast)
+        XCTAssertLessThan(envelope, 1 * .pi / 180)
         let swingDone = HubTitleMotion.swingSettles(after: HubTitleMotion.swingRelease(9))
-        XCTAssertLessThan(swingDone - Opening.labsArrived, 2.2)
-        XCTAssertGreaterThan(Opening.firstGlint, lastLanding)
+        XCTAssertLessThan(swingDone, Opening.labsArrived)
+        XCTAssertGreaterThan(Opening.firstGlint, swingDone)
     }
 }
 

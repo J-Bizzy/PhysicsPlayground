@@ -37,12 +37,14 @@ have landed; skip them on a pass before that and say so in the report.
 The older sections below stay as history and detail — where one of them
 contradicts this section, this section is current.
 
-- [ ] **0 · Arrival.** Cold launch goes STRAIGHT into the space: a beat
-      of plain passthrough, then the seven labs rise into place around
-      you one after another, left to right, each looping its own physics,
-      with one soft tone as the last settles — about a second and a half
-      (2026-10-21). With Reduce Motion on, the labs simply fade in. The
-      end state IS the home: the wordmark, seven short names, More.
+- [ ] **0 · Arrival.** Cold launch goes STRAIGHT into the space: half a
+      second of plain passthrough as the music rises, the wordmark's
+      letters falling and swinging in alone, then the seven labs rise into
+      place around you one after another, left to right, each looping its
+      own physics, with one soft tone as the last settles — about three and
+      a half seconds (2026-11-02). With Reduce Motion on, the labs simply
+      fade in. The end state IS the home: the wordmark, seven short names,
+      More.
 - [ ] **1 · Enter.** Pinch the Projectiles portal: dissolve through
       passthrough, the lab fades up with the room ramping (not snapping)
       to 0.35, quiet: a ball waiting at your left hand (no welcome shot
@@ -144,6 +146,33 @@ contradicts this section, this section is current.
       1.62 m since 2026-09-04 because at 2.0 m the bar crossed its cables.
 - [ ] **The cut test:** enter all seven labs in sequence; the room's
       brightness moves only at Orbital Mechanics, and ramps rather than steps.
+
+## ⟳ 2026-11-02 — the music from the first frame, and the wordmark's beat
+
+Volume up, music on (Settings › Music, which was "Lab room tone").
+- [ ] **A cold launch is in beats.** Half a second of your room alone as
+      the music rises; then the wordmark by itself — "Physics" dropping
+      letter by letter and bouncing, "Playground" swinging in, the i's dot
+      landing last; then, once it is still, the labs rise under it, left to
+      right, with the one tone as the last settles. About three and a half
+      seconds. Judge: does the wordmark's moment read as a title, or as a
+      wait before the labs?
+- [ ] **The music swells with it.** It rises out of silence over the
+      first two and a half seconds to a little louder than usual, holds
+      while the labs rise, and settles back over the next six. Judge: is
+      the swell felt, and is the settled level still the old one (quiet
+      enough to forget)?
+- [ ] **The music never stops.** Walk Home, into another lab, through the
+      Lab list, into Deep space and back: the music runs straight through,
+      never fading out and back in. It falls away only when the space
+      closes.
+- [ ] **No lab before you can see it.** Pinch where a lab will be during
+      the wordmark's beat: nothing happens. A lab that is visibly rising
+      still enters at once.
+- [ ] **Reduce Motion:** no beats, the home fades in, no tone; the music
+      still comes up.
+- [ ] **Settings › Music off, then on:** it stops, then fades back in
+      over four seconds, without the swell.
 
 ## ⟳ 2026-11-02 — greyed controls say why; light fades out (batch 8)
 
@@ -521,10 +550,10 @@ working session:
       comes up a few centimetres into its place as it fades up and grows
       to its size. It eases in and stops without bouncing past its spot,
       and its name comes up under it. One soft tone, a single warm note,
-      sounds as the last one settles; the wordmark's letters fall and
-      swing in at the same time. About a second and a half, with nothing
-      else in the room: no night, no star. Judge: smooth, and short
-      enough that it never feels like waiting?
+      sounds as the last one settles. Since 2026-11-02 the wordmark comes
+      first, alone (see the ⟳ section for it near the top); the labs and
+      their tone follow. With nothing else in the room: no night, no star.
+      Judge: smooth, and short enough that it never feels like waiting?
 - [ ] **A pinch on a lab while they are still rising enters it** at once.
 - [ ] **Walking back from a lab** does not replay it: the home fades in.
 - [ ] **In Deep space** the labs rise the same way, over the sky.

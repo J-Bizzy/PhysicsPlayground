@@ -20,9 +20,10 @@ into 1.1. `ON_DEVICE_TESTS.md` has the detail behind every line, and its
 
 - [ ] The permission sheet asks for your hands and your room, each with
       its own sentence. Allow both.
-- [ ] The seven labs rise in left to right in about 1.5 s, with one soft
-      tone as the last settles. No "dropped" line comes after the
-      arrival's clock starts.
+- [ ] The music rises with half a second of empty room. Then the
+      wordmark lands alone. Then the seven labs rise in left to right,
+      with one soft tone as the last settles. It all takes about 3.5 s,
+      and no "dropped" line comes after the arrival's clock starts.
 - [ ] Pinch two portals in quick succession: you enter the first one only.
 
 ## 2 · The doors
@@ -31,6 +32,7 @@ into 1.1. `ON_DEVICE_TESTS.md` has the detail behind every line, and its
       real lab. The room is never empty.
 - [ ] Go Home, then lab to lab through the Lab list: the lab you leave
       stays where it was until the next one is up, then they cross-fade.
+      The music runs straight through every door.
 - [ ] **Cut test:** enter all seven in turn. The brightness changes only at
       Orbital Mechanics, which opens in Deep space, and it ramps rather
       than steps.

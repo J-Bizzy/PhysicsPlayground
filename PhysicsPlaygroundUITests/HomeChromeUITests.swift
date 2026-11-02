@@ -92,8 +92,8 @@ final class HomeChromeUITests: XCTestCase {
 
         XCTAssertTrue(app.staticTexts["Settings"].waitForExistence(timeout: 20),
                       "the settings window never appeared")
-        let roomTone = app.switches["Lab room tone"]
-        XCTAssertTrue(roomTone.waitForExistence(timeout: 5),
-                      "the settings window has no operable room-tone switch")
+        let music = app.switches["Music"]
+        XCTAssertTrue(music.waitForExistence(timeout: 5),
+                      "the settings window has no operable music switch")
     }
 }

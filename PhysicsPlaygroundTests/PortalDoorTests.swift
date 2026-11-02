@@ -120,8 +120,9 @@ final class PortalDoorTests: XCTestCase {
     /// While they arrive the labs start low and small, the leftmost ahead.
     func testTheLabsRiseIntoPlace() throws {
         let (scene, _) = builtScene(openingPlayed: false)
-        // Settled, then a few frames in.
-        for _ in 0..<(Settle.cleanFrames + 12) { scene.animate(dt: 1.0 / 90.0) }
+        // Settled, through the wordmark's beat, then a few frames into the rise.
+        let intoRise = Int(((Opening.labsStart + 0.13) * 90).rounded(.up))
+        for _ in 0..<(Settle.cleanFrames + intoRise) { scene.animate(dt: 1.0 / 90.0) }
         let first = try XCTUnwrap(scene.portal(scene.portalIDs[0])?.findEntity(named: "portal-body"))
         let last = try XCTUnwrap(scene.portal(scene.portalIDs[6])?.findEntity(named: "portal-body"))
         XCTAssertLessThan(first.position.y, -0.005, "the first lab is not rising")
@@ -129,9 +130,18 @@ final class PortalDoorTests: XCTestCase {
         XCTAssertLessThan(last.position.y, first.position.y, "the last lab is ahead of the first")
     }
 
-    /// A pinch on a lab enters it at once, even while the labs are rising.
-    func testEnteringNeverWaits() {
+    /// A pinch on a lab enters it at once, even while the labs are rising —
+    /// but not before it has begun to rise, while it cannot be seen.
+    func testEnteringNeverWaitsForALabYouCanSee() throws {
         let (scene, _) = builtScene(openingPlayed: false)
+        XCTAssertTrue(scene.isOpening)
+        XCTAssertFalse(scene.beginEnterTransition(id: "circuits"),
+                       "an unseen lab took a pinch during the wordmark's beat")
+        XCTAssertNil(scene.enteringID)
+        let index = try XCTUnwrap(scene.portalIDs.firstIndex(of: "circuits"))
+        // Settled, then just past the moment its lab starts to rise.
+        let rising = Int(((Opening.labStart(index) + 0.05) * 90).rounded(.up))
+        for _ in 0..<(Settle.cleanFrames + rising) { scene.animate(dt: 1.0 / 90.0) }
         XCTAssertTrue(scene.isOpening)
         XCTAssertTrue(scene.beginEnterTransition(id: "circuits"))
     }

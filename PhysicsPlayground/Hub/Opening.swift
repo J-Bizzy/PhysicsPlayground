@@ -2,17 +2,21 @@
 //  Opening.swift
 //  Physics Playground — Hub
 //
-//  The home's arrival, as pure functions of its clock: the seven labs rise
-//  into place one after another, left to right — each a few centimetres up
-//  into its spot as it fades up and grows to full size, easing in with no
-//  overshoot — their names come up under them, one soft tone sounds as the
-//  last settles, and the wordmark's letters fall and swing into theirs
-//  (`HubTitleMotion`). About a second and a half; a walk back from a lab,
-//  or Reduce Motion, is a plain fade instead.
+//  The home's arrival, as pure functions of its clock, in beats: a breath
+//  of the room alone while the music rises; the wordmark, its letters
+//  falling and swinging into theirs (`HubTitleMotion`); then, once they
+//  are down, the seven labs rising into place one after another, left to
+//  right — each a few centimetres up into its spot as it fades up and
+//  grows to full size, easing in with no overshoot — their names coming
+//  up under them, and one soft tone as the last settles. About three and
+//  a half seconds; a walk back from a lab, or Reduce Motion, is a plain
+//  fade instead.
 //
-//  Until 2026-10-21 the opening was "Birth of a System" — a star forming,
-//  its worlds flying Kepler transfers onto the labs' plinths — and before
-//  that a field of charged particles. Both are in the git history.
+//  Until 2026-11-02 the wordmark and the labs arrived together, in a
+//  second and a half. Until 2026-10-21 the opening was "Birth of a
+//  System" — a star forming, its worlds flying Kepler transfers onto the
+//  labs' plinths — and before that a field of charged particles. Both are
+//  in the git history.
 //
 
 import Foundation
@@ -21,6 +25,14 @@ nonisolated enum Opening {
     /// Standard gravity, m/s² — the same g everywhere in the app (the
     /// wordmark's letters fall with it as they arrive).
     static let g = 9.80665
+
+    // MARK: The beats
+
+    /// The room alone, with the music rising, before the wordmark.
+    static let breath = 0.5
+    /// When the first lab starts to rise: once the wordmark's letters are
+    /// down, the i's particle included (`HubTitleMotionTests` holds it).
+    static let labsStart = 2.1
 
     // MARK: The labs
 
@@ -38,14 +50,19 @@ nonisolated enum Opening {
     /// How many labs the home stands; the arrival is timed for them.
     static let labCount = 7
 
-    /// When the last lab is in place.
-    static let labsArrived = Double(labCount - 1) * stagger + rise
+    /// When lab `index` (left to right) starts to rise.
+    static func labStart(_ index: Int) -> Double {
+        labsStart + Double(index) * stagger
+    }
 
-    /// How far lab `index` (left to right) has come at `t`, 0…1: eased out,
-    /// so it moves most at first and comes to rest in its place without
-    /// passing it. Exactly 1 from its arrival on.
+    /// When the last lab is in place.
+    static let labsArrived = labsStart + Double(labCount - 1) * stagger + rise
+
+    /// How far lab `index` has come at `t`, 0…1: eased out, so it moves
+    /// most at first and comes to rest in its place without passing it.
+    /// Exactly 1 from its arrival on.
     static func progress(ofLab index: Int, at t: Double) -> Double {
-        let x = min(max((t - Double(index) * stagger) / rise, 0), 1)
+        let x = min(max((t - labStart(index)) / rise, 0), 1)
         let left = 1 - x
         return 1 - left * left * left
     }
@@ -53,8 +70,14 @@ nonisolated enum Opening {
     /// How far lab `index` has faded up: nothing before it starts, whole
     /// before it has risen.
     static func labOpacity(_ index: Int, at t: Double) -> Float {
-        let x = min(max((t - Double(index) * stagger) / (rise * fadeShare), 0), 1)
+        let x = min(max((t - labStart(index)) / (rise * fadeShare), 0), 1)
         return Float(x * x * (3 - 2 * x))
+    }
+
+    /// Whether lab `index` takes a pinch at `t`: once it has begun to
+    /// rise, so nobody enters a lab they cannot see yet.
+    static func labTakesPinch(_ index: Int, at t: Double) -> Bool {
+        t >= labStart(index)
     }
 
     /// Lab `index`'s size, as a share of its own.
@@ -74,7 +97,7 @@ nonisolated enum Opening {
 
     /// Lab `index`'s name: up as its lab settles.
     static func nameOpacity(_ index: Int, at t: Double) -> Float {
-        let start = Double(index) * stagger + rise / 2
+        let start = labStart(index) + rise / 2
         let x = min(max((t - start) / nameFade, 0), 1)
         return Float(x * x * (3 - 2 * x))
     }
@@ -92,14 +115,22 @@ nonisolated enum Opening {
     // MARK: The wordmark
 
     /// When the first "Physics" letter is let go; "Playground" follows.
-    static let titleStart = 0.25
+    static let titleStart = breath
     /// The machined wordmark's rise, when it stands in for the living one:
-    /// metres below its place at the start, and how long it takes.
+    /// metres below its place at the start, and how long it takes — its
+    /// own beat, in place before the labs start.
     static let titleRise: Float = 0.05
+    static let titleRiseTime = 1.2
     static func titleOffset(at t: Double) -> Float {
-        let x = min(max(t / labsArrived, 0), 1)
+        let x = min(max((t - titleStart) / titleRiseTime, 0), 1)
         let left = 1 - x
         return -titleRise * Float(left * left * left)
+    }
+
+    /// The machined wordmark's fade, over the first half of its rise.
+    static func titleOpacity(at t: Double) -> Float {
+        let x = min(max((t - titleStart) / (titleRiseTime / 2), 0), 1)
+        return Float(x * x * (3 - 2 * x))
     }
 
     /// The living wordmark's first glint, once its letters are down.

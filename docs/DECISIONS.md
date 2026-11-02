@@ -16,6 +16,43 @@ A running log of consequential decisions — architectural, physical, or product
 
 (The template sat stranded at line 309, mid-log between two 2026-07-29 entries, until 2026-08-01.)
 
+## 2026-11-02 — The music plays from the first frame, and the wordmark has its own beat
+
+**Decision:** Two habits borrowed from another visionOS app the owner admires (Astronoma³, by Augmenos), chosen from four:
+- **The house music plays for as long as the space is open,** through the home and every door, one player that never restarts. When the space opens it swells with the arrival: out of silence to 8 dB over its usual −22 dB in 2.5 s, held 1.5 s, and back down over 6 s. Settings' "Lab room tone" is "Music".
+- **The arrival is in beats.** Half a second of the room alone as the music rises, then the wordmark by itself, its letters falling and swinging in as before, then from 2.1 s the seven labs rising under it as before. About 3.6 s, from 1.5.
+
+**Context:**
+- **The recording.** The owner shared a screen recording of Astronoma³ for its polish. Read frame by frame, its smoothness came from habits rather than effects:
+  - one beat at a time;
+  - big things moving slowly and small things quickly;
+  - things coming out of where you touched them;
+  - what you left staying behind, dimmed;
+  - the room tinted to the section;
+  - one piece of music from launch to exit, louder under the studio card.
+- **The gaps.** Physics Playground already held its doors and faded what leaves. Its gaps were how it starts and how its sound carries:
+  - the music lived inside each lab, so the arrival and the home were silent but for one tone;
+  - every visit home stopped the music, and the next lab faded it back in over 4 s;
+  - the wordmark, the labs, their names and the tone all arrived inside 1.5 s, overlapping.
+- **Not chosen, for 1.1 if at all:** the home's miniature growing into its lab at the door, and each lab tinting the room.
+- **The owner's two calls.** The letters keep their fall and swing, rather than closing in from wide spacing as Astronoma's do. No byline was added.
+
+**Consequences:**
+- **`HouseMusicView`** (was `AmbientLabAudioView`) stands beside the dimmer in `PlaygroundSpaceView`, outside the lab-only block.
+  - It swells when the space opens, unless the score is more than 2 s late, as it can be on a first launch.
+  - Switching the music on in Settings is still the plain 4 s fade.
+- **`SoundPalette.ambientEnvelope(swell:)`** is the level as data: the emitter's gain and the fades the playback takes. The swell's emitter stands 8 dB up, and its last fade takes the playback down by as much, so it ends exactly at the house level.
+  - A fade scheduled for later never touches a player that is stopping (`ambientStopping`).
+- **`Opening`** gains `breath`, `labsStart` and `labStart(_:)`. The wordmark's letters are let go at the breath's end. The machined fallback rises and fades in the same beat (`titleOpacity`), instead of with the More.
+- **No lab takes a pinch before it has begun to rise** (`Opening.labTakesPinch`, checked in `beginEnterTransition`). For two seconds the labs stand unseen, and a gaze across one could otherwise have entered it. A lab that is visibly rising still enters at once.
+- **The arrival's tone** is an A, and the score opens on its A-major chord, so the two agree.
+- **Tests:**
+  - `HouseMusicTests`: the swell ends at the house level, rises once, and is timed to the arrival; the plain fade is unchanged.
+  - `OpeningTests`: the wordmark comes first, and no lab takes a pinch before it can be seen.
+  - `HubTitleMotionTests.testTheWordmarkIsDownBeforeTheLabsRise`.
+  - `PortalDoorTests.testEnteringNeverWaitsForALabYouCanSee`.
+- **Unchecked by any machine:** the swell's level and feel, and whether the wordmark's moment reads as a title or as a wait. Both are the owner's, on the headset (ON_DEVICE_TESTS, ⟳ the music from the first frame).
+
 ## 2026-11-02 — A greyed control says why, and light that runs out fades
 
 **Decision:** Two of the five owner's calls in the November polish pass were chosen. The other three are not built: ΔV on a plate, pendulum mass as its metal, and readable planet names.

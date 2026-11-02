@@ -1,7 +1,8 @@
 //  HubSpaceView.swift — the home: the labs floating around the wearer in miniature, each running
 //  its lab's physics in a loop. A pinch on one (a "portal") enters that lab. On a launch they
-//  arrive (`Opening`): one after another, left to right, each rises into its place as it fades
-//  up, and one soft tone sounds as the last settles; a walk back, or Reduce Motion, fades them in.
+//  arrive (`Opening`): the wordmark first, then the labs one after another, left to right, each
+//  rising into its place as it fades up, and one soft tone as the last settles; a walk back, or
+//  Reduce Motion, fades them in.
 //  Secondary things — Deep space, the flat lab list, Settings, About — are behind the one More.
 
 import SwiftUI
@@ -187,7 +188,7 @@ private struct HomeMore: View {
                 .accessibilityHint("Opens a flat list of every lab in a window")
             ControlButton("Settings", systemImage: "gearshape", iconOnly: iconOnly,
                           action: openSettings)
-                .accessibilityHint("Sound, room tone and the Time Capsule")
+                .accessibilityHint("Sound, music and the Time Capsule")
             ControlButton("About", systemImage: "info.circle", iconOnly: iconOnly,
                           action: openAbout)
                 .accessibilityHint("Credits and version")
@@ -545,9 +546,9 @@ final class HubScene {
             titleRule?.components.set(OpacityComponent(opacity: footing))
         }
         if livingTitle == nil {
-            // The machined lines rise the last few centimetres as they fade up;
-            // the living letters bring themselves in.
-            titleAnchor.components.set(OpacityComponent(opacity: footing))
+            // The machined lines rise the last few centimetres as they fade up,
+            // in the wordmark's own beat; the living letters bring themselves in.
+            titleAnchor.components.set(OpacityComponent(opacity: Opening.titleOpacity(at: t)))
             titleAnchor.position = titlePosition + SIMD3(0, Opening.titleOffset(at: t), 0)
         }
     }
@@ -691,7 +692,12 @@ final class HubScene {
         // One door at a time: a second pinch mid-swell entered its lab
         // straight after the first and swelled the same portal twice.
         guard enteringID == nil,
-              let portal = portals.first(where: { $0.moduleID == id }) else { return false }
+              let index = portals.firstIndex(where: { $0.moduleID == id }) else { return false }
+        // While the labs arrive, one that has not begun to rise cannot be
+        // seen, so it takes no pinch (2026-11-02, when the wordmark's beat
+        // came first and the labs stood unseen for two seconds).
+        if openingPhase == .running, !Opening.labTakesPinch(index, at: openingTime) { return false }
+        let portal = portals[index]
         enteringID = id
         SoundPalette.play(.pop, on: portal.anchor, volume: 0.7)
         // The rest of the home fades; the chosen lab stays, swelled toward

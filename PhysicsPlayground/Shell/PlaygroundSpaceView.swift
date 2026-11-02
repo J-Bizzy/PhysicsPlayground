@@ -228,6 +228,11 @@ struct PlaygroundSpaceView: View {
                     RoomDimmerView()
                         .id("dimmer")
                 }
+                // The house music, for as long as the space is open: the home,
+                // every lab and every door, one player so nothing restarts
+                // (2026-11-02; it played in labs only until then).
+                HouseMusicView()
+                    .id("music")
                 // The door (`AppModel.go(to:)`): the scene being left stays mounted,
                 // drawn, until the one replacing it has settled, and the two cross-fade.
                 ForEach(appModel.mountedScenes, id: \.self) { scene in
@@ -257,10 +262,6 @@ struct PlaygroundSpaceView: View {
                         // module is paused with a recording worth scrubbing.
                         TimeRailView(module: module)
                             .id("time-rail-\(module.id)")
-                        // Quiet lab room tone under every module (not the hub); no per-module
-                        // id, so it runs seamlessly across switches.
-                        AmbientLabAudioView()
-                            .id("ambient")
                     }
                     #if DEBUG
                     // `-pauseAfter` counts from here — the lab on screen —
@@ -363,35 +364,46 @@ private struct AccessibilityActionRouter: View {
     }
 }
 
-/// An invisible emitter looping the house music (`AmbientScore`). It is
-/// played head-locked, so where the emitter stands does not matter.
-private struct AmbientLabAudioView: View {
+/// An invisible emitter looping the house music (`AmbientScore`) for as
+/// long as the space is open. It is played head-locked, so where the
+/// emitter stands does not matter.
+private struct HouseMusicView: View {
     @Environment(AppModel.self) private var appModel
     @State private var controller: AudioPlaybackController?
     @State private var emitter = Entity()
+
+    /// How late the score may be ready and still swell: past this the
+    /// wordmark is down, so a first launch's late score just fades in.
+    private static let swellGrace: Duration = .seconds(2)
 
     var body: some View {
         RealityView { content in
             emitter.position = [0, 1.7, -1.0]
             content.add(emitter)
-            if appModel.settings.ambientAudio { start() }
+            // The space opening is the arrival: the music swells with it.
+            if appModel.settings.ambientAudio { start(swell: true) }
         }
         .onChange(of: appModel.settings.ambientAudio) {
             // The settings toggle applies immediately, not next visit.
-            if appModel.settings.ambientAudio { start() } else { stop() }
+            if appModel.settings.ambientAudio { start(swell: false) } else { stop() }
         }
         .onDisappear { stop() }
     }
 
-    private func start() {
+    private func start(swell: Bool) {
         guard controller == nil else { return }
+        let swellUntil = ContinuousClock.now + Self.swellGrace
         Task { @MainActor in
             // warmUp renders the score off-launch, after the one-shots; on a
             // first launch that can take a few seconds, so wait for it.
             for _ in 0..<120 where controller == nil {
                 guard appModel.settings.ambientAudio else { return }
-                if let started = SoundPalette.startAmbient(on: emitter) {
+                let swells = swell && ContinuousClock.now < swellUntil
+                if let started = SoundPalette.startAmbient(on: emitter, swell: swells) {
                     controller = started
+                    #if DEBUG
+                    LaunchTrace.mark(swells ? "music in, swelling with the arrival" : "music in")
+                    #endif
                     return
                 }
                 try? await Task.sleep(for: .milliseconds(250))

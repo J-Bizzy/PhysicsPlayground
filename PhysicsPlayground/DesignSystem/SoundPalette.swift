@@ -163,8 +163,46 @@ enum SoundPalette {
     // MARK: The house music
 
     private static var ambientResource: AudioFileResource?
+    /// Where the music sits under everything, dB.
+    static let ambientLevel = -22.0
     /// How long the music takes to come up from silence when it starts.
     static let ambientFadeIn: TimeInterval = 4
+
+    /// The arrival's swell (2026-11-02): when the space opens, the music
+    /// rises out of silence to `swellLift` dB over the house level as the
+    /// wordmark comes in, holds while the labs rise, and settles to the
+    /// house level once they are in.
+    static let swellLift = 8.0
+    static let swellRise: TimeInterval = 2.5
+    static let swellHold: TimeInterval = 1.5
+    static let swellSettle: TimeInterval = 6
+
+    /// One step of the music's level: a fade to `gain` dB, relative to the
+    /// emitter's gain, over `duration`, starting `at` seconds in.
+    struct AmbientStep: Equatable {
+        let at: TimeInterval
+        let gain: Double
+        let duration: TimeInterval
+    }
+
+    /// The emitter's gain and the steps the playback takes from silence:
+    /// plainly up to the house level, or the arrival's swell. The swell's
+    /// emitter stands `swellLift` over the house level and its last step
+    /// takes the playback back down by as much, so it ends exactly where
+    /// the plain start does.
+    static func ambientEnvelope(swell: Bool) -> (gain: Double, steps: [AmbientStep]) {
+        guard swell else {
+            return (ambientLevel, [AmbientStep(at: 0, gain: 0, duration: ambientFadeIn)])
+        }
+        return (ambientLevel + swellLift, [
+            AmbientStep(at: 0, gain: 0, duration: swellRise),
+            AmbientStep(at: swellRise + swellHold, gain: -swellLift, duration: swellSettle),
+        ])
+    }
+
+    /// Players fading out (`stopAmbient`), so a swell's later step never
+    /// brings one back up.
+    private static var ambientStopping: Set<ObjectIdentifier> = []
 
     /// Starts the looping house music on `entity`, rising out of silence.
     /// It is a stereo bed, not a thing in the room: `ChannelAudioComponent`
@@ -172,22 +210,37 @@ enum SoundPalette {
     /// background music, where the old mono pad hung at one point a metre
     /// in front of the wearer and changed as they walked. Returns nil until
     /// warmUp's synthesis has finished.
-    static func startAmbient(on entity: Entity, gainDecibels: Double = -22) -> AudioPlaybackController? {
+    static func startAmbient(on entity: Entity, swell: Bool = false) -> AudioPlaybackController? {
         guard let ambientResource else { return nil }
+        let envelope = ambientEnvelope(swell: swell)
         entity.components.remove(SpatialAudioComponent.self)
-        entity.components.set(ChannelAudioComponent(gain: Audio.Decibel(gainDecibels)))
+        entity.components.set(ChannelAudioComponent(gain: Audio.Decibel(envelope.gain)))
         let controller = entity.playAudio(ambientResource)
         controller.gain = -60
-        controller.fade(to: 0, duration: ambientFadeIn)
+        for step in envelope.steps {
+            guard step.at > 0 else {
+                controller.fade(to: Audio.Decibel(step.gain), duration: step.duration)
+                continue
+            }
+            Task { @MainActor [weak controller] in
+                try? await Task.sleep(for: .seconds(step.at))
+                guard let controller, controller.isPlaying,
+                      !ambientStopping.contains(ObjectIdentifier(controller)) else { return }
+                controller.fade(to: Audio.Decibel(step.gain), duration: step.duration)
+            }
+        }
         return controller
     }
 
     /// Lets the music fall away rather than cutting it off.
     static func stopAmbient(_ controller: AudioPlaybackController) {
+        let id = ObjectIdentifier(controller)
+        ambientStopping.insert(id)
         controller.fade(to: -60, duration: 1.2)
         Task { @MainActor in
             try? await Task.sleep(for: .milliseconds(1_300))
             controller.stop()
+            ambientStopping.remove(id)
         }
     }
 

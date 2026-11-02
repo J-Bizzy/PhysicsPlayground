@@ -22,7 +22,7 @@ final class AppSettings {
         }
     }
 
-    /// The quiet lab room tone under every module.
+    /// The house music, from the space's first frame to its last.
     var ambientAudio: Bool {
         didSet { UserDefaults.standard.set(ambientAudio, forKey: "settings.ambientAudio") }
     }
