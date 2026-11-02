@@ -673,7 +673,11 @@ final class HubScene {
     /// rising. False when nothing should happen.
     @discardableResult
     func beginEnterTransition(id: String) -> Bool {
-        guard let portal = portals.first(where: { $0.moduleID == id }) else { return false }
+        // One door at a time: a second pinch mid-swell entered its lab
+        // straight after the first and swelled the same portal twice.
+        guard enteringID == nil,
+              let portal = portals.first(where: { $0.moduleID == id }) else { return false }
+        enteringID = id
         SoundPalette.play(.pop, on: portal.anchor, volume: 0.7)
         presenceTarget = 0
         var target = portal.anchor.transform
@@ -684,6 +688,9 @@ final class HubScene {
                            duration: HubSpaceView.enterDelay, timingFunction: .easeIn)
         return true
     }
+
+    /// The lab the home is entering, from the pinch until it is torn down.
+    private(set) var enteringID: String?
 
     /// A pinch on one of the wordmark's letters: it hops. True when it was one.
     func hopTitleLetter(_ entity: Entity) -> Bool {

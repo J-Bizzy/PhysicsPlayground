@@ -185,6 +185,8 @@ struct PendulumsSpaceView: View {
             // A pending press sticks, so an `onEnded` that never arrives would let
             // the next gesture promote it against a stale anchor.
             pressedBob.cancel()
+            // Released, not merely forgotten: the model outlives this view.
+            model.releaseAll()
         }
         .simultaneousGesture(
             DragGesture(minimumDistance: 0)

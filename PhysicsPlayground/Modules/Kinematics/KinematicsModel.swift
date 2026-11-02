@@ -515,6 +515,16 @@ final class KinematicsModel {
                   volume: min(simd_length(velocity) / 8, 1))
     }
 
+    /// Sets down the ball a hand holds, where it is and with no throw.
+    /// Leaving the lab mid-carry never delivers the gesture's end, and a
+    /// ball left `.held` hangs glowing in the air on the next visit.
+    func releaseAll() {
+        guard let id = heldFlightID else { return }
+        // No samples, no velocity: the release is a set-down, not a throw.
+        throwSampler.reset()
+        releaseBall(id: id)
+    }
+
     // MARK: Hoops
 
     nonisolated struct Ring: Identifiable, Equatable {

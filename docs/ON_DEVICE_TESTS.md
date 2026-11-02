@@ -145,6 +145,30 @@ contradicts this section, this section is current.
 - [ ] **The cut test:** enter all seven labs in sequence; the room's
       brightness moves only at Orbital Mechanics, and ramps rather than steps.
 
+## ⟳ 2026-11-02 — what was broken (the November polish pass, batch 1)
+
+- [ ] **The ammeter reads.** In Circuit Workshop, pull the meter, turn
+      the dial to A⎓, open the switch and put red and black on its two
+      terminals: the meter reads the loop's current (the bulb lights
+      through it), not "— — —". Across a live part it still says FUSE.
+- [ ] **A probe leaves with its part.** Latch a probe on the bulb, then
+      delete the bulb: the probe goes back to the meter. The same after
+      Clear the bench and after loading a preset.
+- [ ] **VoiceOver places the probes.** Activate a probe: "Probes ready".
+      Activate two terminals: red goes to the first, black to the second,
+      both drawn there, and the case speaks the reading. The next tap on a
+      lead selects, as before.
+- [ ] **Nothing stays held across a visit.** Hold a pendulum bob, a
+      thrown ball and a charge in turn, and go Home while still pinching.
+      Come back: the bob swings, the ball waits where you left it, the
+      charge moves freely.
+- [ ] **Orbits:** arm the ghost on a planet, then delete the planet: the
+      ghost goes with it.
+- [ ] **Orbits, full:** add worlds until the system holds 16 bodies.
+      More's Add a world grid and Twin suns go grey.
+- [ ] **One door:** pinch two portals quickly on the home: you enter
+      the first, only.
+
 ## ⟳ 2026-10-27 — readable and accessible
 
 With VoiceOver on (Settings › Accessibility), then off, then with the

@@ -552,26 +552,43 @@ final class CircuitsModelTests: XCTestCase {
         XCTAssertFalse(model.multimeterArmed)
     }
 
-    /// Disarming the meter drops both probes, so a stale pair cannot come
-    /// back the next time it is armed. The meter is an object on the
-    /// bench now and its lit face is a claim about exactly this.
-    func testDisarmingTheMeterForgetsItsProbes() {
+    /// VoiceOver places the probes by arming the meter and naming two
+    /// terminals; the black one landing disarms it, so the next tap on a
+    /// lead selects again — and the probes stay where they were put.
+    func testVoiceOverPlacesBothProbesThenDisarms() {
         let model = CircuitsModel()
         model.multimeterArmed = true
         let battery = model.components.first { $0.kind == .battery }!
         let bulb = model.components.first { $0.kind == .bulb }!
         model.step(dt: 1.0 / 90.0)
         model.probeTap(CircuitsModel.Terminal(componentID: battery.id, end: 0))
+        XCTAssertTrue(model.multimeterArmed, "one probe placed, one to go")
         model.probeTap(CircuitsModel.Terminal(componentID: bulb.id, end: 1))
-        XCTAssertNotNil(model.multimeterReading)
+        XCTAssertFalse(model.multimeterArmed)
+        XCTAssertNotNil(model.multimeterReading,
+                        "disarming must not take the probes back off")
+    }
 
-        model.multimeterArmed = false
-        XCTAssertNil(model.multimeterReading,
-                     "a disarmed meter must not still be reading")
+    /// A probe on a part that is gone goes back to the holster: deleting
+    /// the part, clearing the bench and resetting the lab all drop it, so
+    /// the meter never reads, or hangs from, a terminal that is not there.
+    func testAProbeLeavesWithItsPart() throws {
+        let model = CircuitsModel()
+        let battery = try XCTUnwrap(model.components.first { $0.kind == .battery })
+        let bulb = try XCTUnwrap(model.components.first { $0.kind == .bulb })
+        model.setProbe(.red, to: .init(componentID: battery.id, end: 0))
+        model.setProbe(.black, to: .init(componentID: bulb.id, end: 1))
 
-        model.multimeterArmed = true
-        XCTAssertNil(model.multimeterReading,
-                     "re-arming must start from nothing probed")
+        model.removeComponent(id: bulb.id)
+        XCTAssertEqual(model.probeA, .init(componentID: battery.id, end: 0))
+        XCTAssertNil(model.probeB, "the black probe stayed on a deleted bulb")
+
+        model.clearBench()
+        XCTAssertNil(model.probeA, "the red probe stayed on a cleared bench")
+
+        model.setProbe(.red, to: .init(componentID: try XCTUnwrap(model.add(.battery)), end: 0))
+        model.reset()
+        XCTAssertNil(model.probeA, "a reset left a probe latched")
     }
 
     /// Releasing a part with a terminal near another part's terminal
@@ -1051,7 +1068,6 @@ final class CircuitsModelTests: XCTestCase {
         }
         model.step(dt: 1.0 / 60)
 
-        model.multimeterArmed = true
         model.meterMode = .ampsDC
         model.setProbe(.red, to: .init(componentID: switcher, end: 0))
         model.setProbe(.black, to: .init(componentID: switcher, end: 1))
@@ -1102,7 +1118,6 @@ final class CircuitsModelTests: XCTestCase {
         // Open switch, meter bridging the gap: the same loop, through
         // the shunt.
         model.toggleSwitch(id: switcher)
-        model.multimeterArmed = true
         model.meterMode = .ampsDC
         model.setProbe(.red, to: .init(componentID: switcher, end: 0))
         model.setProbe(.black, to: .init(componentID: switcher, end: 1))
@@ -1129,7 +1144,6 @@ final class CircuitsModelTests: XCTestCase {
         model.step(dt: 1.0 / 60)
         let before = try XCTUnwrap(model.readouts[bulb]?.amps)
 
-        model.multimeterArmed = true
         model.meterMode = .voltsDC
         model.setProbe(.red, to: .init(componentID: bulb, end: 0))
         model.setProbe(.black, to: .init(componentID: bulb, end: 1))
@@ -1154,7 +1168,6 @@ final class CircuitsModelTests: XCTestCase {
         model.connectTerminals(.init(componentID: bulb, end: 1), .init(componentID: battery, end: 1))
         model.step(dt: 1.0 / 60)
 
-        model.multimeterArmed = true
         model.meterMode = .ampsDC
         model.setProbe(.red, to: .init(componentID: bulb, end: 0))
         model.setProbe(.black, to: .init(componentID: bulb, end: 1))

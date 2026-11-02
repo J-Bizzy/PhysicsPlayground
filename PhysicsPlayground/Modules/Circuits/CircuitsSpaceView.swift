@@ -103,7 +103,7 @@ struct CircuitsSpaceView: View {
                 anchor: Self.meterAnchor)
             renderer.root.addChild(multimeter.root)
             multimeter.onTap = { [weak multimeter] entity in
-                _ = multimeter?.handleTap(entity, model: model)
+                multimeter?.activate(entity, model: model)
             }
             multimeter.benchToRoom = { [weak renderer] point in
                 renderer?.worldPosition(ofBenchPoint: point) ?? SIMD3<Float>(point)

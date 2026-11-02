@@ -596,4 +596,22 @@ final class PendulumsModelTests: XCTestCase {
                       + "sharing a pivot elsewhere on the bench switched "
                       + "collisions off for everything")
     }
+
+    /// Leaving the lab mid-grab never delivers the gesture's end, so the
+    /// view's exit lets go through `releaseAll` — and a bob let go of
+    /// swings again rather than hanging frozen on the next visit.
+    func testLeavingTheLabMidGrabLetsTheBobGo() throws {
+        let model = PendulumsModel()
+        let bob = try XCTUnwrap(model.pendulums.first)
+        model.beginGrab(id: bob.id)
+        model.moveGrabbed(id: bob.id, toWorld: bob.pivot + SIMD3(0.3, -0.4, 0))
+
+        model.releaseAll()
+        XCTAssertFalse(model.pendulums.contains { $0.isGrabbed })
+        let held = try XCTUnwrap(model.pendulums.first { $0.id == bob.id }).state.position
+        for _ in 0..<30 { model.step(dt: 1.0 / 90.0) }
+        let after = try XCTUnwrap(model.pendulums.first { $0.id == bob.id }).state.position
+        XCTAssertGreaterThan(simd_distance(after, held), 1e-3,
+                             "the bob was released but did not swing")
+    }
 }

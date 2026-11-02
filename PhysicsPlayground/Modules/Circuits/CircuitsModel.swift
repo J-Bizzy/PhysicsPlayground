@@ -1334,6 +1334,9 @@ final class CircuitsModel {
         if leadPull?.source.componentID == id { cancelLeadPull() }
         if voiceWireSource?.componentID == id { voiceWireSource = nil }
         if highlightedSource?.componentID == id { highlightedSource = nil }
+        // A probe on a part that is gone goes back to the meter's holster.
+        if probeA?.componentID == id { probeA = nil }
+        if probeB?.componentID == id { probeB = nil }
         persistSoon()
     }
 
@@ -1538,7 +1541,10 @@ final class CircuitsModel {
         // different nodes: in V⎓ its shunt would short the measurand.
         var meterElementIndex: Int?
         var stamped = elements
-        if multimeterArmed, meterMode == .ampsDC,
+        // Whenever both probes are latched, however they got there: the
+        // stamp once also waited on `multimeterArmed`, which only tests
+        // ever set, so A⎓ never read in the app (fixed 2026-11-02).
+        if meterMode == .ampsDC,
            let probeA, let probeB,
            let a = net.node(of: probeA), let b = net.node(of: probeB) {
             if a != b {
@@ -1673,10 +1679,11 @@ final class CircuitsModel {
 
     // MARK: Instruments
 
-    /// Multimeter: arm it, then tap any two terminals. Red probe first.
-    var multimeterArmed = false {
-        didSet { if !multimeterArmed { probeA = nil; probeB = nil } }
-    }
+    /// VoiceOver's way to place the probes: activating a probe arms the
+    /// meter, and the next two terminals activated take red, then black.
+    /// A hand carries the probes instead and never arms it. Not "the meter
+    /// is in use": latched probes are that.
+    var multimeterArmed = false
     /// The ammeter's shunt, stamped so current flows through it. Not
     /// `.conductor`: a perfect short's current splits arbitrarily across
     /// parallel paths; 1 mΩ disturbs the loop under a percent.
@@ -1732,13 +1739,16 @@ final class CircuitsModel {
         return best?.terminal
     }
 
-    /// A tap while the meter is armed lands a probe (A, then B, then back to A).
+    /// A tap while the meter is armed lands a probe (A, then B, then back
+    /// to A); the black one landing disarms it, so the next tap on a lead
+    /// selects again.
     func probeTap(_ terminal: Terminal) {
         if probeA == nil || probeB != nil {
             probeA = terminal
             probeB = nil
         } else if terminal != probeA {
             probeB = terminal
+            multimeterArmed = false
         }
         if let component = components.first(where: { $0.id == terminal.componentID }) {
             emitSound(.pop, at: component.terminalPosition(terminal.end), volume: 0.5)
@@ -2423,6 +2433,10 @@ final class CircuitsModel {
         cancelLeadPull()
         voiceWireSource = nil
         highlightedSource = nil
+        // Nothing left to probe: both go back to the holster.
+        probeA = nil
+        probeB = nil
+        multimeterArmed = false
         readouts = [:]
         wireFlows = [:]
         totalSourcePower = 0
@@ -2437,7 +2451,6 @@ final class CircuitsModel {
         trueSpeedMode = false
         showVoltageHeights = false
         showMagneticField = false
-        // The meter's `didSet` drops both probes.
         multimeterArmed = false
         meterMode = .voltsDC
         isPaused = false

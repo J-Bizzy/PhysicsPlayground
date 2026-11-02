@@ -109,14 +109,17 @@ enum OrbitalMechanicsModule {
                    items: OrbitalMechanicsModel.Preset.allCases.map {
                        (id: $0.id, label: $0.displayName, symbol: "globe")
                    },
+                   // Grey at the budget, where `spawn` would refuse.
+                   isEnabled: { model.hasRoomForABody },
                    run: { id in
                        if let preset = OrbitalMechanicsModel.Preset(rawValue: id) {
                            model.spawn(preset)
                        }
                    }),
-            // Splits a star named Sun; once there is none it has nothing to do.
+            // Splits a star named Sun into two, so it needs that star and
+            // room for one more body; `makeBinary` refuses otherwise.
             .action(id: "binary", title: "Twin suns", symbol: "sun.max",
-                    isEnabled: { model.bodies.contains { $0.body.name == "Sun" } },
+                    isEnabled: { model.hasSingleSun && model.hasRoomForABody },
                     run: { model.makeBinary() }),
         ]
     }

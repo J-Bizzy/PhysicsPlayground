@@ -135,4 +135,14 @@ final class PortalDoorTests: XCTestCase {
         XCTAssertTrue(scene.isOpening)
         XCTAssertTrue(scene.beginEnterTransition(id: "circuits"))
     }
+
+    /// One door at a time: a second pinch while the first portal swells
+    /// enters nothing, where it once entered a second lab straight after.
+    func testASecondPinchMidSwellEntersNothing() {
+        let (scene, _) = builtScene(openingPlayed: true)
+        XCTAssertTrue(scene.beginEnterTransition(id: "circuits"))
+        XCTAssertFalse(scene.beginEnterTransition(id: "optics"))
+        XCTAssertFalse(scene.beginEnterTransition(id: "circuits"))
+        XCTAssertEqual(scene.enteringID, "circuits")
+    }
 }

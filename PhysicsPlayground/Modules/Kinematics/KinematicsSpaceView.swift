@@ -323,6 +323,8 @@ struct KinematicsSpaceView: View {
             ring.openID = nil
             model.aimTargetID = nil
             aimPicker.close()
+            // Released, not merely forgotten: the model outlives this view.
+            model.releaseAll()
         }
         .task {
             // Plane detection: device-only, quietly absent in the sim.

@@ -421,6 +421,15 @@ final class PendulumsModel {
         }
     }
 
+    /// Lets go of every bob a hand holds, at rest where it is. Leaving the
+    /// lab mid-grab never delivers the gesture's end, and `step` skips a
+    /// grabbed bob, so one left held would hang frozen on the next visit.
+    func releaseAll() {
+        for pendulum in pendulums where pendulum.isGrabbed {
+            release(id: pendulum.id, handVelocity: .zero, isThrow: false)
+        }
+    }
+
     // MARK: Simulation
 
     /// Fixed internal substep — small enough that even 20× time scale

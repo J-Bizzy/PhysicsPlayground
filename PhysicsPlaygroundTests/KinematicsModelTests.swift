@@ -708,4 +708,23 @@ final class KinematicsModelTests: XCTestCase {
         XCTAssertEqual(model.launcherPosition, KinematicsModel.launcherHome)
         XCTAssertEqual(model.elevationDegrees, 45, accuracy: 1e-9)
     }
+
+    /// Leaving the lab mid-carry: `releaseAll` sets the ball down where it
+    /// is, waiting, with no throw — not left held and glowing in the air.
+    func testLeavingTheLabMidCarrySetsTheBallDown() {
+        let model = bareModel()
+        model.spawnBall()
+        let id = model.flights[0].id
+        model.grabBall(id: id)
+        let start = SIMD3<Double>(0, 1.2, -0.8)
+        for sample in 0..<10 {
+            let t = Double(sample) / 90.0
+            model.holdBall(id: id, at: start + t * SIMD3(3, 0, 0), timestamp: 400.0 + t)
+        }
+
+        model.releaseAll()
+        XCTAssertEqual(model.flights[0].status, .staged)
+        XCTAssertFalse(model.flights[0].wasThrown,
+                       "an exit is not a throw, however fast the hand was moving")
+    }
 }

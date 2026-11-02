@@ -16,6 +16,31 @@ A running log of consequential decisions — architectural, physical, or product
 
 (The template sat stranded at line 309, mid-log between two 2026-07-29 entries, until 2026-08-01.)
 
+## 2026-11-02 — What was broken: the ammeter, held objects, a ghost and controls that did nothing
+
+**Decision:** The first batch of the November polish pass fixes six things that did not work, and changes nothing you can see. The owner asked to "keep on working on the user experience and polish"; three read-only surveys of the shell, the home and the seven labs found these, and each was checked against the code before it was fixed.
+
+**Context:**
+- **The multimeter's A⎓ mode never read.** The meter's shunt was stamped into the network only while `multimeterArmed` was true, a flag from the tap-tap probe era that only the tests ever set. Probes carried by hand land through `setProbe`, so in the app A⎓ always showed "— — —" and told the wearer to break the loop they had just broken. Every A⎓ test armed the meter first, which is how the suite stayed green.
+- **Three labs kept a grab across leaving.** Pendulums, Projectiles and Electric Fields never let go of what the hand held when their view disappeared mid-gesture: a bob came back frozen, a ball hung glowing in the air, a charge refused to move. Magnetism already released on exit.
+- **Orbital Mechanics' prediction ghost outlived its planet,** counting down over empty sky after a delete or a merge and ending in no verdict.
+- **More's "Add a world" grid and Twin suns stayed lit at the 16-body limit** and did nothing.
+- **The meter's probes hung in mid-air** after Clear the bench, a preset or a delete took away the part they were on.
+- **A second portal pinch on the home** entered a second lab straight after the first.
+
+**Consequences:**
+- **The meter:**
+  - A⎓ stamps whenever both probes are latched, however they got there.
+  - `multimeterArmed` now means only VoiceOver's placement. Activating a probe arms it, the next two terminals activated take red then black, and the black one landing disarms it.
+  - A probe whose part is gone goes back to its holster: `removeComponent` and `clearBench` drop it, and `Multimeter` re-holsters a carried probe whose terminal no longer exists.
+  - The case publishes the face's reading to VoiceOver.
+  - The A⎓ and V⎓ tests no longer arm the meter, so they prove the hand's path.
+- **Exit:** `PendulumsModel`, `KinematicsModel` and `FieldModel` gain `releaseAll()`, called from each view's `onDisappear`. A bob is let go at rest, a ball is set down with no throw, and a charge and the test charge are released where they are.
+- **Orbits:** removing or merging the guessed body clears the prediction.
+- **More:** `MoreItem.verbs` gains `isEnabled`. `OrbitalMechanicsModel.hasRoomForABody` greys the grid and Twin suns exactly where the model refuses.
+- **The home:** `HubScene.enteringID` admits one door at a time.
+- **Tests:** `CircuitsModelTests` (placement, a probe leaving with its part), `PendulumsModelTests`, `KinematicsModelTests`, `FieldModelTests`, `OrbitalMechanicsModelTests` (the ghost, the full system), `PortalDoorTests`.
+
 ## 2026-10-30 — Circuit Workshop's parts are the Solid Schematic: each part its own symbol, made solid
 
 **Decision:** Every part is its own schematic symbol, made solid. It floats on two brass dots that are its terminals, with no carrier under it, and its leads are drawn as the wire's own line. The owner picked this direction (C, "the one without any base… it can be seen as floating") from three that were milled and rendered. The work ran in six phases, each stopping for the owner: audit, directions, contract, mill, integrate, record. Commits: e31b390, 3ff5509, c914e98, 37a30f4, 5d5349a.

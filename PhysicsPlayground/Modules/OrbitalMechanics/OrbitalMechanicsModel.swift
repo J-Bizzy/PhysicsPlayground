@@ -405,6 +405,9 @@ final class OrbitalMechanicsModel {
         if orbitEdit?.bodyID == id { endOrbitEdit() }
         bodies.removeAll { $0.id == id }
         if selectedID == id { selectedID = bodies.first?.id }
+        // A guess about a body that is gone has nothing left to resolve
+        // against; left armed, the ghost counted down over empty sky.
+        if prediction?.bodyID == id { prediction = nil }
         // The rest were carrying its momentum's opposite.
         settleMomentum()
     }
@@ -478,6 +481,10 @@ final class OrbitalMechanicsModel {
     var hasSingleSun: Bool {
         bodies.contains { $0.body.name == "Sun" }
     }
+
+    /// Whether one more body fits the renderer's pool; every way of adding
+    /// one — the well, More's worlds, Twin suns — refuses past it.
+    var hasRoomForABody: Bool { bodies.count < Self.bodyBudget }
 
     /// Splits the Sun into two half-mass suns about their barycenter; mass and momentum conserved exactly.
     func makeBinary() {
@@ -898,6 +905,10 @@ final class OrbitalMechanicsModel {
         bodies.remove(at: other)
         bodies[index] = survivor
         if selectionWasInvolved { selectedID = survivor.id }
+        // Neither body the guess was about exists any more.
+        if let guessed = prediction?.bodyID, guessed == a.id || guessed == b.id {
+            prediction = nil
+        }
     }
 
     // MARK: Trails — the trailing fraction of each body's own orbit

@@ -574,4 +574,17 @@ final class FieldModelTests: XCTestCase {
         XCTAssertTrue(model.probeTrail.isEmpty,
                       "the old flight must not leak into the new one")
     }
+
+    /// Leaving the lab mid-drag: `releaseAll` lets go of the charge and the
+    /// test charge, so neither comes back held on the next visit.
+    func testLeavingTheLabMidDragLetsGo() {
+        let model = FieldModel()
+        model.heldChargeID = model.charges.first?.id
+        model.dropProbe()
+        model.holdProbe(at: SIMD3(0.2, 1.2, -1.0))
+
+        model.releaseAll()
+        XCTAssertNil(model.heldChargeID)
+        XCTAssertEqual(model.probeStatus, .running)
+    }
 }

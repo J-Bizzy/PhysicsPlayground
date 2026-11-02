@@ -763,4 +763,44 @@ final class OrbitalMechanicsModelTests: XCTestCase {
             XCTAssertEqual(model.bodies.count, 11, "\(preset) merged within its first frames")
         }
     }
+
+    /// A guess about a planet that is gone has nothing to resolve against:
+    /// deleting the planet takes its ghost with it, rather than leaving a
+    /// countdown over empty sky that ends in no verdict.
+    func testThePredictionGoesWithItsPlanet() throws {
+        let model = OrbitalMechanicsModel()
+        let earth = try XCTUnwrap(model.bodies.first { $0.body.name == "Earth" })
+        model.select(id: earth.id)
+        model.armPrediction()
+        XCTAssertEqual(model.prediction?.bodyID, earth.id)
+
+        model.removeBody(id: earth.id)
+        XCTAssertNil(model.prediction)
+    }
+
+    /// More's "Add a world" grid and Twin suns grey out exactly where the
+    /// model would refuse them: at the body budget, where they once stayed
+    /// lit and did nothing.
+    func testTheAddControlsKnowWhenTheSystemIsFull() throws {
+        let model = OrbitalMechanicsModel()
+        XCTAssertTrue(model.hasRoomForABody)
+        var radius = 0.6
+        while model.bodies.count < OrbitalMechanicsModel.bodyBudget {
+            _ = try XCTUnwrap(model.addBody(at: SIMD3(radius, 1.2, 0)))
+            radius += 0.07
+        }
+        XCTAssertFalse(model.hasRoomForABody)
+
+        let more = OrbitalMechanicsModule.more(model)
+        let binary = try XCTUnwrap(more.first { $0.id == "binary" })
+        guard case let .action(_, _, _, _, _, isEnabled, _) = binary else {
+            return XCTFail("Twin suns is no longer an action")
+        }
+        XCTAssertFalse(isEnabled(), "Twin suns stayed lit with no room for a second sun")
+        let worlds = try XCTUnwrap(more.first { $0.id == "worlds" })
+        guard case let .verbs(_, _, _, gridEnabled, _) = worlds else {
+            return XCTFail("Add a world is no longer a grid")
+        }
+        XCTAssertFalse(gridEnabled(), "Add a world stayed lit at the budget")
+    }
 }

@@ -233,6 +233,19 @@ final class Multimeter {
             to: bench, within: Self.snapRadius))
     }
 
+    /// VoiceOver's door to the probes, which a hand would carry: activating
+    /// either probe arms the meter, and the next two terminals activated
+    /// take red, then black (`CircuitsModel.probeTap`). The dial still
+    /// turns through `handleTap`.
+    func activate(_ entity: Entity, model: CircuitsModel) {
+        if handleTap(entity, model: model) { return }
+        guard probeSlot(for: entity) != nil else { return }
+        model.multimeterArmed = true
+        SoundPalette.play(.pop, on: entity, volume: 0.35)
+        AccessibilityNotification.Announcement(
+            "Probes ready. Activate two terminals: red first, then black.").post()
+    }
+
     /// Probes a hand has taken off the case. The rest hang in the
     /// holster and follow the instrument wherever it goes.
     private var carried: Set<CircuitsModel.ProbeSlot> = []
@@ -250,8 +263,22 @@ final class Multimeter {
     /// since the last frame.
     private func rideLatchedTerminals(_ model: CircuitsModel) {
         for slot in [CircuitsModel.ProbeSlot.red, .black] {
-            guard carried.contains(slot),
-                  let terminal = slot == .red ? model.probeA : model.probeB,
+            let terminal = slot == .red ? model.probeA : model.probeB
+            // Latched by VoiceOver rather than carried there: the probe goes
+            // to its terminal, so what the meter reads is where it is drawn.
+            if !carried.contains(slot), let terminal,
+               let point = model.position(of: terminal), let toRoom = benchToRoom {
+                probeTip[slot] = toRoom(point)
+                carried.insert(slot)
+            }
+            // The part it was on is gone (deleted, cleared, a preset loaded):
+            // back to the holster, not left hanging where the terminal was.
+            if let last = latchedAt[slot], model.position(of: last.terminal) == nil {
+                carried.remove(slot)
+                latchedAt[slot] = nil
+                continue
+            }
+            guard carried.contains(slot), let terminal,
                   let point = model.position(of: terminal) else {
                 latchedAt[slot] = nil
                 continue
@@ -401,6 +428,14 @@ final class Multimeter {
             let now = CACurrentMediaTime()
             guard now - lastScreenTime >= Self.minimumInterval else { return }
             lastScreenTime = now
+        }
+        if display != lastDisplay || note != lastNote {
+            // What the face says, for VoiceOver: the case speaks for the meter.
+            // A face with no number ("V⎓", "— — —", "FUSE") is its note alone.
+            let number = display.contains { $0.isNumber }
+            SpatialActions.describe(
+                body, label: "Multimeter",
+                value: number ? PhysicsFormat.spoken(display) + ", " + note : note)
         }
         if display != lastDisplay || fault != lastFault {
             lastDisplay = display

@@ -749,6 +749,15 @@ final class FieldModel {
         probeStatus = .running
     }
 
+    /// Lets go of whatever a hand holds — a charge, the test charge — at
+    /// rest where it is. Leaving the lab mid-drag never delivers the
+    /// gesture's end: a charge left held never moves freely again, and a
+    /// held probe never runs.
+    func releaseAll() {
+        heldChargeID = nil
+        if probeStatus == .held { probeStatus = .running }
+    }
+
     /// One frame of this bench: the probe, then the free charges, then the
     /// recording — the only place that records, one frame per rendered
     /// frame.

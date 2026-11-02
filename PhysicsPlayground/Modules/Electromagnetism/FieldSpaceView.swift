@@ -103,6 +103,8 @@ struct FieldSpaceView: View {
             // in the module.
             bloom.endGrip()
             drag = nil
+            // Released, not merely forgotten: the model outlives this view.
+            model.releaseAll()
         }
         .spatialScale(scaleRig)
         .simultaneousGesture(tap)

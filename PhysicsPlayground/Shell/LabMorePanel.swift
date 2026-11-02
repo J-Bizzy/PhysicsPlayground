@@ -151,7 +151,7 @@ struct MoreItemView: View {
             // "1×, toggle button" means nothing without the clock it sets.
             .accessibilityElement(children: .contain)
             .accessibilityLabel(title)
-        case let .verbs(_, title, items, run):
+        case let .verbs(_, title, items, isEnabled, run):
             VStack(alignment: .leading, spacing: 8) {
                 Text(title)
                     .font(.body.weight(.medium))
@@ -162,6 +162,7 @@ struct MoreItemView: View {
                                       fillsWidth: true) { run(item.id) }
                     }
                 }
+                .disabled(!isEnabled())
             }
         case let .slider(adjustable, isEnabled):
             let format = adjustable.format ?? {
