@@ -126,9 +126,9 @@ struct PendulumsSpaceView: View {
             renderer.subscriptions.append(
                 content.subscribe(to: SceneEvents.Update.self) { [weak renderer] event in
                     // The lab's arrival and departure, on the shell's one flag.
-                    if let renderer, settle.tick(dt: event.deltaTime) {
-                        Fade.tick(renderer.root, visible: !appModel.isDeparting,
-                                  duration: AppModel.departure)
+                    if let renderer {
+                        appModel.doorTick(renderer.root, lab: PendulumsModule.id,
+                                          settled: settle.tick(dt: event.deltaTime))
                     }
                     renderer?.tick(dt: event.deltaTime, model: model)
                     let hand = appModel.room.nearestFingertip(to: Self.wellAnchor)
@@ -136,7 +136,9 @@ struct PendulumsSpaceView: View {
                     syncBloom(dt: event.deltaTime)
                     // The lab's placement: a pure display offset, safe because every grab
                     // moves a body by hand displacement.
-                    renderer?.root.position = appModel.labPlacement.offset
+                    if let placement = appModel.placement(forLab: PendulumsModule.id) {
+                        renderer?.root.position = placement
+                    }
                     // Every well and ring is a child of `renderer.root`, so
                     // the whole lab travels together.
                 }

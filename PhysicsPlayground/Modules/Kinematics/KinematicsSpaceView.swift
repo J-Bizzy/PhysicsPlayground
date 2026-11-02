@@ -255,9 +255,9 @@ struct KinematicsSpaceView: View {
             renderer.subscriptions.append(
                 content.subscribe(to: SceneEvents.Update.self) { [weak renderer] event in
                     // The lab's arrival and departure, on the shell's one flag.
-                    if let renderer, settle.tick(dt: event.deltaTime) {
-                        Fade.tick(renderer.root, visible: !appModel.isDeparting,
-                                  duration: AppModel.departure)
+                    if let renderer {
+                        appModel.doorTick(renderer.root, lab: KinematicsModule.id,
+                                          settled: settle.tick(dt: event.deltaTime))
                     }
                     // Everything the room hands the model is translated into module space
                     // first: model coordinates render under `renderer.root`, which carries
@@ -300,7 +300,9 @@ struct KinematicsSpaceView: View {
                     syncBloom(dt: event.deltaTime)
                     // Constant display offset; every instrument is a child of
                     // `renderer.root`, so the whole lab travels together.
-                    renderer?.root.position = appModel.labPlacement.offset
+                    if let placement = appModel.placement(forLab: KinematicsModule.id) {
+                        renderer?.root.position = placement
+                    }
                 }
             )
 

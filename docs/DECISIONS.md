@@ -16,6 +16,34 @@ A running log of consequential decisions — architectural, physical, or product
 
 (The template sat stranded at line 309, mid-log between two 2026-07-29 entries, until 2026-08-01.)
 
+## 2026-11-02 — The door holds: no empty room between scenes, and deep space arrives over the room
+
+**Decision:** Every change of scene (home to lab, lab to lab, lab to home) keeps the scene being left on screen while the next one builds and settles out of sight, then cross-fades the two over 0.22 s. Entering from the home, the chosen portal stays, swelled toward the wearer, while the rest of the home fades, so the miniature is what the wearer is looking at when its lab dissolves up in its place. Deep space now arrives over the room: the space keeps the room's immersion and its dimmer until the sky is fully up, and only then goes to full immersion. This is the fourth batch of the November polish pass.
+
+**Context:** The space mounted the home or a lab, never both.
+- **Leaving a lab,** the old scene faded out first.
+- **Leaving the home,** the old scene cut out in one frame (there was "nothing to fade from").
+- **Either way,** the new scene then built and waited, hidden, for `Settle`: 12 clean frames or 60. A recording of the frame tour at 10 fps shows the old door as the home, then two frames of empty room, then the lab fading up. The `[door]` trace measures the hold the new door spends where that gap was at 0.18–0.38 s.
+- **Deep space was worse.** Choosing it, or entering Orbital Mechanics from the room, switched to full immersion at once. That turned the room off, and the sky took its settle plus a 0.8 s fade to come up through black.
+- **Why `Settle` hid the new scene:** frames run long while a scene takes in its build. It was right to keep the new scene hidden through them, and the door still does. What is new is that the old scene is no longer gone while it waits.
+
+**Consequences:**
+- **`AppModel`:**
+  - `SceneKey` (`.home`, `.lab(id)`), `currentScene`, `leavingScene` and `mountedScenes`.
+  - `go(to:)` swaps `activeModuleID` at once, so the window, surroundings and dimming follow the destination, and holds the old scene.
+  - `sceneSettled(_:)` starts the cross-fade; `isShown(_:)` is what each scene fades on; `holdLimit` (2 s) is the longest a scene that never settles can hold the door.
+  - `isDeparting` is gone.
+- **Every lab** goes through `doorTick(root, lab:, settled:)` and reads its placement through `placement(forLab:)`, which is nil for a lab on its way out, so it holds where it stood while the next lab adopts its own. `ModuleArrivalCriterionTests` holds all seven to both.
+- **The home** reports `onSettled`, fades out linearly over the cross-fade once `leaving`, and on entry fades everything but the chosen portal (`enteringAnchor`, `fadeRest`).
+- **The space view** mounts `mountedScenes` in a `ForEach`; room sensing, the anchor, the time rail and the room tone go with the current lab only.
+- **Reduce Motion holds too.** The scenes cut instead of fading, but the room is never empty between them. Before, Reduce Motion went straight through to the gap.
+- **The lab list's door** (the flat window) gets the same hold and cross-fade, without the portal's swell.
+- **Deep space:** `isSkyUp`, set by `DeepSpaceView` when its fade has finished (`skyArrived`), gates `.full`. The dimmer stays mounted until then.
+- **Measured** on the frame tour (home, Pendulums, home, Orbits), against the previous commit built and run the same way:
+  - the home and lab doors drop the same one or two long frames per door as before, all from the new scene's build;
+  - entering deep space adds one frame of 24–27 ms, about a second after the door. That is the switch to full immersion, which now happens behind an opaque sky rather than at the door. It was judged a fair price for no black; the headset should confirm.
+- **Tests:** `AppModelDoorTests` is rewritten for the hold, `SurroundingsTests` expects full immersion once the sky is up, and `ModuleArrivalCriterionTests` checks the door and the placement.
+
 ## 2026-11-02 — Every grab answers, every "no" is heard, and the ring and the selection agree
 
 **Decision:** Everything a hand can take now answers it as the rest of the room does: the glow while held, a tick on taking and a tick on letting go. A well with nothing left to give says no aloud. In Circuit Workshop the ring and the selection always name one part, and the readout card stands aside while the ring is open. This is the third batch of the November polish pass, and it finishes the rule the 2026-10-14 entry set ("the labs answer a hand the same way").

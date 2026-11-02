@@ -9,6 +9,7 @@
 //  descriptor is built.)
 //
 
+import RealityKit
 import RenderKit
 import SwiftUI
 import Observation
@@ -30,37 +31,107 @@ final class AppModel {
     /// that is dismissing the space in the same breath: the fade's delay
     /// would land after the scene was torn down.
     func closeForDismissal() {
+        leavingScene = nil
+        leavingFades = false
         activeModuleID = nil
     }
 
-    /// True while a lab is fading out and before its replacement mounts.
-    /// Every module's scene root watches this and rides it down.
-    private(set) var isDeparting = false
+    // MARK: The door
 
-    /// How long a lab takes to leave; matches the arrival ramp.
+    /// What the space shows: the home, or a lab by id.
+    enum SceneKey: Hashable {
+        case home
+        case lab(String)
+    }
+
+    var currentScene: SceneKey { activeModuleID.map(SceneKey.lab) ?? .home }
+
+    /// The scene still on screen while the one replacing it builds and
+    /// settles out of sight (2026-11-02). Until then the room stood empty
+    /// between them for a third of a second or more — black, in deep
+    /// space — while the new scene took in its build (`Settle`); now the
+    /// old one holds until the new one is ready, and the two cross-fade.
+    private(set) var leavingScene: SceneKey?
+    /// True once the replacement has settled and the leaving scene is
+    /// fading out from under it.
+    private(set) var leavingFades = false
+
+    /// The scenes the space mounts: the leaving one, then the current one.
+    var mountedScenes: [SceneKey] {
+        guard let leavingScene, leavingScene != currentScene else { return [currentScene] }
+        return [leavingScene, currentScene]
+    }
+
+    /// How long a scene takes to fade in or out; the cross-fade's length.
     static let departure: Double = 0.22
+    /// The longest a leaving scene waits for its replacement to settle: a
+    /// scene that never says so must not hold the door for ever.
+    static let holdLimit: Double = 2.0
 
-    /// The one door between labs, and between a lab and the home. A
-    /// dissolve through passthrough: the old lab fades, the room stands
-    /// alone for a beat, the new lab fades up.
+    /// The one door between labs, and between a lab and the home. The
+    /// current scene stays while the next builds and settles behind it;
+    /// then the next fades up as the old fades out (`sceneSettled`).
     func go(to id: String?) {
         guard id != activeModuleID else { return }
-        // Nothing to fade from, nothing that would render a fade, or Reduce
-        // Motion: go straight through.
-        guard activeModuleID != nil, isImmersiveSpaceOpen, !Motion.isReduced else {
+        // Nothing on screen to hold: straight through. Under Reduce Motion the
+        // door still holds — the scenes cut rather than fade (`Fade.tick`,
+        // the home's stillness), but the room never stands empty between them.
+        guard isImmersiveSpaceOpen else {
             activeModuleID = id
             return
         }
-        guard !isDeparting else { return }
-        isDeparting = true
+        // One door at a time.
+        guard leavingScene == nil else { return }
+        leavingScene = currentScene
+        leavingFades = false
+        activeModuleID = id
+        let incoming = currentScene
+        #if DEBUG
+        LaunchTrace.mark("[door] to \(id ?? "home"), holding the last scene")
+        #endif
         Task { @MainActor [weak self] in
-            try? await Task.sleep(for: .seconds(Self.departure))
-            guard let self else { return }
-            // Cleared before the swap: the incoming scene mounts on the next line
-            // and must not be born invisible. `AppModelDoorTests` pins the order.
-            self.isDeparting = false
-            self.activeModuleID = id
+            try? await Task.sleep(for: .seconds(Self.holdLimit))
+            self?.sceneSettled(incoming)
         }
+    }
+
+    /// A scene has taken in its build. If it is the one a door is waiting
+    /// on, the scene it replaces starts fading out under it, and leaves the
+    /// space once it has.
+    func sceneSettled(_ scene: SceneKey) {
+        guard scene == currentScene, let leaving = leavingScene, !leavingFades else { return }
+        leavingFades = true
+        #if DEBUG
+        LaunchTrace.mark("[door] the new scene has settled; cross-fading")
+        #endif
+        Task { @MainActor [weak self] in
+            // A frame past the fade, so the last frame drawn is a clear one.
+            try? await Task.sleep(for: .seconds(Self.departure + 0.05))
+            guard let self, self.leavingScene == leaving else { return }
+            self.leavingScene = nil
+            self.leavingFades = false
+        }
+    }
+
+    /// Whether a mounted scene should be drawn: all of them are, but a
+    /// leaving scene once its replacement is up.
+    func isShown(_ scene: SceneKey) -> Bool {
+        !(scene == leavingScene && leavingFades)
+    }
+
+    /// A lab's side of the door, every frame from its scene's update. Once
+    /// its scene has settled it says so, and fades in — or, leaving, out.
+    func doorTick(_ root: Entity, lab id: String, settled: Bool) {
+        guard settled else { return }
+        sceneSettled(.lab(id))
+        Fade.tick(root, visible: isShown(.lab(id)), duration: Self.departure)
+    }
+
+    /// Where a lab stands: its placement while it is the one on screen.
+    /// Nil for a lab on its way out, which holds where it stood while the
+    /// next lab adopts its own placement.
+    func placement(forLab id: String) -> SIMD3<Float>? {
+        activeModuleID == id ? labPlacement.offset : nil
     }
 
     /// Every user preference, persisted; the one instance the hub, the
@@ -141,8 +212,22 @@ final class AppModel {
         if let id = activeModuleID { labPlacement.adopt(moduleID: id) }
     }
 
+    /// Whether deep space's sky has fully come up (2026-11-02). Until it
+    /// has, the space keeps the room's immersion and the room's dimmer, and
+    /// the sky fades in over the room; full immersion came first before,
+    /// which turned the room off and left black until the sky had settled
+    /// and faded up.
+    private(set) var isSkyUp = false
+
+    /// The sky reports in: up once its fade has finished, down as it goes.
+    func skyArrived(_ up: Bool) {
+        guard up != isSkyUp else { return }
+        isSkyUp = up
+        refreshImmersionStyle()
+    }
+
     private func refreshImmersionStyle() {
-        immersionStyle = surroundings == .deepSpace
+        immersionStyle = surroundings == .deepSpace && isSkyUp
             ? .full : (activeModule?.immersionStyle ?? .mixed)
         // The room is out of reach in deep space (`RoomModel.tangible`).
         let shown = surroundings == .room

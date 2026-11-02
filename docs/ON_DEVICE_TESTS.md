@@ -145,6 +145,27 @@ contradicts this section, this section is current.
 - [ ] **The cut test:** enter all seven labs in sequence; the room's
       brightness moves only at Orbital Mechanics, and ramps rather than steps.
 
+## ⟳ 2026-11-02 — the door holds (batch 4)
+
+- [ ] **Into a lab from the home:** pinch a lab. It swells toward you, the
+      rest of the home fades, and the miniature stays until the real lab
+      is there, then the one dissolves into the other. At no point is
+      the room empty. Judge: does the swelled miniature read as "this is
+      the lab arriving", or does it linger?
+- [ ] **Back to the home, and lab to lab** (through the lab list): the
+      lab you leave stays put, where you placed it, until the next scene
+      is up, then they cross-fade. Nothing jumps to the next lab's
+      placement on the way out.
+- [ ] **Deep space from the room** (More › Deep space, or entering
+      Orbital Mechanics): the stars come up over your room rather than
+      after a black frame, and only then does the room go. Judge whether
+      the moment the room goes is felt.
+- [ ] **Reduce Motion on:** the same hold, then a cut. Still never an
+      empty room.
+- [ ] **Frame pacing:** walk a few doors with `-frameLog 1`. The new scene's
+      build costs one or two long frames, as before; entering deep space
+      costs one more, about a second in.
+
 ## ⟳ 2026-11-02 — every grab answers (batch 3)
 
 Volume up. Each of these should glow while held, tick as you take it and

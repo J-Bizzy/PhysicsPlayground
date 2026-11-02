@@ -59,11 +59,14 @@ final class SurroundingsTests: XCTestCase {
         XCTAssertEqual(style(app), "mixed")
     }
 
-    /// Choosing deep space is full immersion at once, and survives a relaunch.
+    /// Choosing deep space is full immersion once the sky is up — the room
+    /// holds while it arrives over it — and survives a relaunch.
     func testTheChoiceIsFullImmersionAndRemembered() {
         let app = AppModel()
         app.choose(.deepSpace)
         XCTAssertEqual(app.surroundings, .deepSpace)
+        XCTAssertEqual(style(app), "mixed", "the room holds while the sky comes up")
+        app.skyArrived(true)
         XCTAssertEqual(style(app), "full")
         app.go(to: "pendulums")
         XCTAssertEqual(app.surroundings, .deepSpace, "a lab with no preference follows the choice")
@@ -71,6 +74,7 @@ final class SurroundingsTests: XCTestCase {
 
         let relaunched = AppModel()
         XCTAssertEqual(relaunched.surroundings, .deepSpace)
+        relaunched.skyArrived(true)
         XCTAssertEqual(style(relaunched), "full")
         relaunched.choose(.room)
         XCTAssertEqual(style(relaunched), "mixed")
@@ -84,6 +88,8 @@ final class SurroundingsTests: XCTestCase {
         let app = AppModel()
         app.go(to: OrbitalMechanicsModule.id)
         XCTAssertEqual(app.surroundings, .deepSpace)
+        XCTAssertEqual(style(app), "progressive", "its own style until the sky is up")
+        app.skyArrived(true)
         XCTAssertEqual(style(app), "full")
 
         app.choose(.room)
@@ -106,6 +112,8 @@ final class SurroundingsTests: XCTestCase {
         let app = AppModel()
         XCTAssertEqual(app.activeModuleID, OrbitalMechanicsModule.id)
         XCTAssertEqual(app.surroundings, .deepSpace)
+        XCTAssertEqual(style(app), "progressive", "the lab's own, until the sky is up")
+        app.skyArrived(true)
         XCTAssertEqual(style(app), "full")
         XCTAssertEqual(app.roomDimming, 0.85)
         XCTAssertEqual(app.dimmingRadius, 16)

@@ -75,9 +75,9 @@ struct FieldSpaceView: View {
                 content.subscribe(to: SceneEvents.Update.self) { [weak renderer] event in
                     // The lab's arrival and departure, on the shell's one flag; `Fade.tick`
                     // settles to a no-op once landed.
-                    if let renderer, settle.tick(dt: event.deltaTime) {
-                        Fade.tick(renderer.root, visible: !appModel.isDeparting,
-                                  duration: AppModel.departure)
+                    if let renderer {
+                        appModel.doorTick(renderer.root, lab: ElectromagnetismModule.id,
+                                          settled: settle.tick(dt: event.deltaTime))
                     }
                     if let renderer { scaleRig.apply(to: renderer.viewRoot) }
                     model.step(dt: event.deltaTime)
@@ -88,7 +88,9 @@ struct FieldSpaceView: View {
                     renderer?.tick(model, room: appModel.room.tangible.clipBox)
                     // The lab's placement: a pure display offset, safe because every grab
                     // moves a body by hand displacement.
-                    renderer?.root.position = appModel.labPlacement.offset
+                    if let placement = appModel.placement(forLab: ElectromagnetismModule.id) {
+                        renderer?.root.position = placement
+                    }
                 }
             )
             applyDebugArguments()

@@ -165,14 +165,16 @@ struct CircuitsSpaceView: View {
                 content.subscribe(to: SceneEvents.Update.self) { [weak renderer] event in
                     // The lab's arrival and departure, on the shell's one flag.
                     // `Fade.tick` settles to a no-op once landed.
-                    if let renderer, settle.tick(dt: event.deltaTime) {
-                        Fade.tick(renderer.root, visible: !appModel.isDeparting,
-                                  duration: AppModel.departure)
+                    if let renderer {
+                        appModel.doorTick(renderer.root, lab: CircuitsModule.id,
+                                          settled: settle.tick(dt: event.deltaTime))
                     }
                     // The lab's placement in the room: a constant display offset, safe
                     // because grabs move a body by hand displacement. Every instrument is
                     // a child of `renderer.root`, so it rides along.
-                    renderer?.root.position = appModel.labPlacement.offset
+                    if let placement = appModel.placement(forLab: CircuitsModule.id) {
+                        renderer?.root.position = placement
+                    }
                     model.step(dt: event.deltaTime)
                     let viewer = appModel.room.headPosition.map { SIMD3<Float>($0) }
                     meter?.update(viewer: viewer, model: model,

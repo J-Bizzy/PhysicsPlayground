@@ -218,18 +218,33 @@ struct PlaygroundSpaceView: View {
                 if appModel.surroundings == .deepSpace {
                     DeepSpaceView(showsSun: !(appModel.activeModule?.drawsItsOwnSun ?? false))
                         .id("deep-space")
-                } else {
-                    // The middle setting: the room stays, a dark shell gives the physics its
-                    // contrast back. Mounted unconditionally so it can ramp down when a lab
-                    // is left; off, it is one disabled entity. The dome is sized by its
-                    // transform, so the radius needs no `.id()`.
+                }
+                // The middle setting: the room stays, a dark shell gives the physics its
+                // contrast back. Mounted unconditionally so it can ramp down when a lab
+                // is left; off, it is one disabled entity. The dome is sized by its
+                // transform, so the radius needs no `.id()`. It stays while deep space
+                // arrives, which it does over the room (`AppModel.skyArrived`).
+                if appModel.surroundings == .room || !appModel.isSkyUp {
                     RoomDimmerView()
                         .id("dimmer")
                 }
+                // The door (`AppModel.go(to:)`): the scene being left stays mounted,
+                // drawn, until the one replacing it has settled, and the two cross-fade.
+                ForEach(appModel.mountedScenes, id: \.self) { scene in
+                    switch scene {
+                    case .home:
+                        HubSpaceView()
+                            .id("hub")
+                    case .lab(let id):
+                        if let module = ModuleCatalog.descriptor(id: id, appModel: appModel) {
+                            module.makeScene()
+                                .id(module.id)
+                        }
+                    }
+                }
+                // What goes with the lab on screen, and only with it.
                 if let module = appModel.activeModule {
                     ZStack {
-                        module.makeScene()
-                            .id(module.id)
                         // The shared room sensing stays alive while a module
                         // is on screen (device-only; inert in the simulator).
                         RoomSensingView()
@@ -252,9 +267,6 @@ struct PlaygroundSpaceView: View {
                     // not from launch; see `AppModel.runStagedPause`.
                     .task(id: module.id) { await appModel.runStagedPause(for: module) }
                     #endif
-                } else {
-                    HubSpaceView()
-                        .id("hub")
                 }
             }
             }

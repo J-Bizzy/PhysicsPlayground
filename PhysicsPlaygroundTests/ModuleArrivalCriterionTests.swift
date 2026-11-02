@@ -2,8 +2,9 @@
 //  ModuleArrivalCriterionTests.swift
 //  PhysicsPlaygroundTests
 //
-//  Every lab arrives and departs through `Fade.tick` on
-//  `AppModel.isDeparting`. A text criterion rather than a reflective
+//  Every lab arrives and departs through the shell's door,
+//  `AppModel.doorTick` (2026-11-02; `Fade.tick` on `isDeparting` until
+//  then), and stands where its own placement says. A text criterion rather than a reflective
 //  one: `makeScene()` hands back an `AnyView`, so a scene cannot be
 //  rendered offscreen in a unit test; reading the source can see whether
 //  a SpaceView that adds a renderer root also fades it.
@@ -46,13 +47,14 @@ final class ModuleArrivalCriterionTests: XCTestCase {
             guard view.source.contains("content.add(renderer.root)") else { continue }
 
             XCTAssertTrue(
-                view.source.contains("Fade.tick(renderer.root"),
+                view.source.contains("appModel.doorTick(renderer.root"),
                 """
-                \(view.name) adds a renderer root but never fades it, so this \
-                lab appears and vanishes in a single frame while the other five \
-                arrive and depart. Add, in the SceneEvents.Update closure:
-                    Fade.tick(renderer.root, visible: !appModel.isDeparting,
-                              duration: AppModel.departure)
+                \(view.name) adds a renderer root but never passes it through the \
+                door, so this lab appears and vanishes in a single frame, and \
+                the scene it replaces never learns that it has settled. Add, in \
+                the SceneEvents.Update closure:
+                    appModel.doorTick(renderer.root, lab: <Module>.id,
+                                      settled: settle.tick(dt: event.deltaTime))
                 """)
 
             XCTAssertTrue(
@@ -65,15 +67,24 @@ final class ModuleArrivalCriterionTests: XCTestCase {
         }
     }
 
-    /// The fade must ride the shell's flag. A module inventing its own
-    /// would drift out of step with the room's dimming ramp and with the
-    /// other five.
-    func testTheFadeRidesTheSharedDepartureFlag() throws {
+    /// No lab fades its root on a flag of its own: one inventing its own
+    /// would drift out of step with the door and with the other six.
+    func testNoLabFadesItsRootOutsideTheDoor() throws {
         for view in try moduleSpaceViews() {
-            guard view.source.contains("Fade.tick(renderer.root") else { continue }
-            XCTAssertTrue(
-                view.source.contains("visible: !appModel.isDeparting"),
-                "\(view.name) fades on something other than AppModel.isDeparting")
+            XCTAssertFalse(
+                view.source.contains("Fade.tick(renderer.root"),
+                "\(view.name) fades its root itself, outside AppModel.doorTick")
+        }
+    }
+
+    /// A lab on its way out holds where it stood while the next one adopts
+    /// its own placement: the offset is read through the door, never
+    /// straight off `labPlacement`, which by then is the next lab's.
+    func testALeavingLabKeepsItsOwnPlacement() throws {
+        for view in try moduleSpaceViews() {
+            XCTAssertFalse(
+                view.source.contains("root.position = appModel.labPlacement.offset"),
+                "\(view.name) follows the next lab's placement while it leaves")
         }
     }
 }

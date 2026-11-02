@@ -27,11 +27,14 @@ import SwiftUI
 struct DeepSpaceView: View {
     /// False while the lab on screen draws a Sun of its own.
     let showsSun: Bool
+    @Environment(AppModel.self) private var appModel
     @State private var stage = DeepSpaceStage()
 
     var body: some View {
         RealityView { content in
             stage.build(showsSun: showsSun)
+            // Fully up: the space can go to full immersion behind it.
+            stage.onArrived = { [appModel] in appModel.skyArrived(true) }
             content.add(stage.root)
             // `[weak stage]`: the subscription is held on the stage.
             stage.subscription = content.subscribe(to: SceneEvents.Update.self) { [weak stage] event in
@@ -44,6 +47,7 @@ struct DeepSpaceView: View {
         .onDisappear {
             stage.subscription?.cancel()
             stage.subscription = nil
+            appModel.skyArrived(false)
         }
     }
 }
@@ -73,10 +77,17 @@ final class DeepSpaceStage {
 
     /// Waits for the scene to take in the sky (`Settle`), then fades up.
     private var settle = Settle()
+    /// Called once, when the fade up has finished.
+    var onArrived: (() -> Void)?
+    private var arrived = false
 
     func tick(dt: Double) {
         guard settle.tick(dt: dt) else { return }
         Fade.tick(root, visible: true, duration: DeepSpace.arrival)
+        if !arrived, root.components[OpacityComponent.self] == nil {
+            arrived = true
+            onArrived?()
+        }
         if let sun { Fade.tick(sun, visible: showsSun, duration: DeepSpace.sunFade) }
     }
 }

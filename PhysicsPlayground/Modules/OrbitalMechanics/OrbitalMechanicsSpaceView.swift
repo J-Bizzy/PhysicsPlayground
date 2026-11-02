@@ -109,9 +109,9 @@ struct OrbitalMechanicsSpaceView: View {
             renderer.subscriptions.append(
                 content.subscribe(to: SceneEvents.Update.self) { [weak renderer] event in
                     // The lab's arrival and departure, on the shell's one flag.
-                    if let renderer, settle.tick(dt: event.deltaTime) {
-                        Fade.tick(renderer.root, visible: !appModel.isDeparting,
-                                  duration: AppModel.departure)
+                    if let renderer {
+                        appModel.doorTick(renderer.root, lab: OrbitalMechanicsModule.id,
+                                          settled: settle.tick(dt: event.deltaTime))
                     }
                     model.step(dt: event.deltaTime)
                     renderer?.tick(model)
@@ -144,7 +144,9 @@ struct OrbitalMechanicsSpaceView: View {
                     }
                     // Constant display offset; every instrument is a child of
                     // `renderer.root`, so the whole lab moves together.
-                    renderer?.root.position = appModel.labPlacement.offset
+                    if let placement = appModel.placement(forLab: OrbitalMechanicsModule.id) {
+                        renderer?.root.position = placement
+                    }
                 }
             )
 

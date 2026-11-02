@@ -57,7 +57,10 @@ struct HubSpaceView: View {
 
             // `[weak scene]`: the subscription is stored on the scene, and a strong
             // capture is a cycle that leaks a home animating forever.
-            scene.subscription = content.subscribe(to: SceneEvents.Update.self) { [weak scene] event in
+            scene.onSettled = { [appModel] in appModel.sceneSettled(.home) }
+            scene.subscription = content.subscribe(to: SceneEvents.Update.self) { [weak scene, appModel] event in
+                // The door: once the lab replacing the home is up, the home goes.
+                scene?.leaving = !appModel.isShown(.home)
                 scene?.animate(dt: event.deltaTime)
             }
             // VoiceOver opens a lab directly: activating a portal is pinching it.
@@ -584,6 +587,11 @@ final class HubScene {
         // in from a lab — stuttered through them. Until then the arrival's
         // clock holds at zero, where nothing has come up.
         let arrived = settle.tick(dt: rawDt)
+        if arrived, !reportedSettled {
+            reportedSettled = true
+            onSettled?()
+        }
+        fadeRest(dt: dt)
         if openingPhase == .running, openingFrozenAt == nil, !openingClockStarted {
             openingStart = time
             if arrived {
@@ -644,8 +652,15 @@ final class HubScene {
     private var presenceTarget: Float = 1
 
     private func fadePresence(dt: Double) {
+        if leaving { presenceTarget = 0 }
         guard presence != presenceTarget else { return }
-        presence += (presenceTarget - presence) * Float(1 - exp(-dt / 0.18))
+        if leaving {
+            // Out over exactly the door's cross-fade, as the lab comes up: the
+            // home leaves the space when it has, and must be gone by then.
+            presence = stillness ? 0 : max(0, presence - Float(dt / AppModel.departure))
+        } else {
+            presence += (presenceTarget - presence) * Float(1 - exp(-dt / 0.18))
+        }
         if abs(presence - presenceTarget) < 0.001 { presence = presenceTarget }
         if presence == 1 {
             root.components.remove(OpacityComponent.self)
@@ -679,7 +694,12 @@ final class HubScene {
               let portal = portals.first(where: { $0.moduleID == id }) else { return false }
         enteringID = id
         SoundPalette.play(.pop, on: portal.anchor, volume: 0.7)
-        presenceTarget = 0
+        // The rest of the home fades; the chosen lab stays, swelled toward
+        // the wearer, until its lab has settled and dissolves up in its place
+        // (2026-11-02). The whole home faded here before, and the room stood
+        // empty while the lab took in its build.
+        if openingPhase == .running { finishOpening() }
+        enteringAnchor = portal.anchor
         var target = portal.anchor.transform
         let toward = -simd_normalize(SIMD3(portal.anchor.position.x, 0, portal.anchor.position.z))
         target.translation += toward * 0.25
@@ -691,6 +711,27 @@ final class HubScene {
 
     /// The lab the home is entering, from the pinch until it is torn down.
     private(set) var enteringID: String?
+
+    /// Set by the view each frame: true once the lab replacing the home has
+    /// settled, and the home is to go.
+    var leaving = false
+    /// Called once, when the home has taken in its build: the door waits on it.
+    var onSettled: (() -> Void)?
+    private var reportedSettled = false
+
+    /// The entered lab's portal, which stays while the rest fades.
+    private var enteringAnchor: Entity?
+    private var restPresence: Float = 1
+
+    private func fadeRest(dt: Double) {
+        guard let enteringAnchor, restPresence > 0 else { return }
+        restPresence = stillness ? 0
+            : restPresence * Float(exp(-dt / 0.18))
+        if restPresence < 0.01 { restPresence = 0 }
+        for child in root.children where child !== enteringAnchor {
+            child.components.set(OpacityComponent(opacity: restPresence))
+        }
+    }
 
     /// A pinch on one of the wordmark's letters: it hops. True when it was one.
     func hopTitleLetter(_ entity: Entity) -> Bool {

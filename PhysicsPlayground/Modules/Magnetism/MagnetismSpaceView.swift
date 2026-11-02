@@ -83,9 +83,9 @@ struct MagnetismSpaceView: View {
             renderer.subscriptions.append(
                 content.subscribe(to: SceneEvents.Update.self) { [weak renderer] event in
                     // The lab's arrival and departure, on the shell's one flag.
-                    if let renderer, settle.tick(dt: event.deltaTime) {
-                        Fade.tick(renderer.root, visible: !appModel.isDeparting,
-                                  duration: AppModel.departure)
+                    if let renderer {
+                        appModel.doorTick(renderer.root, lab: MagnetismModule.id,
+                                          settled: settle.tick(dt: event.deltaTime))
                     }
                     // Per frame, not per event: a hand that leaves the tracking volume
                     // mid-carry stops sending events, so an event-driven expiry never runs
@@ -106,7 +106,9 @@ struct MagnetismSpaceView: View {
                     })
                     // The lab's placement: a pure display offset, safe because every grab
                     // moves a body by hand displacement.
-                    renderer?.root.position = appModel.labPlacement.offset
+                    if let placement = appModel.placement(forLab: MagnetismModule.id) {
+                        renderer?.root.position = placement
+                    }
                 }
             )
             #if DEBUG

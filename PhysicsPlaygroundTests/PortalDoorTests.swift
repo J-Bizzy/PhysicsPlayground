@@ -136,6 +136,33 @@ final class PortalDoorTests: XCTestCase {
         XCTAssertTrue(scene.beginEnterTransition(id: "circuits"))
     }
 
+    /// Entering, the chosen lab stays while the rest of the home fades: it
+    /// is what the wearer looks at while its lab settles out of sight, and
+    /// the room is never empty between them. Then, told to leave, the home
+    /// goes in one cross-fade.
+    func testTheChosenPortalStaysWhileTheRestFades() throws {
+        let (scene, _) = builtScene(openingPlayed: true)
+        // Settled, and faded fully in (a walk back's fade is τ 0.18 s).
+        for _ in 0..<(Settle.cleanFrames + 120) { scene.animate(dt: 1.0 / 90.0) }
+        XCTAssertTrue(scene.beginEnterTransition(id: "circuits"))
+        for _ in 0..<90 { scene.animate(dt: 1.0 / 90.0) }
+
+        let chosen = try XCTUnwrap(scene.portal("circuits"))
+        let other = try XCTUnwrap(scene.portal("optics"))
+        XCTAssertEqual(chosen.components[OpacityComponent.self]?.opacity ?? 1, 1,
+                       "the chosen lab faded with the rest")
+        XCTAssertLessThan(other.components[OpacityComponent.self]?.opacity ?? 1, 0.02)
+        XCTAssertEqual(scene.root.components[OpacityComponent.self]?.opacity ?? 1, 1,
+                       "the home is still there, holding the door")
+
+        scene.leaving = true
+        for _ in 0..<Int((AppModel.departure * 90).rounded(.up)) + 1 {
+            scene.animate(dt: 1.0 / 90.0)
+        }
+        XCTAssertEqual(scene.root.components[OpacityComponent.self]?.opacity ?? 1, 0,
+                       accuracy: 1e-6, "gone within the cross-fade")
+    }
+
     /// One door at a time: a second pinch while the first portal swells
     /// enters nothing, where it once entered a second lab straight after.
     func testASecondPinchMidSwellEntersNothing() {

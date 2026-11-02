@@ -72,9 +72,9 @@ struct OpticsSpaceView: View {
             var settle = Settle()
             renderer.subscriptions.append(
                 content.subscribe(to: SceneEvents.Update.self) { [weak renderer] event in
-                    if let renderer, settle.tick(dt: event.deltaTime) {
-                        Fade.tick(renderer.root, visible: !appModel.isDeparting,
-                                  duration: AppModel.departure)
+                    if let renderer {
+                        appModel.doorTick(renderer.root, lab: OpticsModule.id,
+                                          settled: settle.tick(dt: event.deltaTime))
                     }
                     expireStaleGrabs(now: CACurrentMediaTime())
                     let hand = appModel.room.nearestFingertip(to: Self.wellAnchors[1])
@@ -83,7 +83,9 @@ struct OpticsSpaceView: View {
                     model.room = currentRoom()
                     model.step(dt: event.deltaTime)
                     renderer?.tick(model)
-                    renderer?.root.position = appModel.labPlacement.offset
+                    if let placement = appModel.placement(forLab: OpticsModule.id) {
+                        renderer?.root.position = placement
+                    }
                 }
             )
             #if DEBUG
