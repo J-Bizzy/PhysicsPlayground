@@ -97,9 +97,10 @@ enum ElectromagnetismModule {
         let model = appModel.electromagnetismModel
         var rows: [Reading] = [
             .init("Charges", "\(model.charges.count)"),
+            // In µC, as a charge's bead reads, not "1.00 × 10⁻⁶ C".
             .init("Net charge",
-                  PhysicsFormat.scientific(
-                    model.charges.reduce(0) { $0 + $1.charge }), "C"),
+                  PhysicsFormat.fixed(model.charges.reduce(0) { $0 + $1.charge } * 1e6,
+                                      decimals: 1), "µC"),
         ]
         // The test charge's own physics, while one is in the room: the field
         // at it, the potential, the two force terms, and its motion.
@@ -125,7 +126,7 @@ enum ElectromagnetismModule {
         }
         if let selected = model.selectedCharge {
             rows.append(.init("Selected charge",
-                              PhysicsFormat.scientific(selected.charge), "C"))
+                              PhysicsFormat.fixed(selected.charge * 1e6, decimals: 1), "µC"))
             rows.append(.init("|E| 10 cm away",
                 PhysicsFormat.scientific(
                     simd_length(model.fieldVector(

@@ -443,7 +443,7 @@ struct MagnetismSpaceView: View {
                 .init(name: "Turns", symbol: "circle.dotted.circle",
                       tint: DesignTokens.Palette.neutralActionUI,
                       announce: {
-                          "\(model.coils.first { $0.id == id }?.turns ?? 0) turns"
+                          "\((model.coils.first { $0.id == id }?.turns ?? 0).formatted()) turns"
                       }) { model.cycleTurns(id: id) },
                 .init(name: "Turn", symbol: "rotate.right",
                       tint: DesignTokens.Palette.neutralActionUI) { model.turnCoil(id: id) },

@@ -7,7 +7,7 @@
 //  holding everything secondary — the lab's own layers, modes and verbs,
 //  the quantities it has no object for, its live numbers, the room, and
 //  Reset. The room holds the apparatus and nothing else. Beneath the bar,
-//  only while the immersive space is closed, "Show in room".
+//  only while the immersive space is closed, "Show in Room".
 //
 
 import RenderKit
@@ -21,7 +21,7 @@ struct ModuleHostView: View {
     /// The icon tile scales with the type it frames.
     @ScaledMetric(relativeTo: .headline) private var iconTile = 30.0
     @State private var showingSensing = false
-    /// Set when "Show in room" fails, so it can say so.
+    /// Set when "Show in Room" fails, so it can say so.
     @State private var showInRoomFailed = false
 
     var body: some View {
@@ -97,7 +97,8 @@ struct ModuleHostView: View {
             }
 
             if !appModel.isImmersiveSpaceOpen {
-                ControlButton("Show in room", systemImage: "sparkles",
+                // The home window's words, in its case: one button, one name.
+                ControlButton("Show in Room", systemImage: "sparkles",
                               emphasis: .prominent,
                               fillsWidth: true) {
                     Task {
@@ -124,7 +125,7 @@ struct ModuleHostView: View {
                     HStack(spacing: 10) {
                         Image(systemName: "exclamationmark.triangle.fill")
                             .foregroundStyle(.orange)
-                        Text("Couldn't open the room.")
+                        Text("The room couldn't open.")
                             .font(DesignTokens.TypeScale.footnote)
                         Spacer(minLength: 0)
                     }

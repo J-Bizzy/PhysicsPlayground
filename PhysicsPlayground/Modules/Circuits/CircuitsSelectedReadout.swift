@@ -22,13 +22,12 @@ struct CircuitsSelectedReadout: View {
                     .font(DesignTokens.TypeScale.sectionHeader)
 
                 if let readout = model.readouts[component.id] {
-                    let volts = (abs(readout.volts) * 100).rounded() / 100
-                    let milliamps = (abs(readout.amps) * 1000 * 10).rounded() / 10
-                    let watts = (abs(readout.watts) * 100).rounded() / 100
-                    Text("\(PhysicsFormat.measurement(volts, "V", decimals: 2))   "
-                         + PhysicsFormat.measurement(milliamps, "mA", decimals: 1))
+                    // Auto-ranged as More writes them, so a short reads "150.00 A"
+                    // and not "150000.0 mA"; `metric` quantises before it formats.
+                    Text("\(PhysicsFormat.metric(abs(readout.volts), "V", decimals: 2))   "
+                         + PhysicsFormat.metric(abs(readout.amps), "A", decimals: 2))
                         .font(DesignTokens.TypeScale.footnote.monospacedDigit())
-                    Text(PhysicsFormat.measurement(watts, "W", decimals: 2))
+                    Text(PhysicsFormat.metric(abs(readout.watts), "W", decimals: 2))
                         .font(DesignTokens.TypeScale.footnote.monospacedDigit())
                         .foregroundStyle(.secondary)
                 }

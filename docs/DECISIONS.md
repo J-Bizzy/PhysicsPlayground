@@ -16,6 +16,37 @@ A running log of consequential decisions — architectural, physical, or product
 
 (The template sat stranded at line 309, mid-log between two 2026-07-29 entries, until 2026-08-01.)
 
+## 2026-11-02 — Words and numbers agree
+
+**Decision:** A quantity is written the same way wherever it appears for the same object: on the part, on its ring's bead, on the floating card, in More's Values and inside a formula. The lab window's button and failure line use the home window's words. This is the seventh batch of the November polish pass.
+
+**Context:** The surveys found the same number written two ways side by side:
+- **Circuits:**
+  - a fuse's label kept its own one-decimal format (a 50 mA fuse read "0.1 A") while its bead read "0.05 A";
+  - the card wrote current in fixed milliamps, so a short read "180000.0 mA";
+  - More's voltage was fixed-point ("0.00 V") while the formula under the power row was auto-ranged;
+  - Ohm's law divided by "4700 Ω" under a part labelled "4.7 kΩ".
+- **Orbital Mechanics:** More said "1.00 Suns" while the bead said "1.00 Sun", and the guess's countdown said "d" while More's Elapsed said "days".
+- **Magnetism:** a magnet's moment was "6.0" on its track and "6.000" in More, and a coil's Turns petal announced "10000 turns" while More wrote "10,000".
+- **Electric Fields:** a charge was "1.0 µC" on its bead and "1.00 × 10⁻⁶ C" in More.
+- **Window copy:**
+  - the lab window said "Show in room" where the home window says "Show in Room", and "Couldn't open the room." where the home and the VoiceOver announcement say "The room couldn't open.";
+  - Light & Optics' "Light reaching the room" named a room in Deep space, where there is none.
+- **CLAUDE.md** said a circuit part's Delete arms before it fires. It never did: single deletes do not confirm (2026-10-14).
+
+**Consequences:**
+- **Circuits.** The fuse label goes through `CircuitsModel.formatValue`, like every other part. The card and More's current, voltage and power use `PhysicsFormat.metric` at two decimals, and Ohm's law divides by the part's own label.
+- **Orbital Mechanics.** "Star mass" is `PhysicsFormat.count`, and the guess counts "days".
+- **Magnetism.** More's moment is at the bead's tenth, and every turn count goes through `formatted()`.
+- **Electric Fields.** More writes a charge and the net charge in µC, to the bead's tenth.
+- **Optics.** `OpticsModule.landingName` says "the floor" when the light has no walls to meet (Deep space, or an unscanned room).
+- **Window copy.** The window says "Show in Room" and "The room couldn't open.".
+- **Left on purpose:** the card shows a part's magnitudes ("9.00 V") where More signs them ("−9.00 V"), because More's signs carry the passive convention its P = IV is written in.
+- **Tests:**
+  - `WordsAgreeTests` puts each pair side by side;
+  - `CircuitsModuleTests` now expects "1.00 A";
+  - `HomeChromeUITests` finds "Show in Room".
+
 ## 2026-11-02 — The tape is the recording
 
 **Decision:** While paused, the Time Capsule's rail maps what was actually recorded, end to end, and the closed reel turns by the share of the recording scrubbed (about four turns from "now" to the oldest frame, whatever the length). On Resume the reel holds its turn while it fades, and the rail's bead holds its place. The Pause button's VoiceOver hint promises a reel only while the Time Capsule is switched on. This is the sixth batch of the November polish pass.

@@ -46,9 +46,11 @@ enum OrbitalMechanicsModule {
                     .init("Elapsed", PhysicsFormat.fixed(model.simulatedDays, decimals: 1), "days"),
                 ]
                 if let star = model.primaryBody {
+                    // As its bead says it: "1.00 Sun", not "1.00 Suns".
                     rows.append(.init("Star mass",
-                                      PhysicsFormat.fixed(model.massInSuns(id: star.id),
-                                                          decimals: 2), "Suns"))
+                                      PhysicsFormat.count(model.massInSuns(id: star.id),
+                                                          singular: "Sun", plural: "Suns",
+                                                          decimals: 2)))
                 }
                 if let body = model.selectedBody, let readout = model.readout(for: body) {
                     let r = PhysicsFormat.fixed(readout.distanceAU, decimals: 2)

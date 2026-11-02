@@ -94,7 +94,7 @@ enum CircuitsModule {
             // not a "0.00 V" that its 140 µW cannot be the product of.
             let volts = PhysicsFormat.metric(readout.volts, "V", decimals: 2)
             rows.append(.init("\(name) current", amps, formula: ohm(component, volts: volts)))
-            rows.append(.init("\(name) voltage", PhysicsFormat.fixed(readout.volts, decimals: 2), "V"))
+            rows.append(.init("\(name) voltage", volts))
             // P = IV for every part, exactly: the solver's own definition.
             rows.append(.init("\(name) power", PhysicsFormat.metric(readout.watts, "W", decimals: 2),
                               formula: "P = IV = \(amps) × \(volts)"))
@@ -108,7 +108,7 @@ enum CircuitsModule {
     static func ohm(_ component: CircuitsModel.Component, volts: String) -> String? {
         switch component.kind {
         case .resistor where !component.failed, .bulb:
-            "I = V/R = \(volts) ÷ \(PhysicsFormat.fixed(component.value, decimals: 0)) Ω"
+            "I = V/R = \(volts) ÷ \(CircuitsModel.formatValue(component.value, for: component.kind))"
         default:
             nil
         }

@@ -64,8 +64,10 @@ enum MagnetismModule {
                   formula: "B = Σ (μ₀/4π)(3(m·r̂)r̂ − m)/r³"),
         ]
         if let selected = model.selectedMagnet {
+            // At the bead's tenth: three decimals here said the same magnet
+            // was 6.000 in More and 6.0 on its own track.
             rows.append(.init("Selected moment",
-                              PhysicsFormat.fixed(selected.strength, decimals: 3), "A·m²"))
+                              PhysicsFormat.fixed(selected.strength, decimals: 1), "A·m²"))
             let others = model.magnets.filter { $0.id != selected.id }
             if !others.isEmpty {
                 // Point dipole, matching the dynamics; see `MagnetismModel.step`.

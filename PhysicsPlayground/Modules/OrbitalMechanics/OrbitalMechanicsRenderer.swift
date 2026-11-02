@@ -95,8 +95,9 @@ final class OrbitalMechanicsRenderer {
             ghostCallout.map { Fade.tick($0.root, visible: true) }
             ghostCallout?.anchor(at: ghostEntity.position)
             let daysLeft = max(prediction.resolvesAt - model.simulatedDays, 0)
+            // Days in words, as More's Elapsed counts them.
             ghostCallout?.setText("your guess · "
-                                  + PhysicsFormat.measurement(daysLeft, "d", decimals: 0))
+                                  + PhysicsFormat.count(daysLeft, singular: "day", plural: "days"))
         } else {
             // Faded, not switched (2026-11-02): a guess resolved, or gone
             // with its planet, leaves as the arrows do.

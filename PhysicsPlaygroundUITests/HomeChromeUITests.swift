@@ -68,15 +68,15 @@ final class HomeChromeUITests: XCTestCase {
         XCTAssertTrue(row.waitForExistence(timeout: 5))
         row.tap()
 
-        // The catalog is replaced by the module's window. "Show in room" is on
+        // The catalog is replaced by the module's window. "Show in Room" is on
         // screen for exactly this run (the space is held back under
         // `-uiTesting`) and is a real capability. Not the module's title: the
         // catalog row carries that string as its accessibility label, so that
         // assertion would pass before the tap.
-        let entered = app.buttons["Show in room"].waitForExistence(timeout: 20)
+        let entered = app.buttons["Show in Room"].waitForExistence(timeout: 20)
         XCTAssertTrue(entered,
                       "tapping Circuit Workshop did not open its window: no "
-                      + "\"Show in room\" appeared. Either the row is not "
+                      + "\"Show in Room\" appeared. Either the row is not "
                       + "receiving the tap or its action is not wired.")
         XCTAssertFalse(app.buttons["lab.gravitylab"].exists,
                        "the module opened but the catalog is still up behind it")

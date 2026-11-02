@@ -73,7 +73,7 @@ final class PanelControlCriterionTests: XCTestCase {
             \(panels.map(\.lastPathComponent)) is a flat control surface \
             inside a module.
 
-            The module window is a TITLE BAR — plus "Show in room" while \
+            The module window is a TITLE BAR — plus "Show in Room" while \
             the space is closed, and the first-run hint for as long as it \
             stays closed. Nothing else (DECISIONS.md, 2026-08-01).
 

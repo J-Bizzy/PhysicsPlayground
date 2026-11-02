@@ -1811,11 +1811,10 @@ final class CircuitsRenderer {
     /// readout cannot disagree.
     static func labelText(for component: CircuitsModel.Component) -> String {
         switch component.kind {
-        case .battery, .acSource, .bulb, .capacitor, .inductor, .resistor:
+        case .battery, .acSource, .bulb, .capacitor, .inductor, .resistor, .fuse:
             CircuitsModel.formatValue(component.value, for: component.kind)
         case .switcher, .led: ""
         case .motor: motorRPMLabel(component.motorSpeed)
-        case .fuse: PhysicsFormat.measurement(component.value, "A", decimals: 1)
         }
     }
 

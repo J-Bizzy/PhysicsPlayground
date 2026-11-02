@@ -73,10 +73,17 @@ enum OpticsModule {
         }
         let emitted = trace.total
         if emitted > 0 {
-            rows.append(.init("Light reaching the room",
+            rows.append(.init(landingName(model.room),
                               PhysicsFormat.fixed(100 * trace.landed / emitted, decimals: 0), "%"))
         }
         return rows
+    }
+
+    /// Where the light that lands lands. With no walls to meet (Deep space,
+    /// or a room not yet scanned) the floor is all there is, and "the room"
+    /// named one that was not there.
+    static func landingName(_ room: LightTracer.Room) -> String {
+        room.walls.isEmpty ? "Light reaching the floor" : "Light reaching the room"
     }
 
     /// The wavelength a reading speaks for: the laser's if it lit the piece,

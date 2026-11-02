@@ -123,8 +123,10 @@ final class CircuitsModuleTests: XCTestCase {
         XCTAssertEqual(label(.switcher, closed: false), "")
         XCTAssertEqual(label(.led), "")
         XCTAssertEqual(label(.led, failed: true), "")
-        XCTAssertEqual(label(.fuse), "1.0 A")
-        XCTAssertEqual(label(.fuse, failed: true), "1.0 A", "a blown fuse shows its broken filament")
+        // The one authority, so the label and the bead agree: a 50 mA fuse's
+        // label read "0.1 A" at one decimal until 2026-11-02.
+        XCTAssertEqual(label(.fuse), "1.00 A")
+        XCTAssertEqual(label(.fuse, failed: true), "1.00 A", "a blown fuse shows its broken filament")
         XCTAssertEqual(label(.resistor, failed: true), label(.resistor),
                        "a scorched resistor shows its black ceramic")
         XCTAssertFalse(label(.acSource).contains("~"), "the dial carries the ~")

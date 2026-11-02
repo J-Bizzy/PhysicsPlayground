@@ -145,6 +145,21 @@ contradicts this section, this section is current.
 - [ ] **The cut test:** enter all seven labs in sequence; the room's
       brightness moves only at Orbital Mechanics, and ramps rather than steps.
 
+## ⟳ 2026-11-02 — words and numbers agree (batch 7)
+
+- [ ] **Circuits:** a fuse's label and its bead read the same number at
+      every click (50 mA reads "0.05 A"). Short the battery: the card says
+      "180.00 A", not milliamps. A 4.7 kΩ resistor's Ohm's law in More
+      divides by "4.7 kΩ".
+- [ ] **Orbits:** More's star mass reads "1.00 Sun" as its bead does; a
+      guess counts down in "days".
+- [ ] **Magnetism:** the moment in More matches the magnet's track to the
+      tenth; VoiceOver announces a coil's Turns as "10,000 turns".
+- [ ] **Electric Fields:** More writes the selected charge in µC.
+- [ ] **Light & Optics in Deep space:** More says "Light reaching the
+      floor".
+- [ ] **A lab's window with the space closed:** "Show in Room".
+
 ## ⟳ 2026-11-02 — the tape is the recording (batch 6)
 
 - [ ] **Pause a few seconds into a lab** and draw the tape out: the whole
