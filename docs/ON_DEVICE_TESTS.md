@@ -147,6 +147,27 @@ contradicts this section, this section is current.
 - [ ] **The cut test:** enter all seven labs in sequence; the room's
       brightness moves only at Orbital Mechanics, and ramps rather than steps.
 
+## ⟳ 2026-11-02 — a resize only when you mean it (hands, batch 1)
+
+In Circuit Workshop, Electric Fields, Magnetism and Orbital Mechanics —
+the four labs that resize. This supersedes "Both hands on ONE object (or
+empty space) resizes everywhere" below: empty space no longer does.
+- [ ] **Look at one object and pinch it with both hands at once,** then
+      spread them: the lab grows. Close them: it shrinks. Judge: does it
+      start when you mean it to, and is nothing lost by the small wait?
+- [ ] **Hold that pinch still:** the lab does not breathe with your hands.
+      It moves only once they have spread or closed by about 8 %, and then
+      picks up from where it stood, with no jump.
+- [ ] **Spread your hands without twisting:** the lab grows and does NOT
+      turn. Twist them past about 10°: now it turns, from where it stood.
+- [ ] **Carry something with one hand, then pinch with the other** —
+      on nothing, on another object, or on the same object: the lab never
+      resizes. (In Magnetism the second object moves; in the other three,
+      until hands batch 3, it does not.)
+- [ ] **Pinch two different objects at once,** one per hand: no resize.
+- [ ] **A resize held still for a second** keeps going when you move
+      again; it does not snap back.
+
 ## ⟳ 2026-11-02 — the music from the first frame, and the wordmark's beat
 
 Volume up, music on (Settings › Music, which was "Lab room tone").

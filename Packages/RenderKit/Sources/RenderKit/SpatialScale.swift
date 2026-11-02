@@ -31,9 +31,22 @@ public final class SpatialScaleRig {
     /// Committed turn about the vertical axis, radians.
     private(set) public var turn: Float = 0
 
+    /// How far apart or together the hands must move, as a factor, before
+    /// the view grows or shrinks at all: a held pinch wobbles by a few
+    /// per cent, and the rig used to follow every bit of it.
+    public static let scaleDeadBand: Float = 1.08
+    /// How far the hands must turn about each other before the view
+    /// turns: 10°, so a resize does not bring a twist along with it.
+    public static let turnDeadBand: Float = 10 * .pi / 180
+
     private var gestureStartScale: Float = 1
     private var gestureStartTurn: Float = 0
     private var isGesturing = false
+    /// The hands' magnification and turn at the moment each cleared its
+    /// dead band; nil until then. The view moves by what the hands do
+    /// after that moment, so it never jumps by the band it waited out.
+    private var scaleBaseline: Float?
+    private var turnBaseline: Float?
 
     /// Live values including the in-flight gesture.
     private(set) public var liveScale: Float = 1
@@ -54,8 +67,13 @@ public final class SpatialScaleRig {
         isGesturing = true
         gestureStartScale = scale
         gestureStartTurn = turn
+        scaleBaseline = nil
+        turnBaseline = nil
     }
 
+    /// Applies a magnification exactly, relative to the view at the
+    /// gesture's start. For a caller that knows the scale it wants (a
+    /// launch argument); the hands go through `handMagnification`.
     public func updateMagnification(_ magnification: Float) {
         beginGesture()
         liveScale = min(max(gestureStartScale * magnification, range.lowerBound),
@@ -68,6 +86,30 @@ public final class SpatialScaleRig {
         liveTurn = gestureStartTurn + radians
     }
 
+    /// The hands' magnification, through the dead band: nothing moves
+    /// until they have spread or closed by `scaleDeadBand`.
+    public func handMagnification(_ magnification: Float) {
+        beginGesture()
+        if scaleBaseline == nil {
+            guard magnification > Self.scaleDeadBand
+                || magnification < 1 / Self.scaleDeadBand else { return }
+            scaleBaseline = magnification
+        }
+        updateMagnification(magnification / (scaleBaseline ?? 1))
+    }
+
+    /// The hands' turn, through its own dead band, independently of the
+    /// scale's: spreading the hands never turns the view on the way.
+    public func handRotation(radians: Float) {
+        guard allowsTurn else { return }
+        beginGesture()
+        if turnBaseline == nil {
+            guard abs(radians) > Self.turnDeadBand else { return }
+            turnBaseline = radians
+        }
+        updateRotation(radians: radians - (turnBaseline ?? 0))
+    }
+
     /// Commits the in-flight gesture: whatever the hands did becomes the
     /// new view. Call this when a gesture genuinely finishes.
     public func endGesture() {
@@ -78,9 +120,8 @@ public final class SpatialScaleRig {
     }
 
     /// Abandons the in-flight gesture, restoring the view to where it
-    /// stood when the hands closed. Not interchangeable with endGesture:
-    /// the same-object rule must cancel (not commit) a suppressed pinch,
-    /// or grabbing two objects leaves the bench permanently scaled.
+    /// stood when the hands closed. Not interchangeable with endGesture,
+    /// which would keep whatever the hands had done.
     public func cancelGesture() {
         guard isGesturing else { return }
         isGesturing = false
@@ -121,52 +162,110 @@ public final class SpatialScaleRig {
     public var label: String { String(format: "%.1f×", liveScale) }
 }
 
-/// Tracks which entities are currently being pinched, so a two-hand
-/// gesture can tell "both hands on one object" (resize) from "one object
-/// in each hand" (two grabs — rig stays out). Fed from a passive
-/// `SpatialEventGesture` that carries each pinch's targeted entity.
+/// Tracks every live pinch — what it landed on and when it closed — so a
+/// two-hand gesture is a resize only when it was meant as one: both hands
+/// closing on ONE object at about the same moment. One object in each
+/// hand, a hand that closes on nothing, or a second hand joining one that
+/// is already carrying something are all something else, and the rig
+/// stays out. Until 2026-11-02 anything short of two different objects
+/// resized, so a second pinch that missed scaled the lab. Fed from a
+/// passive `SpatialEventGesture` that carries each pinch's targeted
+/// entity.
 @MainActor
 public final class PinchLedger {
     /// How long an unmentioned pinch stays on the books. A hand that
     /// leaves the tracking volume mid-pinch never emits its removing
-    /// event, so without expiry its owner sticks forever and two-hand
-    /// zoom silently dies for the session. Longer than a frame gap, far
-    /// shorter than a user notices.
+    /// event, so without expiry it would stay held forever. Longer than a
+    /// frame gap, far shorter than a user notices.
     public static let staleAfter: Double = 0.5
 
-    private var owners: [SpatialEventCollection.Event.ID: (owner: Entity, seen: Double)] = [:]
+    /// How near together the two hands must close for their pinch to be a
+    /// resize. Looking at one thing and pinching with both hands closes
+    /// them well inside this; reaching for a second object means first
+    /// looking at it, which takes longer.
+    public static let togetherWithin: Double = 0.4
+
+    /// What the pinches on the books add up to.
+    public enum Verdict: Equatable, Sendable {
+        /// Fewer than two pinches reported yet: the other hand's may still
+        /// be on its way.
+        case undecided
+        /// Both hands closed on one object together.
+        case resize
+        /// Anything else two hands do.
+        case refuse
+    }
+
+    private struct Pinch {
+        /// What the pinch landed on, kept from its first report: nil for a
+        /// pinch on nothing nameable.
+        let owner: Entity?
+        let began: Double
+        var seen: Double
+    }
+
+    private var pinches: [AnyHashable: Pinch] = [:]
+    /// The verdict on the two-hand gesture in hand, once one is given.
+    private var latched = Verdict.undecided
 
     public init() {}
 
-    /// `now` is injectable so the expiry can be tested; production
-    /// callers use the media clock.
+    /// `now` is injectable so the rule can be tested; production callers
+    /// use the media clock.
     public func update(_ events: SpatialEventCollection,
                        now: Double = CACurrentMediaTime()) {
         for event in events {
-            if event.phase == .active, let target = event.targetedEntity {
-                owners[event.id] = (Self.owner(of: target), now)
-            } else {
-                owners[event.id] = nil
-            }
+            record(event.id, active: event.phase == .active,
+                   on: event.targetedEntity, now: now)
         }
         expire(now: now)
     }
 
-    public func clear() { owners.removeAll() }
+    /// One pinch's report, as `update` reads it from an event. Public so the
+    /// rule can be tested without a hand.
+    public func record(_ id: AnyHashable, active: Bool, on target: Entity?,
+                       now: Double = CACurrentMediaTime()) {
+        guard active else {
+            pinches[id] = nil
+            return
+        }
+        if pinches[id] != nil {
+            pinches[id]?.seen = now
+        } else {
+            pinches[id] = Pinch(owner: target.map(Self.owner(of:)), began: now, seen: now)
+        }
+    }
 
     private func expire(now: Double) {
-        owners = owners.filter { now - $0.value.seen < Self.staleAfter }
+        pinches = pinches.filter { now - $0.value.seen < Self.staleAfter }
     }
 
-    /// Whether a two-hand scale may run: true while the live pinches
-    /// rest on at most one distinct object (or on nothing nameable).
-    public func allowsScale(now: Double = CACurrentMediaTime()) -> Bool {
+    /// The live pinches judged as they stand.
+    public func verdict(now: Double = CACurrentMediaTime()) -> Verdict {
         expire(now: now)
-        return Self.distinctOwnerCount(of: owners.values.map(\.owner)) < 2
+        let live = Array(pinches.values)
+        guard live.count >= 2 else { return .undecided }
+        let owners = live.compactMap(\.owner)
+        guard owners.count == live.count,
+              Self.distinctOwnerCount(of: owners) == 1 else { return .refuse }
+        let closes = live.map(\.began)
+        guard let first = closes.min(), let last = closes.max(),
+              last - first <= Self.togetherWithin else { return .refuse }
+        return .resize
     }
 
-    /// The same question, asked at the current instant.
-    public var allowsScale: Bool { allowsScale() }
+    /// The verdict for the gesture in progress, kept once given: a resize
+    /// that has begun runs to its end even while a still hand's pinch goes
+    /// quiet, and a refused one never starts halfway through.
+    public func decide(now: Double = CACurrentMediaTime()) -> Verdict {
+        if latched == .undecided { latched = verdict(now: now) }
+        return latched
+    }
+
+    /// The two-hand gesture is over; the next is judged afresh. The pinches
+    /// stay on the books — a hand still carrying something closed when it
+    /// closed, and must not look as though it had just closed again.
+    public func gestureEnded() { latched = .undecided }
 
     /// A pinch lands on whatever collider was hit — a glyph, a halo, a
     /// terminal — so it is walked up to the nearest named ancestor,
@@ -192,46 +291,16 @@ public final class PinchLedger {
 }
 
 public extension View {
-    /// Attaches two-handed scale (and optional turn) to a module scene,
-    /// firing on any two grabbable objects the hands pinch. Deliberately
-    /// No region-covering input plate: hit-testing uses colliders, so a
-    /// plate would shield every object inside it from every pinch. The
-    /// same-object rule (via `PinchLedger`) suppresses the rig while two
-    /// pinches rest on two different objects — that is two grabs.
+    /// Attaches two-handed scale (and optional turn) to a module scene:
+    /// look at one object, pinch it with both hands together, and spread
+    /// or close them. Deliberately no region-covering input plate:
+    /// hit-testing uses colliders, so a plate would shield every object
+    /// inside it from every pinch. `PinchLedger` decides whether the
+    /// hands meant a resize; anything else they do leaves the rig alone.
+    /// (A multi-rig variant routed by station went on 2026-11-02, unused
+    /// since the merged worlds and resizing on any two pinches.)
     func spatialScale(_ rig: SpatialScaleRig) -> some View {
         modifier(SpatialScaleModifier(rig: rig))
-    }
-
-    /// The same gesture for a scene holding more than one apparatus:
-    /// `route` walks the pinched entity up to the station that owns it and
-    /// only that rig moves. A gesture end is applied to all `rigs` (a
-    /// no-op on any not gesturing), so a hand drifting off its start
-    /// entity can't leave the original rig stuck mid-gesture.
-    func spatialScale(
-        rigs: [SpatialScaleRig],
-        routing route: @escaping (Entity) -> SpatialScaleRig?
-    ) -> some View {
-        self
-            .simultaneousGesture(
-                MagnifyGesture()
-                    .targetedToAnyEntity()
-                    .onChanged { value in
-                        route(value.entity)?
-                            .updateMagnification(Float(value.magnification))
-                    }
-                    .onEnded { _ in rigs.forEach { $0.endGesture() } }
-            )
-            .simultaneousGesture(
-                RotateGesture3D(constrainedToAxis: .y)
-                    .targetedToAnyEntity()
-                    .onChanged { value in
-                        let rotation = value.rotation
-                        let angle = Float(rotation.angle.radians)
-                        let sign: Float = rotation.axis.y < 0 ? -1 : 1
-                        route(value.entity)?.updateRotation(radians: angle * sign)
-                    }
-                    .onEnded { _ in rigs.forEach { $0.endGesture() } }
-            )
     }
 }
 
@@ -257,37 +326,31 @@ public struct SpatialScaleModifier: ViewModifier {
                 MagnifyGesture()
                     .targetedToAnyEntity()
                     .onChanged { value in
-                        // Cancel, not end — `endGesture` would commit the
-                        // partial swell this guard exists to reject.
-                        guard ledger.allowsScale else {
-                            rig.cancelGesture()
-                            return
-                        }
-                        rig.updateMagnification(Float(value.magnification))
+                        // Nothing moves until the hands are judged a resize,
+                        // so a refused gesture has nothing to take back.
+                        guard ledger.decide() == .resize else { return }
+                        rig.handMagnification(Float(value.magnification))
                     }
                     .onEnded { _ in
                         rig.endGesture()
-                        ledger.clear()
+                        ledger.gestureEnded()
                     }
             )
             .simultaneousGesture(
                 RotateGesture3D(constrainedToAxis: .y)
                     .targetedToAnyEntity()
                     .onChanged { value in
-                        guard ledger.allowsScale else {
-                            rig.cancelGesture()
-                            return
-                        }
+                        guard ledger.decide() == .resize else { return }
                         // The rotation arrives as a 3-D rotation about Y;
                         // its angle carries the sign we want.
                         let rotation = value.rotation
                         let angle = Float(rotation.angle.radians)
                         let sign: Float = rotation.axis.y < 0 ? -1 : 1
-                        rig.updateRotation(radians: angle * sign)
+                        rig.handRotation(radians: angle * sign)
                     }
                     .onEnded { _ in
                         rig.endGesture()
-                        ledger.clear()
+                        ledger.gestureEnded()
                     }
             )
     }

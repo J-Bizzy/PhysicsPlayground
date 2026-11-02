@@ -16,6 +16,23 @@ A running log of consequential decisions — architectural, physical, or product
 
 (The template sat stranded at line 309, mid-log between two 2026-07-29 entries, until 2026-08-01.)
 
+## 2026-11-02 — A resize only when both hands take one thing together
+
+**Decision:** The two-hand resize (`RenderKit/SpatialScale.swift`, in Circuit Workshop, Electric Fields, Magnetism and Orbital Mechanics) starts only when both hands close on ONE object within `PinchLedger.togetherWithin` (0.4 s) of each other. It then waits out a dead band: nothing moves until the hands have spread or closed by `scaleDeadBand` (8 %), or turned by `turnDeadBand` (10°), each on its own, and from that moment the view moves from where it stood. The owner's pick from three, the others being the same rule with a half-second hold first, and no two-hand resize at all, with a Zoom slider in More instead.
+
+**Context:**
+- **The owner:** resizing happened "anytime I try to pinch with my two fingers", and it was "very clunky".
+- **The old rule resized unless the two pinches rested on two different objects.** A second pinch that landed on nothing, or a second hand joining one already carrying something, therefore resized the lab. Reaching for a second object and missing it was the usual way in.
+- **The rig followed every per cent of a held pinch's wobble,** and turned as it scaled, so spreading the hands brought a twist with it.
+
+**Consequences:**
+- **`PinchLedger` keeps each pinch's owner and the moment it closed,** and gives a `Verdict`. It is undecided below two pinches, a resize for one owner closed together, and refused for everything else. The verdict is latched per gesture: a resize runs to its end while a still hand goes quiet past `staleAfter`, and a refusal never starts halfway.
+- **The ledger is no longer cleared when a gesture ends.** A hand still carrying something must keep the moment it closed, or a quick second pinch would read as "together".
+- **The hands go through `handMagnification`/`handRotation`.** `updateMagnification` stays exact for `-viewScale`.
+- **`PinchLedgerTests` and `SpatialScaleDeadBandTests` hold the rule.** Whether 0.4 s and 8 % feel right is a headset question.
+- **The unused multi-rig `spatialScale(rigs:routing:)` is deleted.** It was a merged-worlds leftover that resized on any two pinches.
+- **Supersedes "both hands on one object (or empty space) resizes"** in `ON_DEVICE_TESTS.md`: empty space no longer does.
+
 ## 2026-11-02 — The music plays from the first frame, and the wordmark has its own beat
 
 **Decision:** Two habits borrowed from another visionOS app the owner admires (Astronoma³, by Augmenos), chosen from four:

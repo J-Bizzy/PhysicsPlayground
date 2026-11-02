@@ -230,8 +230,8 @@ struct MagnetismSpaceView: View {
     // `DragGesture` is a single recogniser, so the second hand's pinch is
     // never delivered to it; raw `SpatialEventGesture` events carry their
     // own ids, so each hand gets its own grab session. A second pinch on an
-    // already-held object starts no session and falls through to the
-    // two-hand scale.
+    // already-held object starts no session: closed together with the
+    // first, it is the two-hand scale (`PinchLedger`); later, it is nothing.
 
     /// One hand's live hold: what it grabbed, and the relative drag
     /// anchored where it grabbed it.
@@ -353,8 +353,8 @@ struct MagnetismSpaceView: View {
             }
             if let id = UUID(uuidString: candidate.name),
                let magnet = model.magnets.first(where: { $0.id == id }) {
-                // A second hand on a held magnet is the resize gesture,
-                // not a second grab.
+                // A second hand on a held magnet is never a second grab
+                // (the resize, if it closed with the first).
                 guard !model.heldIDs.contains(id) else { return nil }
                 model.grab(id: id)
                 Self.acknowledgeGrab(candidate)
