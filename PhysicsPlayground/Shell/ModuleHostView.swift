@@ -92,9 +92,8 @@ struct ModuleHostView: View {
                               iconOnly: true) {
                     module.togglePause()
                 }
-                .accessibilityHint(paused
-                    ? "Runs the lab again, from the moment on screen"
-                    : "Freezes the lab; a reel appears to rewind it")
+                .accessibilityHint(Self.pauseHint(
+                    paused: paused, recording: appModel.settings.timeCapsule))
             }
 
             if !appModel.isImmersiveSpaceOpen {
@@ -160,5 +159,13 @@ struct ModuleHostView: View {
         // above the apparatus band instead of inside it. The wearer can still
         // park the window anywhere.
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+    }
+
+    /// What Pause says it does. The reel is promised only while the Time
+    /// Capsule records: switched off in Settings, a pause is just a pause.
+    static func pauseHint(paused: Bool, recording: Bool) -> String {
+        if paused { return "Runs the lab again, from the moment on screen" }
+        return recording ? "Freezes the lab; a reel appears to rewind it"
+                         : "Freezes the lab"
     }
 }

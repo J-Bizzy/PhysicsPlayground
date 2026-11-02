@@ -16,6 +16,22 @@ A running log of consequential decisions — architectural, physical, or product
 
 (The template sat stranded at line 309, mid-log between two 2026-07-29 entries, until 2026-08-01.)
 
+## 2026-11-02 — The tape is the recording
+
+**Decision:** While paused, the Time Capsule's rail maps what was actually recorded, end to end, and the closed reel turns by the share of the recording scrubbed (about four turns from "now" to the oldest frame, whatever the length). On Resume the reel holds its turn while it fades, and the rail's bead holds its place. The Pause button's VoiceOver hint promises a reel only while the Time Capsule is switched on. This is the sixth batch of the November polish pass.
+
+**Context:**
+- **The rail always mapped 30 s.** With 5 s recorded, the left five-sixths of it was the oldest frame, and a drag across most of the rail did nothing. Its subtitle rounded to whole seconds, so half a second read "0 s recorded".
+- **The reel snapped on Resume.** Its scrub share was read live, so the frame the room resumed it jumped to zero while the reel was still fading, a turn or more in one frame. The bead jumped to "now" on the same frame.
+- **Pause promised a reel** ("a reel appears to rewind it") with the Time Capsule switched off in Settings, where none ever appears.
+
+**Consequences:**
+- **`SpatialTrackControl.range` is settable.** The slider reads it from its observable display, so it remaps in place.
+- **The rail remaps only while paused,** since the recording grows again once the room runs, and a rail fading out must not remap under its bead.
+- **Holding the reel is the honest reading,** not a compromise: Resume cuts the recording at the instant on screen, so the reel already stands where the recording ends. A pause that comes back mid-fade carries the reel on from where it stands.
+- **Left as it was:** in the first half second of a lab, Pause still mentions the reel, though none appears until there is half a second to rewind. Saying so exactly needs a hint that changes under the finger, and the bar would have to re-render as the recording grows.
+- **Tests:** `TimeRailTests` (the rail's mapping, the reel's share, no snap on Resume or on a pause mid-fade, the subtitle, the hint) and `SpatialTrackControlTests.testARangeMovedInPlaceRemapsTheRail`.
+
 ## 2026-11-02 — Nothing pops while its neighbours fade
 
 **Decision:** An object leaving the room (deleted, cleared, evicted, merged away) fades and shrinks a little over 0.15 s instead of vanishing in one frame, and a layer switched in More fades rather than snapping. The halo, the ring and the arrows around them already faded. This is the fifth batch of the November polish pass.

@@ -145,6 +145,18 @@ contradicts this section, this section is current.
 - [ ] **The cut test:** enter all seven labs in sequence; the room's
       brightness moves only at Orbital Mechanics, and ramps rather than steps.
 
+## ⟳ 2026-11-02 — the tape is the recording (batch 6)
+
+- [ ] **Pause a few seconds into a lab** and draw the tape out: the whole
+      rail is what was recorded ("6.0 s recorded" under it), and a drag
+      from end to end runs from the oldest frame to "now".
+- [ ] **Scrub back, then Resume:** the reel and the bead hold still as
+      they fade; nothing jumps to "now" on the way out.
+- [ ] **Pause, Resume and Pause again quickly:** the reel picks up where
+      it stood.
+- [ ] **VoiceOver, Time Capsule off in Settings:** Pause's hint says
+      "Freezes the lab" and nothing about a reel.
+
 ## ⟳ 2026-11-02 — nothing pops (batch 5)
 
 - [ ] **Delete one of everything** (a bob, a magnet, a coil, a charge, a

@@ -117,6 +117,18 @@ final class SpatialTrackControlTests: XCTestCase {
         XCTAssertEqual(box.value, 100)
     }
 
+    /// A range moved in place remaps the same rail: the Time Capsule's
+    /// track maps whatever was recorded, which changes between pauses.
+    func testARangeMovedInPlaceRemapsTheRail() {
+        let (track, box) = makeTrack()
+        track.range = 0...10
+
+        track.adjust(hand: SIMD3(0, 0, 0))
+        XCTAssertEqual(box.value, 5, accuracy: tolerance)
+        track.adjust(hand: SIMD3(5, 0, 0))
+        XCTAssertEqual(box.value, 10)
+    }
+
     /// The rail is placed in the parent's space and may be turned to face
     /// its reader; the mapping must survive both.
     func testTheMappingSurvivesBeingMovedAndTurned() {

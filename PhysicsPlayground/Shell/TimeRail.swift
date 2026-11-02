@@ -27,7 +27,8 @@ final class TimeRail {
     /// inside the simulator's frame. Safe under the apparatus because it
     /// exists only while paused.
     static let home = SIMD3<Float>(0, 1.20, -1.20)
-    /// The capsule window the rail maps, newest at the right-hand end.
+    /// The capsule's whole window, newest at the right-hand end: what the
+    /// rail maps before a pause has told it what was recorded.
     static let range = -30.0...0.0
     /// A rail over an empty recording is a control over nothing — it
     /// stays folded until there is at least this much to scrub.
@@ -36,9 +37,11 @@ final class TimeRail {
     /// Where the reel is mounted relative to `root`: to the left of the
     /// rail, which is tape drawn off it.
     static let reelOffset = SIMD3<Float>(-0.24, 0, 0)
-    /// How far the reel turns per second of recording scrubbed; the 30 s
-    /// window is about four turns.
-    static let radiansPerSecond: Float = 0.9
+    /// How far the reel turns for the bead's run from "now" to the oldest
+    /// frame — about four turns, however long the recording: the rail maps
+    /// what was recorded end to end, so the same travel turns the reel as
+    /// far.
+    static let radiansPerRecording: Float = 27
     /// The rail's length, which is also the length of tape drawn off the
     /// reel when it opens.
     static let railLength: Float = 0.34
@@ -86,6 +89,11 @@ final class TimeRail {
     private var coastVelocity: Float = 0
     private var coastAngle: Float = 0
     private var wasPresent = false
+    /// The scrub's share of the reel's turn. It follows the bead while
+    /// paused and holds once the room runs: Resume cuts the recording at
+    /// the instant on screen, so the reel already stands where the
+    /// recording ends. It snapped to zero mid-fade until 2026-11-02.
+    private var scrubAngle: Float = 0
 
     /// The system Reduce Motion setting, pushed in by the host. Stops the
     /// coast (decorative) and leaves the draw alone (an answer to a pinch).
@@ -120,7 +128,7 @@ final class TimeRail {
             subtitle: { _ in
                 let span = scrub.span()
                 let seconds = span.map { $0.upperBound - $0.lowerBound } ?? 0
-                return String(format: "%.0f s recorded", seconds)
+                return Self.recordedText(seconds)
             })
         root.addChild(track.root)
 
@@ -197,8 +205,21 @@ final class TimeRail {
     /// Whether the rail should be out: paused, with a recording worth
     /// scrubbing.
     private var wantsPresence: Bool {
-        guard isPaused(), let span = controls.span() else { return false }
-        return span.upperBound - span.lowerBound >= Self.minimumSpan
+        guard isPaused(), let recorded else { return false }
+        return recorded >= Self.minimumSpan
+    }
+
+    /// Seconds recorded, oldest frame to newest; nil while nothing is.
+    private var recorded: Double? {
+        controls.span().map { $0.upperBound - $0.lowerBound }
+    }
+
+    /// The subtitle under the rail: tenths while the recording is short,
+    /// where "1 s recorded" would round half a second away.
+    static func recordedText(_ seconds: Double) -> String {
+        seconds < 9.95
+            ? String(format: "%.1f s recorded", seconds)
+            : String(format: "%.0f s recorded", seconds)
     }
 
     /// Per frame: stand at the apparatus hem (riding the lab-placement
@@ -216,14 +237,29 @@ final class TimeRail {
             root.orientation = facing
         }
 
-        let target: Float = wantsPresence ? 1 : 0
+        let present = wantsPresence
+        let target: Float = present ? 1 : 0
         // The reel arrives coasting: recording stopped at the instant of the
         // pause.
-        if wantsPresence, !wasPresent {
+        if present, !wasPresent {
             coastVelocity = stillness ? 0 : -Self.coastSpeed
-            coastAngle = 0
+            // It carries on from wherever it stands, so a pause that comes
+            // back mid-fade does not jump the reel.
+            let scrubNow = Float(fractionScrubbedBack) * Self.radiansPerRecording
+            coastAngle = remainder(coastAngle + scrubAngle - scrubNow, 2 * .pi)
+            scrubAngle = scrubNow
         }
-        wasPresent = wantsPresence
+        wasPresent = present
+        // The rail maps what was recorded, end to end: with 5 s on the reel,
+        // the whole rail is those 5 s, not a sixth of a 30 s window. Only
+        // while paused — the recording grows again once the room runs, and a
+        // rail fading out must not remap under its bead.
+        if present, let recorded {
+            let mapped = -recorded...0
+            if abs(track.range.lowerBound - mapped.lowerBound) > 1e-9 {
+                track.range = mapped
+            }
+        }
         if visibility != target {
             let rate = Float(min(dt * 6, 1))
             visibility += (target - visibility) * rate
@@ -232,7 +268,7 @@ final class TimeRail {
         }
         // The tape winds itself back in when the instrument leaves, so the next
         // pause opens on a reel.
-        if !wantsPresence, isOpen { isOpen = false }
+        if !present, isOpen { isOpen = false }
         guard isVisible else { return }
 
         let drawTarget: Float = isOpen ? 1 : 0
@@ -251,25 +287,31 @@ final class TimeRail {
             coastVelocity *= exp(-Float(dt) / Self.coastTau)
             if abs(coastVelocity) < 0.02 { coastVelocity = 0 }
         }
+        if present {
+            scrubAngle = Float(fractionScrubbedBack) * Self.radiansPerRecording
+        }
         let fromDraw = -(Self.railLength * drawn) / Self.tapeRadius
-        let fromScrub = Float(secondsScrubbedBack) * Self.radiansPerSecond
         spindle.orientation = simd_quatf(
-            angle: fromDraw + fromScrub + coastAngle, axis: [0, 0, 1])
+            angle: fromDraw + scrubAngle + coastAngle, axis: [0, 0, 1])
 
+        // Leaving, the bead stays where it was while the tape winds in; the
+        // instant it showed is "now" the moment the room runs, and a bead
+        // jumping to the end of a fading rail says nothing.
         guard openness > 0.02 else { return }
-        track.refresh()
+        if present { track.refresh() }
         // The plates lay out relative to their own root and inherit the rail's
         // yaw. They never recede: they exist only while the tape is out, and a
         // scrub control that dims mid-scrub fights the hand.
         plates.update(anchor: plates.root.position, viewer: nil, dt: dt)
     }
 
-    /// How far back the scrub currently stands, in seconds. Zero while
-    /// live — the reel is fully wound.
-    private var secondsScrubbedBack: Double {
-        guard let time = controls.scrubTime(), let span = controls.span()
+    /// How far back the scrub stands, as a share of the recording: 0 at
+    /// "now" (and while live), 1 at the oldest frame.
+    private var fractionScrubbedBack: Double {
+        guard let time = controls.scrubTime(), let span = controls.span(),
+              span.upperBound > span.lowerBound
         else { return 0 }
-        return span.upperBound - time
+        return (span.upperBound - time) / (span.upperBound - span.lowerBound)
     }
 
     /// Draws the tape out, or winds it in: the rail and its plates slide

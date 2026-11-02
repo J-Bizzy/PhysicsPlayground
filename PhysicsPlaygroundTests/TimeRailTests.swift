@@ -366,11 +366,13 @@ final class TimeRailTests: XCTestCase {
     /// Asserts a spindle carries a rotation of `angle` about Z. Two
     /// quaternions describe the same rotation when |q₁ · q₂| is 1, which
     /// is wrap-proof in a way comparing angles is not.
-    private func assertTurned(_ entity: Entity, by angle: Float,
+    private func assertTurned(_ entity: Entity,
+                              from start: simd_quatf = simd_quatf(ix: 0, iy: 0, iz: 0, r: 1),
+                              by angle: Float,
                               _ message: String,
                               file: StaticString = #filePath,
                               line: UInt = #line) {
-        let expected = simd_quatf(angle: angle, axis: [0, 0, 1])
+        let expected = simd_quatf(angle: angle, axis: [0, 0, 1]) * start
         let alignment = abs(simd_dot(entity.orientation.vector, expected.vector))
         XCTAssertEqual(alignment, 1, accuracy: 1e-3, message,
                        file: file, line: line)
@@ -400,6 +402,109 @@ final class TimeRailTests: XCTestCase {
             try XCTUnwrap(mount.children.first { $0 !== spindle }).orientation.angle,
             plateUpright.angle, accuracy: 1e-6,
             "The nameplate turned with the reel")
+    }
+
+    // MARK: The tape is the recording (2026-11-02)
+
+    /// The rail maps what was recorded, end to end. It used to map a fixed
+    /// 30 s, so with 2 s on the reel everything left of the last fifteenth
+    /// of the rail was the oldest frame, and the middle of it was too.
+    func testTheRailMapsWhatWasRecorded() throws {
+        let (module, model, _) = makeRecordedModule()
+        let rail = TimeRail(module: module)
+        settleOpen(rail)
+        let trackEntity = try XCTUnwrap(rail.root.findEntity(named: "Time"))
+        let center = SIMD3<Double>(SIMD3<Float>(rail.root.position))
+        let span = try XCTUnwrap(model.capsuleSpan)
+        let recorded = span.upperBound - span.lowerBound
+
+        XCTAssertTrue(rail.handleDrag(entity: trackEntity, handWorld: center))
+        XCTAssertEqual(span.upperBound - (try XCTUnwrap(model.scrubTime)),
+                       recorded / 2, accuracy: dt,
+                       "Half way along the rail should be half way back")
+
+        let quarter = Double(TimeRail.railLength) / 4
+        XCTAssertTrue(rail.handleDrag(entity: trackEntity,
+                                      handWorld: center + SIMD3(quarter, 0, 0)))
+        XCTAssertEqual(span.upperBound - (try XCTUnwrap(model.scrubTime)),
+                       recorded / 4, accuracy: dt)
+        rail.endDrag()
+    }
+
+    /// The closed reel reads the share of the recording scrubbed: the bead
+    /// at the oldest frame has turned it the same four-odd turns whatever
+    /// the recording's length.
+    func testTheReelTurnsByTheShareOfTheRecording() throws {
+        let (module, _, _) = makeRecordedModule()
+        let rail = TimeRail(module: module)
+        rail.stillness = true          // isolate the scrub from the coast
+        settleOpen(rail)
+        let spindle = try XCTUnwrap(reel(rail).children.first)
+
+        module.timeScrub.scrub(60)     // clamped to the oldest frame
+        settle(rail)
+        assertTurned(spindle,
+                     by: -TimeRail.railLength / TimeRail.tapeRadius
+                         + TimeRail.radiansPerRecording,
+                     "The reel did not turn by the whole recording")
+    }
+
+    /// Resume cuts the recording at the instant on screen, so the reel is
+    /// already where the recording ends: it holds its scrub turn while it
+    /// fades, where it used to snap a few turns home on the first frame.
+    func testResumingFromAScrubDoesNotSnapTheReel() throws {
+        let (module, _, _) = makeRecordedModule()
+        let rail = TimeRail(module: module)
+        // Wound and still, so the scrub is the only thing that turns it:
+        // drawn out, the tape winding in turns it too, and rightly.
+        rail.stillness = true
+        settle(rail)
+        let spindle = try XCTUnwrap(reel(rail).children.first)
+        module.timeScrub.scrub(1.0)
+        settle(rail)
+        let before = spindle.orientation
+
+        module.togglePause()
+        rail.update(dt: 1.0 / 90.0, viewer: [0, 1.6, 1], placement: .zero)
+        XCTAssertTrue(rail.isVisible, "The reel should still be fading")
+        assertTurned(spindle, from: before, by: 0, "The reel snapped as the room resumed")
+    }
+
+    /// A pause that comes back while the reel is still fading out picks it
+    /// up where it stands rather than jumping it.
+    func testAPauseMidFadeDoesNotJumpTheReel() throws {
+        let (module, model, _) = makeRecordedModule()
+        let rail = TimeRail(module: module)
+        rail.stillness = true
+        settle(rail)
+        let spindle = try XCTUnwrap(reel(rail).children.first)
+        module.timeScrub.scrub(1.0)
+        settle(rail)
+
+        module.togglePause()
+        for _ in 0..<3 { rail.update(dt: 1.0 / 90.0, viewer: [0, 1.6, 1], placement: .zero) }
+        let before = spindle.orientation
+        model.isPaused = true
+        rail.update(dt: 1.0 / 90.0, viewer: [0, 1.6, 1], placement: .zero)
+        XCTAssertTrue(rail.isVisible)
+        assertTurned(spindle, from: before, by: 0, "The reel jumped as the pause came back")
+    }
+
+    /// The subtitle names the recording to the tenth while it is short.
+    func testTheRecordingIsNamedToTheTenthWhileShort() {
+        XCTAssertEqual(TimeRail.recordedText(0.5), "0.5 s recorded")
+        XCTAssertEqual(TimeRail.recordedText(4.24), "4.2 s recorded")
+        XCTAssertEqual(TimeRail.recordedText(30), "30 s recorded")
+    }
+
+    /// Pause promises the reel only while the Time Capsule records.
+    func testPausePromisesAReelOnlyWhileRecording() {
+        XCTAssertTrue(ModuleHostView.pauseHint(paused: false, recording: true)
+            .contains("reel"))
+        XCTAssertFalse(ModuleHostView.pauseHint(paused: false, recording: false)
+            .contains("reel"), "Pause promised a reel the Settings switched off")
+        XCTAssertTrue(ModuleHostView.pauseHint(paused: true, recording: false)
+            .hasPrefix("Runs"))
     }
 
     /// Every module answers the scrub contract — the rail is shell

@@ -21,11 +21,15 @@ import SwiftUI
 import simd
 
 /// What the slider shows, bumped only when the displayed value changes
-/// under it, so the view re-reads its model.
+/// under it, so the view re-reads its model; and the range it maps,
+/// which a track over a changing span moves in place.
 @MainActor
 @Observable
 final class TrackDisplay {
     var version = 0
+    var range: ClosedRange<Double>
+
+    init(range: ClosedRange<Double>) { self.range = range }
 }
 
 @MainActor
@@ -34,14 +38,24 @@ public final class SpatialTrackControl {
     public let name: String
 
     private let layout: TrackLayout
-    private let range: ClosedRange<Double>
+    /// The values the rail maps, end to end. Settable: the Time Capsule's
+    /// rail maps whatever has been recorded, so its range moves between
+    /// pauses, and the slider is told.
+    public var range: ClosedRange<Double> {
+        didSet {
+            guard range != oldValue else { return }
+            display.range = range
+            lastShown = ""
+            refresh()
+        }
+    }
     private let read: () -> Double
     private let write: (Double) -> Void
     private let format: (Double) -> String
     /// A second, quieter line under the slider — for a value that derives
     /// something (the ΔV rail's E = V/d).
     private let subtitle: ((Double) -> String)?
-    private let display = TrackDisplay()
+    private let display: TrackDisplay
     private var lastShown = ""
     private var isDragging = false
 
@@ -61,6 +75,7 @@ public final class SpatialTrackControl {
         self.name = name
         self.layout = layout
         self.range = range
+        self.display = TrackDisplay(range: range)
         self.read = read
         self.write = write
         self.format = format
@@ -72,7 +87,7 @@ public final class SpatialTrackControl {
 
         let width = CGFloat(layout.length) * CGFloat(ControlMetrics.pointsPerMeter)
         let display = self.display
-        let card = TrackCard(title: spokenName ?? name, range: range,
+        let card = TrackCard(title: spokenName ?? name,
                              read: read, write: write, format: format,
                              subtitle: subtitle, display: display)
             .frame(width: width)
@@ -160,7 +175,6 @@ public final class SpatialTrackControl {
 /// The slider and its derived line, re-read whenever `display` moves.
 private struct TrackCard: View {
     let title: String
-    let range: ClosedRange<Double>
     let read: () -> Double
     let write: (Double) -> Void
     let format: (Double) -> String
@@ -171,7 +185,7 @@ private struct TrackCard: View {
         // Read so a model change the view cannot observe still redraws it.
         let _ = display.version
         VStack(alignment: .leading, spacing: 4) {
-            ControlSlider(title, range: range, read: read, write: write,
+            ControlSlider(title, range: display.range, read: read, write: write,
                           format: format)
             if let subtitle {
                 Text(subtitle(read()))
