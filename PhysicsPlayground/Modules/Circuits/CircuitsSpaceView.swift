@@ -626,7 +626,7 @@ struct CircuitsSpaceView: View {
            !model.components.contains(where: { $0.id == openID }) {
             ring.openID = nil     // deleted out from under the ring
         }
-        // The ring, the halo and the readout name one part: a selection that
+        // The ring, the lit outline and the readout name one part: a selection that
         // moves to another part (a tap on its lead or lever, a carry, a new
         // part from the shelf) folds the ring rather than leave it on the old.
         if let openID = ring.openID, model.selectedID != openID {
@@ -671,7 +671,9 @@ struct CircuitsSpaceView: View {
                         write: { model.setComponentValue(id: uuid, $0) },
                         format: { CircuitsModel.formatValue($0, for: part.kind) },
                         radius: { 0.05 },
-                        track: Self.valueTrack(for: part.kind))
+                        track: Self.valueTrack(for: part.kind) { [weak renderer] toward in
+                            renderer?.targetReachBelow(of: uuid, towardViewer: toward) ?? 0
+                        })
                 : nil)
 
         let viewer = appModel.room.headPosition.map {
@@ -685,14 +687,23 @@ struct CircuitsSpaceView: View {
     /// parts are sold in (`CircuitsModel.valueDetents`), numbered at each
     /// decade, and run under the part, clear of its leads. It replaced a
     /// linear 14 cm handle that put a resistor's 10–470 Ω in its first
-    /// 1.3 cm.
-    static func valueTrack(for kind: CircuitsModel.ComponentKind) -> Bloom.Grip.Track {
+    /// 1.3 cm. Given `clearsBelow` — the part's own targets' reach as the
+    /// wearer sees them — it hangs `trackGap` below that rather than a fixed
+    /// drop under the centre, where the part's carry box covered the rail's
+    /// first few centimetres and took the pinch (2026-11-02).
+    static func valueTrack(for kind: CircuitsModel.ComponentKind,
+                           clearsBelow: ((SIMD3<Float>) -> Float)? = nil) -> Bloom.Grip.Track {
         Bloom.Grip.Track(
             detents: CircuitsModel.valueDetents(for: kind).map {
                 .init(value: $0, label: tickLabel($0, for: kind))
             },
-            drop: Bloom.calmTrackDrop)
+            drop: clearsBelow == nil ? Bloom.calmTrackDrop : trackGap,
+            clearsBelow: clearsBelow)
     }
+
+    /// How far under a part's own targets its value track hangs, at one
+    /// metre: the bead's pinch target and a few millimetres of air.
+    static let trackGap: Float = 0.03
 
     /// A tick's number, where it carries one: every cell size a battery
     /// stacks to but 4.5 V (too near its neighbours to read), and elsewhere
@@ -912,7 +923,7 @@ struct CircuitsSpaceView: View {
                 ring.openID = nil
                 SoundPalette.play(.releaseTick, on: entity, volume: 0.3)
             } else {
-                // The ring, the halo and the readout name one part.
+                // The ring, the lit outline and the readout name one part.
                 model.select(id: id)
                 ring.openID = id
                 SoundPalette.play(.pop, on: entity, volume: 0.35)

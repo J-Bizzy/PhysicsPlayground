@@ -147,6 +147,23 @@ contradicts this section, this section is current.
 - [ ] **The cut test:** enter all seven labs in sequence; the room's
       brightness moves only at Orbital Mechanics, and ramps rather than steps.
 
+## ⟳ 2026-11-02 — Circuits: the outline, and sliders you can grab (hands, batch 2)
+
+- [ ] **Tap a part:** no box appears round it. Its symbol's outline turns
+      white instead — the battery's +, the bulb's circle, the resistor's
+      zigzag, the motor's M; the coil and the fuse light their copper or
+      brass. Tap another: the first goes back to champagne as the second
+      lights. Judge: is it plain enough which part is selected, from where
+      you stand?
+- [ ] **Open a part's ring and grab its slider at its LEFT end,** right
+      under the part, standing at the bench and again leaning in close: the
+      bead moves, the part does not. Do it on the battery (the case that
+      was worst) and on a part stood on end.
+- [ ] **Look along the rail without pinching:** it lights under your eye,
+      as the bead does. Judge: does the rail hang too far below the part
+      now (it is about 11 cm under a battery at arm's length)?
+- [ ] **Pinch just above or below the rail:** it still takes the bead.
+
 ## ⟳ 2026-11-02 — a resize only when you mean it (hands, batch 1)
 
 In Circuit Workshop, Electric Fields, Magnetism and Orbital Mechanics —

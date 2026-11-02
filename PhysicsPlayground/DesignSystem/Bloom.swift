@@ -109,6 +109,13 @@ final class Bloom {
             /// starts straight under it instead, clear of the leads or poles
             /// that join it to its neighbours along its own axis.
             var drop: Float = 0
+            /// For a dropped track, how far the object's own pinch targets
+            /// reach below its centre as seen from the viewer's side, in the
+            /// ring's parent frame, metres; handed the level unit vector
+            /// toward the viewer. The rail then hangs `drop` (at one metre)
+            /// below THAT, so the object's target never sits over the rail's
+            /// start, at any distance or turn. Nil: `drop` below the centre.
+            var clearsBelow: ((_ towardViewer: SIMD3<Float>) -> Float)? = nil
 
             /// Where along the rail the track starts, for an object of
             /// `radius`: its surface, or under its centre when dropped.
@@ -309,7 +316,8 @@ final class Bloom {
             trackEntity = built
         }
         if let grip {
-            let handle = Self.makeGrip()
+            let handle = Self.makeGrip(clearOfObject: grip.track?.clearsBelow != nil
+                                       && (grip.track?.drop ?? 0) > 0)
             root.addChild(handle)
             gripEntity = handle
             // The handle is dragged, not pressed, so it needs VoiceOver
@@ -449,8 +457,11 @@ final class Bloom {
             let surface = track.start(radius: grip.radius())
             let start = gripDrag?.trackStart ?? surface
             let t = Float(grip.fraction(of: grip.read()))
-            // The ring only yaws, so its own down is the parent frame's.
-            let below = SIMD3<Float>(0, -track.drop * scale, 0)
+            // The ring only yaws, so its own down is the parent frame's, and
+            // its +z is level toward the viewer.
+            let clears = track.drop > 0
+                ? max(track.clearsBelow?(root.orientation.act([0, 0, 1])) ?? 0, 0) : 0
+            let below = SIMD3<Float>(0, -(track.drop * scale + clears), 0)
             origin = anchor + below + railAxis * surface
             handle = anchor + below
                 + railAxis * (start + (Self.gripGap + track.length * t) * scale)
@@ -458,7 +469,7 @@ final class Bloom {
                 // The ring's root is the anchor scaled by `scale` and turned
                 // so its +x is the rail: the track's start, in its own units.
                 trackEntity.position = [start / max(scale, 0.001) + Self.gripGap,
-                                        -track.drop, 0]
+                                        -(track.drop + clears / max(scale, 0.001)), 0]
                 trackEntity.scale = [max(reveal, 0.001), 1, 1]
                 trackEntity.isEnabled = reveal > 0.02
                 let interactive = reveal > 0.85
@@ -757,12 +768,32 @@ final class Bloom {
                 container.addChild(number.root)
             }
         }
-        // Thick enough to pinch, thin enough to leave the object to itself.
+        // Thick enough to pinch, thin enough to leave the object to itself
+        // (it was 24 × 20 mm until 2026-11-02, about half what a pinch
+        // wants, and the owner found the sliders hard to grab). It lights
+        // under the eye as the bead does, so a pinch knows it is on the rail
+        // before it closes.
         container.components.set(CollisionComponent(shapes: [
-            Primitives.collisionBox(size: [track.length, 0.024, 0.02],
+            Primitives.collisionBox(size: [track.length, Self.trackTargetHeight,
+                                           Self.trackTargetDepth],
                                     offset: [track.length / 2, 0, 0])]))
+        container.components.set(HoverEffectComponent())
         return container
     }
+
+    /// The rail's pinch target at one metre, across and through: within the
+    /// collider rule's 15 mm per side of the ticks and numbers it carries.
+    /// Only the height grew: the rail is drawn under 2 mm deep, and a deeper
+    /// target breaks the rule once the ring is scaled past about a metre.
+    static let trackTargetHeight: Float = 0.036
+    static let trackTargetDepth: Float = 0.02
+    /// The bead's pinch target at one metre. On a track that hangs clear of
+    /// the object's own targets (`clearsBelow`), nothing of the object's
+    /// competes for it and it takes most of the rule's reach; anywhere else
+    /// it stays barely larger than the bead, or it would steal pinches meant
+    /// for the object.
+    static let beadTargetRadius: Float = 0.016
+    static let clearBeadTargetRadius: Float = 0.022
 
     /// The stalk: a thin bright line, the part of the object that
     /// stretches. Scaled along +y by the layout; never a target.
@@ -775,7 +806,7 @@ final class Bloom {
         return stalk
     }
 
-    private static func makeGrip() -> ModelEntity {
+    private static func makeGrip(clearOfObject: Bool = false) -> ModelEntity {
         // The bead stays bright and solid — the handle your fingers hunt
         // for; the glass language is for surfaces a control sits on.
         let bead = ModelEntity(
@@ -785,10 +816,8 @@ final class Bloom {
                                        glow: 0.35)])
         bead.name = "bloom-grip"
         bead.components.set(InputTargetComponent())
-        // Barely larger than the bead: a generous collider steals grabs
-        // meant for the object the bloom decorates.
-        bead.components.set(CollisionComponent(
-            shapes: [Primitives.collisionSphere(radius: 0.016)]))
+        bead.components.set(CollisionComponent(shapes: [Primitives.collisionSphere(
+            radius: clearOfObject ? clearBeadTargetRadius : beadTargetRadius)]))
         bead.components.set(HoverEffectComponent())
         bead.components.set(GroundingShadowComponent(castsShadow: true))
         SpatialActions.describe(bead, label: "Pull to change")

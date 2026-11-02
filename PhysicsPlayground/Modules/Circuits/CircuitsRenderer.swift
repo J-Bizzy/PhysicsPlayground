@@ -67,7 +67,12 @@ final class CircuitsRenderer {
         /// dot and its target withdrawn — changed only when it moves.
         var terminalJoined: [Bool] = [false, false]
         let label: BackedLabel
-        let halo: ModelEntity
+        /// Selection is told by the part's own outline (`outlineSlots`),
+        /// lit toward white as `selectionLevel` rises; written only when its
+        /// step moves.
+        var outline: [OutlineSlots] = []
+        var selectionLevel: Float = 0
+        var selectionStep = 0
         var glow: ModelEntity?
         var filament: Entity?
         /// The bulb's own light on the parts round it.
@@ -544,6 +549,146 @@ final class CircuitsRenderer {
             entity.components.set(model)
         }
         for child in entity.children { dress(child, material) }
+    }
+
+    // MARK: Selection is the part's own outline (2026-11-02)
+    //
+    // A selected part used to stand in a rounded white box at 22 %, which the
+    // owner read as a hitbox. Now the symbol says it: its champagne keyline
+    // lights toward white, as a schematic draws a selected symbol in another
+    // ink. Nothing is added round the part.
+
+    /// The material slots of one mesh that a selection lights, and what they
+    /// wear unselected.
+    struct OutlineSlots {
+        let entity: ModelEntity
+        let slots: [Int]
+        let rest: [RealityKit.Material]
+    }
+
+    /// The material every symbol is keylined in (`Tools/circuitparts.py`).
+    nonisolated static let keylineMaterialName = "CircuitChampagne"
+    /// The steps the outline lights through on its way to white over the
+    /// house fade: a handful of material writes per selection change, none
+    /// while it rests.
+    nonisolated static let selectionSteps = 4
+    /// How bright a fully lit outline glows. No part's own material glows,
+    /// so this is also how a test tells a lit outline from a resting one.
+    nonisolated static let selectionGlow: Float = 0.9
+    private static var litMaterials: [String: RealityKit.Material] = [:]
+
+    /// Where a part shows its selection: the keyline, wherever it is drawn.
+    /// The coil and the fuse have none, so theirs is the element itself (the
+    /// copper helix, the brass caps), the mesh named for the asset; a
+    /// stand-in body for a missing asset lights whole.
+    static func outlineSlots(of body: ModelEntity,
+                             kind: CircuitsModel.ComponentKind) -> [OutlineSlots] {
+        let elementName = bodyAssetNames[kind] ?? resistorCapsAssetName
+        var keyline: [OutlineSlots] = []
+        var element: [OutlineSlots] = []
+        func walk(_ entity: Entity, inElement: Bool) {
+            let inElement = inElement || entity.name == elementName
+            if let model = entity as? ModelEntity, let materials = model.model?.materials,
+               !materials.isEmpty {
+                let named = materials.indices.filter {
+                    (materials[$0] as? PhysicallyBasedMaterial)?.name == keylineMaterialName
+                }
+                if !named.isEmpty {
+                    keyline.append(.init(entity: model, slots: named,
+                                         rest: named.map { materials[$0] }))
+                } else if inElement {
+                    element.append(.init(entity: model, slots: Array(materials.indices),
+                                         rest: materials))
+                }
+            }
+            for child in entity.children { walk(child, inElement: inElement) }
+        }
+        walk(body, inElement: false)
+        if !keyline.isEmpty { return keyline }
+        if !element.isEmpty { return element }
+        guard let materials = body.model?.materials, !materials.isEmpty else { return [] }
+        return [.init(entity: body, slots: Array(materials.indices), rest: materials)]
+    }
+
+    /// `rest`, lit `step` of `selectionSteps` of the way to white.
+    static func lit(_ rest: RealityKit.Material, step: Int) -> RealityKit.Material {
+        guard step > 0, var pbr = rest as? PhysicallyBasedMaterial else { return rest }
+        let key = pbr.name.map { "\($0)#\(step)" }
+        if let key, let cached = litMaterials[key] { return cached }
+        let t = CGFloat(step) / CGFloat(selectionSteps)
+        var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+        pbr.baseColor.tint.getRed(&r, green: &g, blue: &b, alpha: &a)
+        pbr.baseColor.tint = UIColor(red: r + (1 - r) * t, green: g + (1 - g) * t,
+                                     blue: b + (1 - b) * t, alpha: a)
+        pbr.emissiveColor = .init(color: .white)
+        pbr.emissiveIntensity = selectionGlow * Float(t)
+        if let key { litMaterials[key] = pbr }
+        return pbr
+    }
+
+    /// Eases a part's outline toward lit or rest over the house fade, and
+    /// writes its materials only when the step moves.
+    private static func tickSelection(_ visual: inout ComponentVisual, selected: Bool,
+                                      dt: Double) {
+        let target: Float = selected ? 1 : 0
+        if Motion.isReduced {
+            visual.selectionLevel = target
+        } else {
+            let step = Float(dt / Fade.duration)
+            visual.selectionLevel = target > visual.selectionLevel
+                ? min(visual.selectionLevel + step, target)
+                : max(visual.selectionLevel - step, target)
+        }
+        let step = Int((visual.selectionLevel * Float(selectionSteps)).rounded())
+        guard step != visual.selectionStep else { return }
+        visual.selectionStep = step
+        for outline in visual.outline {
+            guard var model = outline.entity.model else { continue }
+            for (slot, rest) in zip(outline.slots, outline.rest)
+            where model.materials.indices.contains(slot) {
+                model.materials[slot] = lit(rest, step: step)
+            }
+            outline.entity.model = model
+        }
+    }
+
+    /// The steepest a wearer looks down onto a part's rail, as a slope: tan
+    /// 40°. A target's front face hangs this much lower in the eye than it
+    /// stands, for every metre it stands toward the viewer. Leaning in to
+    /// look 35° down at a part puts the rail under it nearer 41°, which is
+    /// what the lying battery found at tan 35°.
+    nonisolated static let lookDownSlope: Float = 0.84
+
+    /// How far a part's own pinch targets (its carry box, its dots, a
+    /// switch's blade) reach below its centre as the wearer sees them, in
+    /// the bench's frame: each target's lowest corner, lowered by how far it
+    /// stands toward the viewer × `lookDownSlope`. Its value track hangs
+    /// below this (`Bloom.Grip.Track.clearsBelow`), so the part never takes
+    /// a pinch meant for the rail. Nil for a part not drawn yet.
+    func targetReachBelow(of id: UUID, towardViewer: SIMD3<Float>) -> Float? {
+        guard let holder = visuals[id]?.holder else { return nil }
+        let flat = SIMD3<Float>(towardViewer.x, 0, towardViewer.z)
+        let toward = simd_length(flat) > 1e-4 ? simd_normalize(flat) : SIMD3<Float>(0, 0, 1)
+        let centre = holder.position(relativeTo: viewRoot)
+        var reach: Float = 0
+        func walk(_ entity: Entity) {
+            guard entity.isEnabled else { return }
+            if let collision = entity.components[CollisionComponent.self] {
+                for shape in collision.shapes {
+                    let box = shape.bounds
+                    for corner in 0..<8 {
+                        let local = SIMD3<Float>(corner & 1 == 0 ? box.min.x : box.max.x,
+                                                 corner & 2 == 0 ? box.min.y : box.max.y,
+                                                 corner & 4 == 0 ? box.min.z : box.max.z)
+                        let p = entity.convert(position: local, to: viewRoot) - centre
+                        reach = max(reach, -p.y + max(simd_dot(p, toward), 0) * Self.lookDownSlope)
+                    }
+                }
+            }
+            entity.children.forEach(walk)
+        }
+        walk(holder)
+        return reach
     }
 
     /// How far from the stage's front a part's axis must lie (the sine of
@@ -1387,7 +1532,7 @@ final class CircuitsRenderer {
             let pose = displayPose(of: component)
             visual.holder.position = SIMD3<Float>(pose.position)
             orient(&visual, along: SIMD3<Float>(pose.axis), yaw: model.stage.yaw, dt: dt)
-            Fade.tick(visual.halo, visible: component.id == model.selectedID)
+            Self.tickSelection(&visual, selected: component.id == model.selectedID, dt: dt)
 
             // One contact at each end, and nothing else to hit there.
             for (end, terminal) in visual.terminals.enumerated() {
@@ -1835,7 +1980,7 @@ final class CircuitsRenderer {
 
     private func makeVisual(for component: CircuitsModel.Component) -> ComponentVisual {
         // The holder is the manipulation target, so a carried part brings
-        // its contacts, label and halo along.
+        // its contacts and label along.
         let holder = Entity()
         holder.name = component.id.uuidString
         holder.position = SIMD3<Float>(component.position)
@@ -1852,7 +1997,7 @@ final class CircuitsRenderer {
         // The carry target runs the line from lead's end to lead's end — the
         // old carrier's reach — clamped inside the dots' targets, so a body
         // pinch cannot swallow a lead; across the line it is the element's
-        // own size (the holder collects a bulb's glow and a halo).
+        // own size (the holder collects a bulb's glow).
         let bounds = module.body.visualBounds(relativeTo: holder)
         let clearOfLead = Float(CircuitsModel.terminalOffset) - Self.terminalTargetRadius - 0.002
         let half = SIMD3<Float>(
@@ -1886,15 +2031,6 @@ final class CircuitsRenderer {
             GroundingShadows.cast(on: terminal)
         }
 
-        // Selection halo: a rounded slab round the line and the element.
-        let span = Float(CircuitsModel.terminalOffset) + Self.contactRadius
-        let halo = SelectionHalo.make(mesh: Primitives.box(
-            size: [2 * span + 0.02, max(bounds.extents.y, 0.02) + 0.02,
-                   max(bounds.extents.z, 0.02) + 0.02],
-            cornerRadius: 0.012))
-        halo.position = [0, bounds.center.y, bounds.center.z]
-        holder.addChild(halo)
-
         // The value beneath, billboarded over the dark backing. Its pivot is
         // placed in the room each time the part turns, so it hangs below
         // whatever angle the part takes.
@@ -1906,8 +2042,9 @@ final class CircuitsRenderer {
 
         var visual = ComponentVisual(
             holder: holder, body: module.body, ceramic: module.ceramic,
-            terminals: module.contacts, label: label, halo: halo,
+            terminals: module.contacts, label: label,
             labelPivot: labelPivot)
+        visual.outline = Self.outlineSlots(of: module.body, kind: component.kind)
         visual.leads = module.leads
         visual.glow = module.glow
         visual.filament = module.filament

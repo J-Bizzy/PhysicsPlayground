@@ -1377,7 +1377,7 @@ final class CircuitsModel {
         components.removeAll { $0.id == id }
         wires.removeAll { $0.from.componentID == id || $0.to.componentID == id }
         // Nothing is selected after a delete: handing the selection to the
-        // last part added moved its halo and card onto a part no hand chose.
+        // last part added moved its lit outline and card onto a part no hand chose.
         if selectedID == id { selectedID = nil }
         // A half-drawn wire cannot survive its own part: clear pull, voice and
         // highlight state.

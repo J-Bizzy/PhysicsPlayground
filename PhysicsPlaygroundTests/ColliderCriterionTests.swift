@@ -166,6 +166,31 @@ final class ColliderCriterionTests: XCTestCase {
         assertCollidersFit(picker.root, "SpatialPicker")
     }
 
+    /// The calm track's rail and bead, grown on 2026-11-02 so a slider is
+    /// easier to pinch: measured open, near and at arm's length and beyond,
+    /// on a part's track (the larger bead) and on a charge's.
+    func testTheCalmTrackCollidersFit() {
+        var value = 100.0
+        for clears in [true, false] {
+            for distance: Float in [0.5, 0.8, 1.2] {
+                let track = clears
+                    ? CircuitsSpaceView.valueTrack(for: .resistor) { _ in 0.04 }
+                    : CircuitsSpaceView.valueTrack(for: .resistor)
+                let bloom = Bloom()
+                bloom.configure(petals: [], grip: .init(
+                    name: "Value", range: 10...4700, read: { value },
+                    write: { value = $0 }, format: { "\($0)" }, radius: { 0.05 },
+                    track: track))
+                for _ in 0..<80 {
+                    bloom.update(anchor: .zero, viewer: [0, 0, distance],
+                                 revealTarget: 1, dt: 1 / 90)
+                }
+                assertCollidersFit(bloom.root, "Calm track at \(distance) m"
+                                   + (clears ? ", clear of its part" : ""))
+            }
+        }
+    }
+
     // MARK: The modules
 
     func testPendulumsCollidersFit() {

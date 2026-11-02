@@ -16,6 +16,32 @@ A running log of consequential decisions — architectural, physical, or product
 
 (The template sat stranded at line 309, mid-log between two 2026-07-29 entries, until 2026-08-01.)
 
+## 2026-11-02 — A selected part lights its outline, and its slider hangs clear of it
+
+**Decision:** In Circuit Workshop a selected part no longer stands in a white box. Its own symbol says it is selected: the champagne keyline lights toward white. The coil and the fuse are drawn without a keyline, so their element lights. A part's value track now hangs below the part's own pinch targets, wherever the part is turned, instead of 6.5 cm under its centre. The rail and the bead have larger targets, and the rail lights under the eye.
+
+**Context:**
+- **The owner:** "I'm not a fan of the 'hitbox' sort of mechanic in the circuits module, and it is sometimes hard to grab the sliders." Asked which hitbox, the owner said the grey box.
+- **The halo was a rounded box** round the part, white at 22 %. It read as a game's debug hitbox, and it overlapped the start of the track (noted, and left, in the November pass's batch 3).
+- **Measured, the slider was covered by the part it belongs to.** The carry box reaches 15 mm past the body, and from above its front edge hangs lower still in the eye. Three cases:
+  - a battery's discs are tall enough that the whole rail sat inside the box;
+  - a standing part's lower dot sat on the rail;
+  - leaning in, the rail under a lying part was covered too.
+- **Hit-testing takes the nearest collider,** so a pinch aimed at the slider carried the part.
+
+**Consequences:**
+- **Selection is the outline.** `CircuitsRenderer.outlineSlots` finds the slots wearing `CircuitChampagne` by material name, which RealityKit keeps from the USD. `tickSelection` writes `lit(_:step:)` in four steps over `Fade.duration`, and only when the step moves. A material's `name` is read-only, so a test knows a lit outline by its glow (`selectionGlow`); no part's own material glows.
+- **`SelectionHalo` stays for the other labs.** Magnets and optics pieces still wear boxes; they were not part of the complaint.
+- **The track hangs below the part's own targets.** `Bloom.Grip.Track.clearsBelow` takes the reach, which is `CircuitsRenderer.targetReachBelow`: each target's lowest corner, lowered by its depth toward the viewer × tan 40°. The rail hangs `CircuitsSpaceView.trackGap` (0.03 at a metre) below that.
+  - **Why tan 40°:** the test's lean-in eye looks 35° down at the part, but the rail under it is nearer 41°, and tan 35° failed the lying battery.
+  - **The visible cost:** the rail sits further below a part than it did, about 11 cm under a battery at 0.7 m.
+- **Magnetism's track is unchanged.** It has no `clearsBelow`, so it keeps the fixed drop and the 16 mm bead.
+- **The rail's target is 36 mm tall** (was 24) and carries `HoverEffectComponent`. A clear track's bead target is 22 mm (was 16). The rail's depth stays 20 mm, because the rail is drawn under 2 mm deep and a deeper target breaks the collider rule past about a metre.
+- **The tests:**
+  - `CircuitsTrackClearanceTests` casts a ray from three eyes (standing, leaning in, off to the side) to 33 points on every kind's rail, lying and standing, and fails if the part's own targets come first. It also shows that the old drop fails under a standing bulb.
+  - `ColliderCriterionTests.testTheCalmTrackCollidersFit` measures the track at 0.5, 0.8 and 1.2 m.
+- **Not covered:** a neighbouring part or the turntable can still stand between the eye and a rail. In the simulator's low camera the stage's band projects over the rail, but a standing wearer looks down past it.
+
 ## 2026-11-02 — A resize only when both hands take one thing together
 
 **Decision:** The two-hand resize (`RenderKit/SpatialScale.swift`, in Circuit Workshop, Electric Fields, Magnetism and Orbital Mechanics) starts only when both hands close on ONE object within `PinchLedger.togetherWithin` (0.4 s) of each other. It then waits out a dead band: nothing moves until the hands have spread or closed by `scaleDeadBand` (8 %), or turned by `turnDeadBand` (10°), each on its own, and from that moment the view moves from where it stood. The owner's pick from three, the others being the same rule with a half-second hold first, and no two-hand resize at all, with a Zoom slider in More instead.
