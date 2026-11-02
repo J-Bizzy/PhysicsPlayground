@@ -16,6 +16,25 @@ A running log of consequential decisions — architectural, physical, or product
 
 (The template sat stranded at line 309, mid-log between two 2026-07-29 entries, until 2026-08-01.)
 
+## 2026-11-02 — Nothing pops while its neighbours fade
+
+**Decision:** An object leaving the room (deleted, cleared, evicted, merged away) fades and shrinks a little over 0.15 s instead of vanishing in one frame, and a layer switched in More fades rather than snapping. The halo, the ring and the arrows around them already faded. This is the fifth batch of the November polish pass.
+
+**Context:** The surveys found the same split in every lab: the halo eased away while the thing it haloed blinked out.
+- **Objects:** a pendulum rig and its spring, magnets and coils, charges and the test charge, circuit parts and their wires, optics pieces, Projectiles' balls and hoops, Orbits' bodies.
+- **Layers:** field lines and the compass, the equipotential shells, the uniform-B arrows, the capacitor, Trajectory and Numbers, the period tags, the voltage skyline, Orbits' ghost, verdict and Lagrange markers, and the optics aim bead.
+- **Orbits' prediction verdict** cut off at eight seconds, though the model's comment said the renderer faded it.
+- **The Time Capsule's step buttons** slid out at full strength and vanished as the tape wound in. The bank's `Recession` reset their opacity to full while no hand was near, which wiped the rail's fade.
+
+**Consequences:**
+- **`RenderKit/Retire`:**
+  - `Retire.entity` renames the entity and everything in it (nothing may find a departed object by name), strips its hit targets and VoiceOver element, fades it with a `FromToByAnimation` on opacity (shrinking to 85 % unless Reduce Motion is on), and removes it.
+  - `Retire.copy(of:)` serves the pooled renderers (Projectiles' balls and hoops, Orbits' bodies), where a slot is handed straight to the next object: a clone of the slot fades in its place.
+  - The model stays the truth: a renderer retires only what the model has already dropped.
+- **Layers use `Fade.tick`,** which writes nothing once settled. Projectiles' layers lost their change gate to get it, and Orbits' verdict fades over 0.6 s. Circuits' wire-field arrows (a pool with no root) and the Kepler sweep (updated every twelfth frame) still switch.
+- **`SpatialActionBank.recedes`:** the time rail's plates opt out, so they fade with the tape.
+- **Tests:** `RetireTests`. `CircuitsModuleTests.testAnLEDLightsRedAndBurnsOutDark` found the first version of `Retire` renaming only the root: a cleared bench's LED core was still found by name while it faded.
+
 ## 2026-11-02 — The door holds: no empty room between scenes, and deep space arrives over the room
 
 **Decision:** Every change of scene (home to lab, lab to lab, lab to home) keeps the scene being left on screen while the next one builds and settles out of sight, then cross-fades the two over 0.22 s. Entering from the home, the chosen portal stays, swelled toward the wearer, while the rest of the home fades, so the miniature is what the wearer is looking at when its lab dissolves up in its place. Deep space now arrives over the room: the space keeps the room's immersion and its dimmer until the sky is fully up, and only then goes to full immersion. This is the fourth batch of the November polish pass.

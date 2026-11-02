@@ -139,6 +139,8 @@ final class TimeRail {
                 },
             ])
         plates.root.position = [Self.railLength / 2 + 0.11, 0, 0]
+        // They fade with the tape (`applyOpenness`), never by the hand's distance.
+        plates.recedes = false
         root.addChild(plates.root)
 
         buildReel(accent: accent)

@@ -257,7 +257,7 @@ final class PendulumsRenderer {
         for id in visuals.keys where !liveIDs.contains(id) {
             let visual = visuals[id]
             [visual?.pivot, visual?.cable, visual?.bob,
-             visual?.cable2, visual?.elbow].forEach { $0?.removeFromParent() }
+             visual?.cable2, visual?.elbow].forEach { $0.map(Retire.entity) }
             [visual?.velocityArrow, visual?.gravityArrow,
              visual?.tensionArrow, visual?.netArrow].forEach { $0?.holder.removeFromParent() }
             visuals[id] = nil
@@ -554,7 +554,7 @@ final class PendulumsRenderer {
     private func syncSprings(_ model: PendulumsModel) {
         let live = Set(model.springs.map(\.id))
         for (id, entity) in springVisuals where !live.contains(id) {
-            entity.removeFromParent()
+            Retire.entity(entity)
             springVisuals[id] = nil
         }
         for spring in model.springs {
@@ -604,7 +604,9 @@ final class PendulumsRenderer {
             label = (holder, backed)
             periodLabels[pendulum.id] = label
         }
-        label.holder.isEnabled = visible
+        // Faded, not switched (2026-11-02): a cradle bob's tag comes and goes
+        // with its selection.
+        Fade.tick(label.holder, visible: visible)
         guard visible else { return }
         label.holder.position = SIMD3<Float>(pendulum.pivot) + SIMD3(0, 0.055, 0)
 

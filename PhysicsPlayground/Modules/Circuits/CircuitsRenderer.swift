@@ -1053,7 +1053,8 @@ final class CircuitsRenderer {
     /// Raises a glowing tower over every node to a height equal to its
     /// voltage — potential as terrain (Kirchhoff's loop law made spatial).
     private func syncVoltageSkyline(_ model: CircuitsModel) {
-        skylineRoot.isEnabled = model.showVoltageHeights
+        // Faded, not switched (2026-11-02), as every layer from More is.
+        Fade.tick(skylineRoot, visible: model.showVoltageHeights)
         guard model.showVoltageHeights else { return }
 
         // One tower per net, in node order, so a tower keeps its identity
@@ -1373,7 +1374,7 @@ final class CircuitsRenderer {
         // Remove visuals whose components are gone.
         let liveIDs = Set(model.components.map(\.id))
         for id in visuals.keys where !liveIDs.contains(id) {
-            visuals[id]?.holder.removeFromParent()
+            visuals[id].map { Retire.entity($0.holder) }
             visuals[id] = nil
             wirePhases[id] = nil  // a removed jumper's electron phase
         }
@@ -2180,7 +2181,7 @@ final class CircuitsRenderer {
     private func syncWires(_ model: CircuitsModel) {
         let liveIDs = Set(model.wires.map(\.id))
         for id in wireEntities.keys where !liveIDs.contains(id) {
-            wireEntities[id]?.removeFromParent()
+            wireEntities[id].map(Retire.entity)
             wireEntities[id] = nil
             wirePhases[id] = nil
             wireLaidEndpoints[id] = nil

@@ -83,7 +83,7 @@ final class OrbitalMechanicsRenderer {
         let toDisplay = Float(model.simToDisplay)
         if let prediction = model.prediction {
             if ghostEntity.parent == nil { systemRoot.addChild(ghostEntity) }
-            ghostEntity.isEnabled = true
+            Fade.tick(ghostEntity, visible: true)
             ghostEntity.position = SIMD3<Float>(prediction.position) * toDisplay
             if ghostCallout == nil {
                 let callout = Callout(color: UIColor(white: 0.95, alpha: 1),
@@ -92,14 +92,16 @@ final class OrbitalMechanicsRenderer {
                 systemRoot.addChild(callout.root)
                 ghostCallout = callout
             }
-            ghostCallout?.isEnabled = true
+            ghostCallout.map { Fade.tick($0.root, visible: true) }
             ghostCallout?.anchor(at: ghostEntity.position)
             let daysLeft = max(prediction.resolvesAt - model.simulatedDays, 0)
             ghostCallout?.setText("your guess · "
                                   + PhysicsFormat.measurement(daysLeft, "d", decimals: 0))
         } else {
-            ghostEntity.isEnabled = false
-            ghostCallout?.isEnabled = false
+            // Faded, not switched (2026-11-02): a guess resolved, or gone
+            // with its planet, leaves as the arrows do.
+            Fade.tick(ghostEntity, visible: false)
+            ghostCallout.map { Fade.tick($0.root, visible: false) }
         }
 
         if let verdict = model.predictionVerdict {
@@ -131,11 +133,12 @@ final class OrbitalMechanicsRenderer {
             // Eight seconds of reading time, then the verdict retires.
             let shown = verdictShownWall.map { CACurrentMediaTime() - $0 } ?? 0
             let visible = shown < 8
-            verdictLine.isEnabled = visible
-            verdictCallout?.isEnabled = visible
+            // The model's comment always said the renderer fades it out; now it does.
+            Fade.tick(verdictLine, visible: visible, duration: 0.6)
+            verdictCallout.map { Fade.tick($0.root, visible: visible, duration: 0.6) }
         } else {
-            verdictLine.isEnabled = false
-            verdictCallout?.isEnabled = false
+            Fade.tick(verdictLine, visible: false)
+            verdictCallout.map { Fade.tick($0.root, visible: false) }
         }
     }
 
@@ -793,10 +796,10 @@ final class OrbitalMechanicsRenderer {
         let points = model.lagrangePoints
         for (index, marker) in lagrangeMarkers.enumerated() {
             guard index < points.count else {
-                marker.isEnabled = false
+                Fade.tick(marker, visible: false)
                 continue
             }
-            marker.isEnabled = true
+            Fade.tick(marker, visible: true)
             marker.position = SIMD3<Float>(points[index].position) * scale
         }
     }
@@ -824,6 +827,15 @@ final class OrbitalMechanicsRenderer {
     }
 
     private func syncBodies(_ model: OrbitalMechanicsModel) {
+        // A body deleted or merged away fades where it was; its slot goes
+        // straight on to show the next body.
+        let live = Set(model.bodies.map(\.id))
+        for (index, slot) in bodyPool.slots.enumerated() {
+            if let shown = bodySlotIDs[index], !live.contains(shown) {
+                Retire.copy(of: slot.entity)
+                bodySlotIDs[index] = nil
+            }
+        }
         for (index, slot) in bodyPool.slots.enumerated() {
             guard index < model.bodies.count else {
                 slot.entity.isEnabled = false

@@ -193,8 +193,6 @@ final class KinematicsRenderer {
     /// pulled from its well is found once it is drawn, and its tick is the
     /// well's pop.
     let carried = Grasp.Carried()
-    /// The layers last applied, so a frame that changes nothing writes nothing.
-    private var appliedLayers: (trajectory: Bool, numbers: Bool, apex: Bool, landing: Bool)?
     /// How large each flight's strobe dots are drawn, easing to 0 when they
     /// are no longer kept (`flightsKeepingDots`).
     private var dotScales: [UUID: Float] = [:]
@@ -563,19 +561,19 @@ final class KinematicsRenderer {
         return shown
     }
 
-    /// The two layers, written only when what they show changes.
+    /// The two layers, faded every frame rather than switched when what
+    /// they show changes (2026-11-02): a layer from More, and the apex and
+    /// landing as the arc comes to have them, come and go as everything
+    /// else in the room does. `Fade.tick` writes nothing once settled.
     private func applyLayers(_ model: KinematicsModel) {
-        let layers = (trajectory: model.showsTrajectory, numbers: model.showsNumbers,
-                      apex: apexAvailable, landing: landingAvailable)
-        if let applied = appliedLayers, applied == layers { return }
-        appliedLayers = layers
-        arcEntity.isEnabled = layers.trajectory
-        arcCasingEntity.isEnabled = layers.trajectory
-        apexMarker.isEnabled = layers.trajectory && layers.apex
-        apexDropLine.isEnabled = layers.trajectory && layers.apex
-        landingMarker.isEnabled = layers.trajectory && layers.landing
-        apexLabel.root.isEnabled = layers.numbers
-        landingLabel.root.isEnabled = layers.numbers
+        let trajectory = model.showsTrajectory, numbers = model.showsNumbers
+        Fade.tick(arcEntity, visible: trajectory)
+        Fade.tick(arcCasingEntity, visible: trajectory)
+        Fade.tick(apexMarker, visible: trajectory && apexAvailable)
+        Fade.tick(apexDropLine, visible: trajectory && apexAvailable)
+        Fade.tick(landingMarker, visible: trajectory && landingAvailable)
+        Fade.tick(apexLabel.root, visible: numbers)
+        Fade.tick(landingLabel.root, visible: numbers)
     }
 
     /// The bead's reading: placed every frame (a transform) beside the bead,
@@ -916,6 +914,15 @@ final class KinematicsRenderer {
             pulsedGrabID = nil
             pulsedGrabEntity = nil
         }
+        // A ball cleared or evicted fades where it was; its slot goes
+        // straight on to show the next.
+        let flying = Set(flights.map(\.id))
+        for (index, slot) in ballPool.slots.enumerated() {
+            if let shown = ballSlotIDs[index], !flying.contains(shown) {
+                Retire.copy(of: slot.entity)
+                ballSlotIDs[index] = nil
+            }
+        }
         for (index, slot) in ballPool.slots.enumerated() {
             guard index < flights.count else {
                 slot.entity.isEnabled = false
@@ -1104,6 +1111,15 @@ final class KinematicsRenderer {
     private func syncRings(_ model: KinematicsModel) {
         let rings = model.rings
         let now = CACurrentMediaTime()
+        // A hoop deleted or cleared fades where it was; its slot goes
+        // straight on to show the next.
+        let live = Set(rings.map(\.id))
+        for index in 0..<ringPool.budget {
+            if let shown = ringSlots[index].appliedID, !live.contains(shown) {
+                Retire.copy(of: ringPool.slots[index].entity)
+                ringSlots[index].appliedID = nil
+            }
+        }
         for index in 0..<ringPool.budget {
             let poolSlot = ringPool.slots[index]
             guard index < rings.count else {

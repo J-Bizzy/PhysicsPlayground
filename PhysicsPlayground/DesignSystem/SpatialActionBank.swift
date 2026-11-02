@@ -153,9 +153,16 @@ final class SpatialActionBank {
         // Anchor in world space: `anchor` is in the parent's (possibly
         // scaled) frame while the hand is world space — `position(relativeTo: nil)`
         // puts both in the same frame.
+        guard recedes else { return }
         Recession.apply(to: root, anchor: root.position(relativeTo: nil),
                         nearestHand: nearestHand)
     }
+
+    /// False for a bank whose owner fades its root itself (the Time
+    /// Capsule's plates, drawn out with the tape): `Recession` writes the
+    /// same opacity, and with no hand near it wiped the owner's fade, so
+    /// the plates slid out at full strength and vanished in a frame.
+    var recedes = true
 
     /// True when the tap hit one of these plates — armed it, or fired it.
     /// A tap on a plate's child resolves to the plate (the walk-up contract).

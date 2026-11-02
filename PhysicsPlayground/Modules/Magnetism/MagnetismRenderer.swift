@@ -249,7 +249,7 @@ final class MagnetismRenderer {
     private func syncCoils(_ model: MagnetismModel) {
         let live = Set(model.coils.map(\.id))
         for (id, visual) in coilVisuals where !live.contains(id) {
-            visual.container.removeFromParent()
+            Retire.entity(visual.container)
             coilVisuals[id] = nil
         }
         for coil in model.coils {
@@ -399,7 +399,8 @@ final class MagnetismRenderer {
 
     private func syncHandCompass(_ model: MagnetismModel) {
         if handCompassNeedle == nil { buildHandCompass() }
-        handCompass.isEnabled = model.compassOn
+        // Faded, as a layer from More is everywhere (2026-11-02).
+        Fade.tick(handCompass, visible: model.compassOn)
         guard model.compassOn else { return }
         // Every frame, including while a hand owns it: these are relative
         // drags, so the model owns motion and the renderer follows it
@@ -532,7 +533,7 @@ final class MagnetismRenderer {
         if mintedNew || magnetEntities.count != model.magnets.count {
             let live = Set(model.magnets.map(\.id))
             for (id, entity) in magnetEntities where !live.contains(id) {
-                entity.removeFromParent()
+                Retire.entity(entity)
                 magnetEntities[id] = nil
                 magnetHalos[id] = nil
             }
@@ -806,10 +807,11 @@ final class MagnetismRenderer {
     }
 
     private func syncFieldLines(_ model: MagnetismModel) {
-        linesEntity.isEnabled = model.showFieldLines
-        lineCasingEntity.isEnabled = model.showFieldLines
-        lineGlowEntity.isEnabled = model.showFieldLines
-        arrowHeads.root.isEnabled = model.showFieldLines
+        // Faded rather than switched (2026-11-02): the layer comes and goes
+        // as everything else in the room does.
+        for layer in [linesEntity, lineCasingEntity, lineGlowEntity, arrowHeads.root] {
+            Fade.tick(layer, visible: model.showFieldLines)
+        }
         guard model.showFieldLines else { return }
         let sources = model.magnets
         guard Self.fieldLinesWorthRetracing(sources, versus: lastLineInputs) else { return }

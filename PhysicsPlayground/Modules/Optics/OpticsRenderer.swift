@@ -299,7 +299,7 @@ final class OpticsRenderer {
         if minted || pieceEntities.count != model.pieces.count {
             let live = Set(model.pieces.map(\.id))
             for (id, entity) in pieceEntities where !live.contains(id) {
-                entity.removeFromParent()
+                Retire.entity(entity)
                 pieceEntities[id] = nil
                 halos[id] = nil
             }
@@ -488,12 +488,13 @@ final class OpticsRenderer {
     private func syncAimBead(_ model: OpticsModel) {
         guard let bead = Self.aimBeadPosition(model), let id = model.selectedID,
               let position = model.position(of: id) else {
-            aimBead.isEnabled = false
-            aimStalk.isEnabled = false
+            // Faded, as the halo it goes with is (2026-11-02).
+            Fade.tick(aimBead, visible: false)
+            Fade.tick(aimStalk, visible: false)
             return
         }
-        aimBead.isEnabled = true
-        aimStalk.isEnabled = true
+        Fade.tick(aimBead, visible: true)
+        Fade.tick(aimStalk, visible: true)
         aimBead.position = bead
         let from = SIMD3<Float>(position)
         let length = simd_distance(from, bead)

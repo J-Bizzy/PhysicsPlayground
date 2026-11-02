@@ -312,9 +312,10 @@ final class FieldRenderer {
         // A bare capacitor is a field source in its own right now —
         // the gap draws its bundle with no point charges in the room.
         let hasSources = !charges.isEmpty || capacitor != nil
-        linesEntity.isEnabled = showLines && hasSources
-        lineCasingEntity.isEnabled = showLines && hasSources
-        lineGlowEntity.isEnabled = showLines && hasSources
+        // Faded rather than switched (2026-11-02).
+        for layer in [linesEntity, lineCasingEntity, lineGlowEntity] {
+            Fade.tick(layer, visible: showLines && hasSources)
+        }
         if !showLines || !hasSources {
             arrowHeads.hideAll()
         }
@@ -435,7 +436,7 @@ final class FieldRenderer {
 
     private func syncShells(show: Bool, charges: [PointCharge], region: FieldModel.SamplingRegion) {
         let visible = show && !charges.isEmpty
-        shellRoot.isEnabled = visible
+        Fade.tick(shellRoot, visible: visible)
         guard visible else {
             // Off forgets what was meshed, so turning them on re-meshes.
             meshedShells = nil
@@ -586,7 +587,7 @@ final class FieldRenderer {
             }
             viewRoot.addChild(bFieldRoot)
         }
-        bFieldRoot.isEnabled = on
+        Fade.tick(bFieldRoot, visible: on)
     }
 
     // MARK: Capacitor plates
@@ -674,7 +675,7 @@ final class FieldRenderer {
         let half = Float(separation / 2)
         plateEntities[0].position = mid + SIMD3(-half, 0, 0)  // + plate
         plateEntities[1].position = mid + SIMD3(half, 0, 0)   // − plate
-        for plate in plateEntities { plate.isEnabled = on }
+        for plate in plateEntities { Fade.tick(plate, visible: on) }
     }
 
     /// Everything the real capacitor wears beyond the plates: the
@@ -716,22 +717,22 @@ final class FieldRenderer {
             }
         }
         guard let capacitor else {
-            dielectricSlab?.isEnabled = false
-            slabHandle?.isEnabled = false
+            dielectricSlab.map { Fade.tick($0, visible: false) }
+            slabHandle.map { Fade.tick($0, visible: false) }
             capacitorCallout?.isEnabled = false
             for dot in chargeDots { dot.isEnabled = false }
             return
         }
 
         if let slab = dielectricSlab {
-            slab.isEnabled = true
+            Fade.tick(slab, visible: true)
             slab.position = SIMD3<Float>(slabCenter)
             slab.scale = SIMD3(Float(capacitor.separation) * 0.94,
                                Float(capacitor.plateSize) * 0.96,
                                Float(capacitor.plateSize) * 0.99)
         }
         if let handle = slabHandle {
-            handle.isEnabled = true
+            Fade.tick(handle, visible: true)
             handle.position = SIMD3<Float>(slabCenter)
                 + SIMD3(0, 0, -Float(capacitor.plateSize) * 0.99 / 2)
         }
@@ -948,7 +949,7 @@ final class FieldRenderer {
             }
         }
         for (id, entity) in chargeEntities where !seen.contains(id) {
-            entity.removeFromParent()
+            Retire.entity(entity)
             chargeEntities.removeValue(forKey: id)
             chargeHalos.removeValue(forKey: id)
             chargeSignVerticals.removeValue(forKey: id)
@@ -1080,7 +1081,7 @@ final class FieldRenderer {
 
     private func syncProbeEntity(_ probe: TestChargeDynamics.ProbeState?, isPositive: Bool) {
         guard let probe else {
-            probeEntity?.removeFromParent()
+            probeEntity.map(Retire.entity)
             probeEntity = nil
             probeSignVertical = nil
             appliedProbePolarity = nil

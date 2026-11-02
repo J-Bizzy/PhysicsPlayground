@@ -145,6 +145,23 @@ contradicts this section, this section is current.
 - [ ] **The cut test:** enter all seven labs in sequence; the room's
       brightness moves only at Orbital Mechanics, and ramps rather than steps.
 
+## ⟳ 2026-11-02 — nothing pops (batch 5)
+
+- [ ] **Delete one of everything** (a bob, a magnet, a coil, a charge, a
+      circuit part, an optics piece, a hoop, a planet): each fades and
+      shrinks away in a blink, as its halo does, rather than vanishing.
+      Clear the bench and Clear all: the whole set fades together. Throw
+      a thirteenth ball: the one it replaces fades.
+- [ ] **Two planets merging:** both fade where they met as the merged one
+      appears with its boom.
+- [ ] **Every layer in More** (field lines, compass, shells, Uniform B,
+      Capacitor, Trajectory, Numbers, the voltage skyline, Lagrange
+      points) fades in and out.
+- [ ] **Orbits' guess:** the ghost and the verdict fade; the verdict
+      leaves over half a second at the eight-second mark.
+- [ ] **The Time Capsule's step buttons** fade in and out with the tape.
+- [ ] **Judge:** is 0.15 s too quick to notice, or just enough not to?
+
 ## ⟳ 2026-11-02 — the door holds (batch 4)
 
 - [ ] **Into a lab from the home:** pinch a lab. It swells toward you, the
