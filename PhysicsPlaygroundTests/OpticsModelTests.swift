@@ -137,6 +137,29 @@ final class OpticsModelTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(coloured.count, LightTracer.visibleSpectrum.count - 1)
     }
 
+    /// With no wall ahead, the fanned spectrum meets nothing: its strokes
+    /// are marked to fade out rather than end in a cut. Light that lands
+    /// is never marked (2026-11-02).
+    func testLightThatMeetsNothingFadesOut() {
+        let model = OpticsModel()
+        model.laser.isOn = false
+        let open = OpticsBeamLayout.strokes(model.traceIfNeeded())
+        XCTAssertTrue(open.contains { $0.fadesOut }, "nothing ran out in an unscanned room")
+        XCTAssertFalse(open.contains { $0.fadesOut && $0.inGlass }, "light faded inside glass")
+
+        model.room = LightTracer.Room(
+            walls: [RoomWalls.Wall(center: SIMD3(0, 1.5, -3), normal: SIMD3(0, 0, 1),
+                                   uAxis: SIMD3(1, 0, 0), vAxis: SIMD3(0, 1, 0),
+                                   halfU: 6, halfV: 3)],
+            floorY: OpticsModel.floorY, maxSegment: 6)
+        let walled = model.traceIfNeeded()
+        let landed = OpticsBeamLayout.strokes(walled).filter { stroke in
+            walled.landings.contains { simd_distance(SIMD3<Float>($0.point), stroke.b) < 1e-3 }
+        }
+        XCTAssertFalse(landed.isEmpty, "the wall caught nothing")
+        XCTAssertFalse(landed.contains { $0.fadesOut }, "light that landed was faded out")
+    }
+
     func testResetReturnsTheOpeningScene() {
         let model = OpticsModel()
         model.clearPieces()

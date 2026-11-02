@@ -58,6 +58,43 @@ public enum Primitives {
         mesh(.init("cone", height, radius)) { .generateCone(height: height, radius: radius) }
     }
 
+    /// A unit tube along Y, open at both ends, for a line that fades to
+    /// nothing (`Materials.fadedLine`): its u runs from 1 at −Y to 0 at +Y,
+    /// so stretched along a beam's direction it is whole where it leaves
+    /// the beam and gone at its far end. `generateCylinder` gives no say
+    /// over which way its texture runs.
+    public static func fadeTube(sides: Int = 10) -> MeshResource {
+        mesh(.init("fadeTube", Float(sides))) {
+            var positions: [SIMD3<Float>] = []
+            var normals: [SIMD3<Float>] = []
+            var coordinates: [SIMD2<Float>] = []
+            for ring in 0...1 {
+                let y = Float(ring) - 0.5
+                for side in 0...sides {
+                    let angle = Float(side) / Float(sides) * 2 * .pi
+                    let normal = SIMD3<Float>(cos(angle), 0, sin(angle))
+                    positions.append(normal + SIMD3(0, y, 0))
+                    normals.append(normal)
+                    coordinates.append(SIMD2(0.5 - y, Float(side) / Float(sides)))
+                }
+            }
+            let stride = UInt32(sides + 1)
+            var indices: [UInt32] = []
+            for side in 0..<UInt32(sides) {
+                let a = side, b = side + 1, c = a + stride, d = b + stride
+                // Wound to face outward.
+                indices += [a, c, b, b, c, d]
+            }
+            var descriptor = MeshDescriptor(name: "fade-tube")
+            descriptor.positions = MeshBuffers.Positions(positions)
+            descriptor.normals = MeshBuffers.Normals(normals)
+            descriptor.textureCoordinates = MeshBuffers.TextureCoordinates(coordinates)
+            descriptor.primitives = .triangles(indices)
+            return (try? MeshResource.generate(from: [descriptor]))
+                ?? .generateCylinder(height: 1, radius: 1)
+        }
+    }
+
     // MARK: Colliders
 
     public static func collisionSphere(radius: Float,

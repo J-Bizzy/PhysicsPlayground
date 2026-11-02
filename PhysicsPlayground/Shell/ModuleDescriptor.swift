@@ -95,29 +95,63 @@ struct PhysicsAdjustable: Identifiable {
 /// One secondary control a lab offers behind More. Drawn by the shell in
 /// the one control language; the lab only says what it is.
 enum MoreItem: Identifiable {
+    /// Whether a control can be used now and, when it cannot, why. The
+    /// reason is drawn as one dim line under the greyed control and given
+    /// to VoiceOver as its hint (2026-11-02, owner's call): a grey control
+    /// with no word was a question nobody answered. One closure, so the
+    /// greying and its reason cannot disagree.
+    struct Availability {
+        /// Nil while the control can be used; otherwise what it waits for.
+        let reason: () -> String?
+
+        init(_ reason: @escaping () -> String?) { self.reason = reason }
+
+        static let always = Availability { nil }
+
+        /// Usable while `condition` holds; otherwise `reason` says why.
+        static func when(_ condition: @escaping () -> Bool,
+                         else reason: String) -> Availability {
+            Availability { condition() ? nil : reason }
+        }
+
+        /// Whether it can be used now: `isEnabled()` reads as it always did.
+        func callAsFunction() -> Bool { reason() == nil }
+    }
+
     /// A display layer or a mode: on or off.
     case toggle(id: String, title: String, symbol: String,
                 isOn: () -> Bool, set: (Bool) -> Void,
-                isEnabled: () -> Bool = { true })
+                isEnabled: Availability = .always)
     /// A verb. `confirms` arms first ("Tap again"), for anything that
     /// throws work away; `destructive` paints it red, for the one verb
     /// whose whole point is to throw it away (Clear).
     case action(id: String, title: String, symbol: String,
                 confirms: Bool = false, destructive: Bool = false,
-                isEnabled: () -> Bool = { true },
+                isEnabled: Availability = .always,
                 run: () -> Void)
     /// One of a few named choices, the current one selected.
     case choice(id: String, title: String,
                 options: [(id: String, label: String)],
                 selected: () -> String?, select: (String) -> Void)
     /// A quantity with no object to stretch.
-    case slider(PhysicsAdjustable, isEnabled: () -> Bool = { true })
+    case slider(PhysicsAdjustable, isEnabled: Availability = .always)
     /// A set of like verbs — things you could add — as one wrapping grid.
     /// `isEnabled` greys the whole grid, for a lab that has no room left.
     case verbs(id: String, title: String,
                items: [(id: String, label: String, symbol: String)],
-               isEnabled: () -> Bool = { true },
+               isEnabled: Availability = .always,
                run: (String) -> Void)
+
+    /// Why this control cannot be used now, or nil when it can.
+    var unavailableReason: String? {
+        switch self {
+        case .toggle(_, _, _, _, _, let gate): gate.reason()
+        case .action(_, _, _, _, _, let gate, _): gate.reason()
+        case .choice: nil
+        case .slider(_, let gate): gate.reason()
+        case .verbs(_, _, _, let gate, _): gate.reason()
+        }
+    }
 
     var id: String {
         switch self {

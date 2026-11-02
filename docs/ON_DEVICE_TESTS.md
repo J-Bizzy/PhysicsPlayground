@@ -145,6 +145,21 @@ contradicts this section, this section is current.
 - [ ] **The cut test:** enter all seven labs in sequence; the room's
       brightness moves only at Orbital Mechanics, and ramps rather than steps.
 
+## ⟳ 2026-11-02 — greyed controls say why; light fades out (batch 8)
+
+- [ ] **More in each lab:** every greyed control has one dim line under it
+      saying what it waits for (Electric Fields: "Needs the capacitor"
+      under ΔV and Deflect shot, "Needs uniform B" under B). Switch the
+      thing on: the line goes and the control lights.
+- [ ] **VoiceOver on a greyed control** hears the reason as its hint, and
+      the line is not a second stop.
+- [ ] **Light & Optics in Deep space,** and in a room not yet scanned: the
+      fanned spectrum and any stray beam fade away into the distance; no
+      beam ends in a cut. Walk to the side of one and judge the fade from
+      there too.
+- [ ] **With a scanned wall ahead,** light that lands still lands at full
+      strength.
+
 ## ⟳ 2026-11-02 — words and numbers agree (batch 7)
 
 - [ ] **Circuits:** a fuse's label and its bead read the same number at

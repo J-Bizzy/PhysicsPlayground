@@ -48,7 +48,8 @@ enum PendulumsModule {
                     isOn: { model.frictionOn }, set: { model.frictionOn = $0 }),
             // Two pendulums and a spring, ready to trade their swing.
             .action(id: "coupledPair", title: "Coupled pair", symbol: "link",
-                    isEnabled: { model.pendulums.count + 2 <= PendulumsModel.pendulumBudget },
+                    isEnabled: .when({ model.pendulums.count + 2 <= PendulumsModel.pendulumBudget },
+                                     else: "No room for two more pendulums"),
                     run: { model.addCoupledPair() }),
             // A spring has no handle of its own to stretch, so its constant is a
             // slider — and only while there is a spring to set.
@@ -57,7 +58,7 @@ enum PendulumsModule {
                                       decimals: 1,
                                       read: { model.springStiffness },
                                       write: { model.setSpringStiffness($0) }),
-                    isEnabled: { !model.springs.isEmpty }),
+                    isEnabled: .when({ !model.springs.isEmpty }, else: "Needs a coupled pair")),
         ]
     }
 

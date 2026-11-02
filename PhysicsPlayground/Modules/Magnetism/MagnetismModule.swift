@@ -49,7 +49,7 @@ enum MagnetismModule {
             // so without the compass it has nothing to change.
             .toggle(id: "earth", title: "Earth's field", symbol: "globe",
                     isOn: { model.earthFieldOn }, set: { model.earthFieldOn = $0 },
-                    isEnabled: { model.compassOn }),
+                    isEnabled: .when({ model.compassOn }, else: "Needs the hand compass")),
         ]
     }
 

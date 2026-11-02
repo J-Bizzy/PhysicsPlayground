@@ -69,9 +69,8 @@ struct LabMorePanel: View {
                                       write: { appModel.setDimming($0) },
                                       format: { "\(Int(($0 * 100).rounded())) %" },
                                       speak: { "\(Int(($0 * 100).rounded())) percent" })
-                            .disabled(appModel.surroundings == .deepSpace)
-                            .accessibilityHint(appModel.surroundings == .deepSpace
-                                               ? "There is no room to dim in deep space" : "")
+                            .unavailable(appModel.surroundings == .deepSpace
+                                         ? "No room to dim in Deep space" : nil)
                     }
 
                     // Side by side while they fit; stacked at the sizes where
@@ -131,16 +130,17 @@ struct MoreItemView: View {
     let item: MoreItem
 
     var body: some View {
+        let reason = item.unavailableReason
         switch item {
-        case let .toggle(_, title, symbol, isOn, set, isEnabled):
+        case let .toggle(_, title, symbol, isOn, set, _):
             ControlToggle(title, systemImage: symbol, presentation: .row,
                           isOn: isOn, set: set)
-                .disabled(!isEnabled())
-        case let .action(_, title, symbol, confirms, destructive, isEnabled, run):
+                .unavailable(reason)
+        case let .action(_, title, symbol, confirms, destructive, _, run):
             ControlButton(title, systemImage: symbol,
                           emphasis: destructive ? .destructive : .standard,
                           fillsWidth: true, confirms: confirms, action: run)
-                .disabled(!isEnabled())
+                .unavailable(reason)
         case let .choice(_, title, options, selected, select):
             VStack(alignment: .leading, spacing: 8) {
                 Text(title)
@@ -151,7 +151,7 @@ struct MoreItemView: View {
             // "1×, toggle button" means nothing without the clock it sets.
             .accessibilityElement(children: .contain)
             .accessibilityLabel(title)
-        case let .verbs(_, title, items, isEnabled, run):
+        case let .verbs(_, title, items, _, run):
             VStack(alignment: .leading, spacing: 8) {
                 Text(title)
                     .font(.body.weight(.medium))
@@ -162,9 +162,9 @@ struct MoreItemView: View {
                                       fillsWidth: true) { run(item.id) }
                     }
                 }
-                .disabled(!isEnabled())
+                .unavailable(reason)
             }
-        case let .slider(adjustable, isEnabled):
+        case let .slider(adjustable, _):
             let format = adjustable.format ?? {
                 PhysicsFormat.measurement($0, adjustable.unit, decimals: adjustable.decimals)
             }
@@ -172,8 +172,39 @@ struct MoreItemView: View {
                           read: adjustable.read, write: adjustable.write,
                           format: format,
                           speak: { PhysicsFormat.spoken(format($0)) })
-                .disabled(!isEnabled())
+                .unavailable(reason)
         }
+    }
+}
+
+/// A control that cannot be used now, greyed, with one dim line under it
+/// saying why (2026-11-02). VoiceOver hears the reason as the control's
+/// hint, so the line is not a second stop.
+private struct Unavailable: ViewModifier {
+    let reason: String?
+
+    func body(content: Content) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            content
+                .disabled(reason != nil)
+                .accessibilityHint(reason ?? "")
+            if let reason {
+                Text(reason)
+                    .font(DesignTokens.TypeScale.footnote)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityHidden(true)
+                    .transition(.opacity)
+            }
+        }
+        .animation(.easeOut(duration: 0.2), value: reason)
+    }
+}
+
+extension View {
+    /// Greys this More control while `reason` is set, and says why.
+    func unavailable(_ reason: String?) -> some View {
+        modifier(Unavailable(reason: reason))
     }
 }
 

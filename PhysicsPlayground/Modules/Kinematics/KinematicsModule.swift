@@ -59,7 +59,7 @@ enum KinematicsModule {
             .toggle(id: "walls", title: "Walls bounce", symbol: "square.dashed",
                     isOn: { model.respectRoomWalls },
                     set: { model.respectRoomWalls = $0 },
-                    isEnabled: roomInReach),
+                    isEnabled: .when(roomInReach, else: "No walls in Deep space")),
             .toggle(id: "air", title: "Air resistance", symbol: "wind",
                     isOn: { model.airResistance },
                     set: { model.airResistance = $0 }),
@@ -68,13 +68,13 @@ enum KinematicsModule {
                           range: KinematicsModel.windSpeedRange, decimals: 1,
                           read: { model.windSpeed },
                           write: { model.windSpeed = $0 }),
-                    isEnabled: { model.airResistance }),
+                    isEnabled: .when({ model.airResistance }, else: "Needs air resistance")),
             // The custom ball's only free number; its diameter stays 10 cm.
             .slider(.init(id: "customMass", label: "Custom ball mass", unit: "kg",
                           range: KinematicsModel.customMassRange, decimals: 2,
                           read: { model.customMass },
                           write: { model.customMass = $0 }),
-                    isEnabled: { model.kind == .custom }),
+                    isEnabled: .when({ model.kind == .custom }, else: "For the custom ball")),
         ]
     }
 

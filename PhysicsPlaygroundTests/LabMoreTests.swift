@@ -72,6 +72,58 @@ final class LabMoreTests: XCTestCase {
         XCTAssertLessThanOrEqual(module.readings().count, 2 + 2 * 3)
     }
 
+    // MARK: Greyed, and why (2026-11-02)
+
+    /// A gate's reason is there exactly while it greys its control.
+    func testAGateSaysWhyExactlyWhileItGreys() {
+        var open = true
+        let gate = MoreItem.Availability.when({ open }, else: "Needs the compass")
+        XCTAssertTrue(gate())
+        XCTAssertNil(gate.reason())
+        open = false
+        XCTAssertFalse(gate())
+        XCTAssertEqual(gate.reason(), "Needs the compass")
+        XCTAssertNil(MoreItem.Availability.always.reason())
+    }
+
+    private func item(_ id: String, in module: String, _ appModel: AppModel) throws -> MoreItem {
+        let descriptor = try XCTUnwrap(ModuleCatalog.descriptor(id: module, appModel: appModel))
+        return try XCTUnwrap(descriptor.more.first { $0.id == id }, "\(module) has no \(id)")
+    }
+
+    /// The controls a lab opens greyed say what they are waiting for, and
+    /// say nothing once it arrives.
+    func testAGreyedControlNamesWhatItWaitsFor() throws {
+        let appModel = AppModel()
+        let fields = appModel.electromagnetismModel
+        fields.capacitorOn = false
+        XCTAssertEqual(try item("plateVoltage", in: "electrostatics", appModel).unavailableReason,
+                       "Needs the capacitor")
+        fields.capacitorOn = true
+        XCTAssertNil(try item("plateVoltage", in: "electrostatics", appModel).unavailableReason)
+
+        let magnets = appModel.magnetismModel
+        magnets.compassOn = false
+        XCTAssertEqual(try item("earth", in: "magnetism", appModel).unavailableReason,
+                       "Needs the hand compass")
+
+        let kinematics = appModel.kinematicsModel
+        kinematics.airResistance = false
+        XCTAssertEqual(try item("wind", in: "kinematics", appModel).unavailableReason,
+                       "Needs air resistance")
+    }
+
+    /// Twin suns names the one thing in its way: room in the system, then
+    /// a single Sun to split.
+    func testTwinSunsSaysWhichThingIsMissing() throws {
+        let appModel = AppModel()
+        let orbits = appModel.orbitalMechanicsModel
+        XCTAssertNil(try item("binary", in: "gravitylab", appModel).unavailableReason)
+        orbits.makeBinary()
+        XCTAssertEqual(try item("binary", in: "gravitylab", appModel).unavailableReason,
+                       "Needs a single Sun")
+    }
+
     /// The room's dimming is one number, set by More's slider, clamped.
     func testTheDimmingSliderSetsTheRoom() {
         let appModel = AppModel()

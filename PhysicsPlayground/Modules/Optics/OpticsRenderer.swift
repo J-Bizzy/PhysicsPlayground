@@ -47,6 +47,20 @@ final class OpticsRenderer {
     private var torchGlow: ModelEntity?
 
     private let beams: EntityPool<(core: ModelEntity, glow: ModelEntity)>
+    /// The far part of a stretch of light that meets nothing — Deep space,
+    /// or a room not yet scanned — drawn as a tail that fades to nothing
+    /// instead of a beam cut off where the tracer stopped following it
+    /// (2026-11-02, owner's call).
+    private let tails: EntityPool<(core: ModelEntity, glow: ModelEntity)>
+    private var tailLooks: [Int: BeamLook] = [:]
+    /// The house fade ramp, loaded once; until it arrives, light that runs
+    /// out is drawn whole, as it was.
+    private var fadeRamp: TextureResource?
+    /// How much of such a stretch the fade takes: its far half. Half a
+    /// metre was tried first and read as a cut — a beam running away from
+    /// the eye foreshortens, and the last 0.5 m of a 6 m stretch was 2 % of
+    /// its length on screen.
+    static let tailShare: Float = 0.5
     private let spots: EntityPool<ModelEntity>
     private let normals: EntityPool<ModelEntity>
     private let aimBead = Entity()
@@ -81,6 +95,14 @@ final class OpticsRenderer {
             container.addChild(core)
             return (core, glow)
         }
+        let tube = Primitives.fadeTube()
+        tails = EntityPool(budget: 64) { container in
+            let core = ModelEntity(mesh: tube, materials: [])
+            let glow = ModelEntity(mesh: tube, materials: [])
+            container.addChild(glow)
+            container.addChild(core)
+            return (core, glow)
+        }
         let square = Primitives.plane(width: 1, height: 1, cornerRadius: 0)
         spots = EntityPool(budget: 96) { container in
             let sprite = ModelEntity(mesh: square, materials: [])
@@ -99,10 +121,18 @@ final class OpticsRenderer {
         root.addChild(Lighting.keyLight())
         root.addChild(viewRoot)
         viewRoot.addChild(beams.root)
+        viewRoot.addChild(tails.root)
         viewRoot.addChild(spots.root)
         viewRoot.addChild(normals.root)
         buildSources()
         buildAimBead()
+        Task { [weak self] in
+            let ramp = await Materials.fadeRamp()
+            guard let self else { return }
+            fadeRamp = ramp
+            // Draw again, now with the tails.
+            drawnVersion = -1
+        }
     }
 
     /// World → lab coordinates.
@@ -149,22 +179,38 @@ final class OpticsRenderer {
 
     private func drawLight(_ trace: LightTracer.Result, angles: Bool) {
         let strokes = OpticsBeamLayout.strokes(trace)
+        var tailCount = 0
         for (index, slot) in beams.slots.enumerated() {
             guard index < strokes.count else {
                 slot.entity.isEnabled = false
                 continue
             }
             let stroke = strokes[index]
-            let length = simd_distance(stroke.a, stroke.b)
+            var length = simd_distance(stroke.a, stroke.b)
             guard length > 1e-5 else {
                 slot.entity.isEnabled = false
                 continue
             }
-            slot.entity.isEnabled = true
-            slot.entity.position = (stroke.a + stroke.b) / 2
-            slot.entity.orientation = rotation(from: [0, 1, 0], to: (stroke.b - stroke.a) / length)
+            let direction = (stroke.b - stroke.a) / length
             let level = OpticsBeamLayout.level(stroke.strength)
             let colour = Self.color(stroke.color)
+            // Light that meets nothing fades out over its far half; the beam
+            // proper stops where its tail begins.
+            if stroke.fadesOut, let fadeRamp, tailCount < tails.budget {
+                let tail = length * Self.tailShare
+                drawTail(tailCount, from: stroke.b - direction * tail, along: direction,
+                         length: tail, colour: colour, level: level,
+                         inGlass: stroke.inGlass, ramp: fadeRamp)
+                tailCount += 1
+                length -= tail
+                guard length > 1e-5 else {
+                    slot.entity.isEnabled = false
+                    continue
+                }
+            }
+            slot.entity.isEnabled = true
+            slot.entity.position = stroke.a + direction * (length / 2)
+            slot.entity.orientation = rotation(from: [0, 1, 0], to: direction)
             slot.payload.core.scale = [Self.coreRadius, length, Self.coreRadius]
             slot.payload.glow.scale = [Self.glowRadius, length, Self.glowRadius]
             let look = BeamLook(colour: colour, level: level, inGlass: stroke.inGlass)
@@ -176,6 +222,8 @@ final class OpticsRenderer {
             slot.payload.glow.model?.materials = [Materials.unlit(colour,
                                                                   opacity: (stroke.inGlass ? 0.32 : 0.16) * level)]
         }
+
+        for slot in tails.slots.dropFirst(tailCount) { slot.entity.isEnabled = false }
 
         let landed = OpticsBeamLayout.spots(trace)
         for (index, slot) in spots.slots.enumerated() {
@@ -211,6 +259,36 @@ final class OpticsRenderer {
             slot.entity.orientation = rotation(from: [0, 1, 0], to: mark.normal)
             slot.payload.scale = [0.0007, 0.09, 0.0007]
         }
+    }
+
+    /// One tail: whole where it leaves its beam, nothing at its far end —
+    /// the beam's own core and glow, read through the fade ramp.
+    private func drawTail(_ index: Int, from start: SIMD3<Float>, along direction: SIMD3<Float>,
+                          length: Float, colour: UIColor, level: Float, inGlass: Bool,
+                          ramp: TextureResource) {
+        let slot = tails.slots[index]
+        slot.entity.isEnabled = true
+        slot.entity.position = start + direction * (length / 2)
+        slot.entity.orientation = rotation(from: [0, 1, 0], to: direction)
+        slot.payload.core.scale = [Self.coreRadius, length, Self.coreRadius]
+        slot.payload.glow.scale = [Self.glowRadius, length, Self.glowRadius]
+        let look = BeamLook(colour: colour, level: level, inGlass: inGlass)
+        guard tailLooks[index] != look else { return }
+        tailLooks[index] = look
+        slot.payload.core.model?.materials = [Self.tailMaterial(colour, ramp: ramp, opacity: level)]
+        slot.payload.glow.model?.materials = [Self.tailMaterial(
+            colour, ramp: ramp, opacity: (inGlass ? 0.32 : 0.16) * level)]
+    }
+
+    /// Light, not a surface, so it writes no depth: the glow round a tail is
+    /// a tube about its core, and drawn first it hid the core inside it —
+    /// the tail began at 40 % of its beam (the beam's own core is opaque,
+    /// drawn before any glow).
+    private static func tailMaterial(_ colour: UIColor, ramp: TextureResource,
+                                     opacity: Float) -> UnlitMaterial {
+        var material = Materials.fadedLine(colour, ramp: ramp, opacity: opacity)
+        material.writesDepth = false
+        return material
     }
 
     /// One mark per surface the strong light met, not one per wavelength.

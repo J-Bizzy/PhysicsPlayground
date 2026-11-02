@@ -32,6 +32,9 @@ enum OpticsBeamLayout {
         var strength: Double
         /// Whether it runs through glass.
         var inGlass: Bool
+        /// Whether it met nothing, so the drawing fades it out rather than
+        /// ending it where the tracer stopped following.
+        var fadesOut = false
     }
 
     struct Spot: Equatable {
@@ -84,7 +87,8 @@ enum OpticsBeamLayout {
             guard let group = groups[key] else { return nil }
             return Stroke(a: SIMD3<Float>(group.segment.a), b: SIMD3<Float>(group.segment.b),
                           color: Spectrum.linearRGB(xyz: group.color),
-                          strength: group.strength, inGlass: group.segment.inside != nil)
+                          strength: group.strength, inGlass: group.segment.inside != nil,
+                          fadesOut: group.segment.escapes)
         }
     }
 

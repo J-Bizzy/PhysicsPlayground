@@ -329,6 +329,24 @@ final class LightTracerTests: XCTestCase {
         XCTAssertEqual(down.landings.first?.point.y ?? -1, 0, accuracy: 1e-12)
     }
 
+    /// A stretch that meets nothing says so, and ends where the tracer
+    /// stopped following it — so a drawing can fade it out rather than
+    /// show a cut. A stretch that arrives somewhere does not.
+    func testLightThatMeetsNothingIsMarkedAsEscaping() throws {
+        let room = LightTracer.Room(walls: [farWall], floorY: 0, maxSegment: 6)
+        let past = LightTracer.trace([.init(origin: SIMD3(3.5, 1.2, 0),
+                                            direction: SIMD3(0, 0, 1), nanometers: 650)],
+                                     elements: [], room: room)
+        let escaping = try XCTUnwrap(past.segments.first)
+        XCTAssertTrue(escaping.escapes)
+        XCTAssertEqual(simd_distance(escaping.a, escaping.b), 6, accuracy: 1e-12)
+
+        let hit = LightTracer.trace([.init(origin: SIMD3(1.5, 1.2, 0),
+                                           direction: SIMD3(0, 0, 1), nanometers: 650)],
+                                    elements: [], room: room)
+        XCTAssertFalse(try XCTUnwrap(hit.segments.first).escapes, "a stretch that landed escaped")
+    }
+
     // MARK: The whole scene
 
     /// A beam folded by a mirror through a turned block and a prism onto a

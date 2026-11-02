@@ -51,7 +51,7 @@ enum CircuitsModule {
             .toggle(id: "truespeed", title: "True drift speed", symbol: "tortoise",
                     isOn: { model.trueSpeedMode },
                     set: { model.trueSpeedMode = $0 },
-                    isEnabled: { model.showElectronFlow }),
+                    isEnabled: .when({ model.showElectronFlow }, else: "Needs electron flow")),
             .toggle(id: "bfield", title: "Magnetic field", symbol: "circle.hexagongrid",
                     isOn: { model.showMagneticField },
                     set: { model.showMagneticField = $0 }),
@@ -60,7 +60,7 @@ enum CircuitsModule {
                     set: { model.showVoltageHeights = $0 }),
             .action(id: "clear", title: "Clear the bench", symbol: "trash.slash",
                     confirms: true, destructive: true,
-                    isEnabled: { !model.components.isEmpty },
+                    isEnabled: .when({ !model.components.isEmpty }, else: "The bench is empty"),
                     run: {
                         model.clearBench()
                         model.commitBench()

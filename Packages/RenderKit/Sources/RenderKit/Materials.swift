@@ -296,9 +296,10 @@ public enum Materials {
     /// 0 at one end, 1 at the other — so a trail is bright at the body and
     /// nothing at its tail. Clamped, not repeated: u = 1 must not wrap round
     /// to the transparent end.
-    public static func fadedLine(_ color: UIColor, ramp: TextureResource) -> UnlitMaterial {
+    public static func fadedLine(_ color: UIColor, ramp: TextureResource,
+                                 opacity: Float = 1) -> UnlitMaterial {
         memo(key("fadedLine", colors: [color],
-                 [Float(ObjectIdentifier(ramp).hashValue % 1_000_000)])) {
+                 [Float(ObjectIdentifier(ramp).hashValue % 1_000_000), opacity])) {
             var material = UnlitMaterial(color: color)
             let sampler = MTLSamplerDescriptor()
             sampler.sAddressMode = .clampToEdge
@@ -306,7 +307,7 @@ public enum Materials {
             sampler.minFilter = .linear
             sampler.magFilter = .linear
             material.blending = .transparent(opacity: .init(
-                scale: 1,
+                scale: opacity,
                 texture: .init(ramp, sampler: MaterialParameters.Texture.Sampler(sampler))))
             return material
         }

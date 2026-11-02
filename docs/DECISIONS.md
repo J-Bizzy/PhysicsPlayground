@@ -16,6 +16,28 @@ A running log of consequential decisions — architectural, physical, or product
 
 (The template sat stranded at line 309, mid-log between two 2026-07-29 entries, until 2026-08-01.)
 
+## 2026-11-02 — A greyed control says why, and light that runs out fades
+
+**Decision:** Two of the five owner's calls in the November polish pass were chosen. The other three are not built: ΔV on a plate, pendulum mass as its metal, and readable planet names.
+- **Greyed controls say why.** A More control that cannot be used now says why in one dim line under it, such as "Needs the hand compass", "Needs air resistance" or "No walls in Deep space". VoiceOver hears the same words as the control's hint.
+- **Light that runs out fades.** In Light & Optics, a stretch of light that meets nothing (Deep space, or a room not yet scanned) fades to nothing over its far half instead of ending in a cut.
+
+**Context:**
+- **Greyed controls.** Sixteen controls across the seven labs, plus the room's dimming slider, could grey out with no word. Each was waiting on something the panel already showed, but never named: the compass, the air, the capacitor, a coupled pair, room in the system.
+- **Light that runs out.** The tracer follows a ray 6 m before it gives up, and the beam was drawn to that point and stopped. A beam that ends there reads as a beam that hit something invisible.
+
+**Consequences:**
+- **`MoreItem.Availability`** replaces each `isEnabled` closure. It is one closure returning the reason or nil, built with `.when(condition, else: reason)`, so the greying and its reason cannot disagree. `callAsFunction` keeps `isEnabled()` reading as it did in the tests. `LabMorePanel`'s `unavailable(_:)` draws the line, and the room's dimming slider uses it too.
+- **`LightTracer.Segment.escapes`** marks a stretch that met no piece, wall or floor. `OpticsBeamLayout.Stroke.fadesOut` carries it to the renderer.
+- **The renderer draws the far half of such a stroke as a tail:** a pool of 64 tubes (`Primitives.fadeTube`, whose u runs along its length) in `Materials.fadedLine`, which gained an `opacity`.
+- **Two things the stills found:**
+  - **Half a metre, the first length, read as a cut.** A beam running away from the eye foreshortens: the last 0.5 m of 6 m was 2 % of its length on screen.
+  - **The tail began at 40 % of its beam,** because its glow wrote depth and hid its core. Tail materials write no depth, as the landing spots already did.
+- **Tests:**
+  - `LightTracerTests.testLightThatMeetsNothingIsMarkedAsEscaping`;
+  - `OpticsModelTests.testLightThatMeetsNothingFadesOut`;
+  - `LabMoreTests`: a gate says why exactly while it greys, three labs' greyed controls name what they wait for, and Twin suns names which of its two needs is missing.
+
 ## 2026-11-02 — Words and numbers agree
 
 **Decision:** A quantity is written the same way wherever it appears for the same object: on the part, on its ring's bead, on the floating card, in More's Values and inside a formula. The lab window's button and failure line use the home window's words. This is the seventh batch of the November polish pass.

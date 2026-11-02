@@ -70,11 +70,11 @@ enum ElectromagnetismModule {
                           range: scaled(FieldModel.plateVoltageRange, by: 1e-3), decimals: 1,
                           read: { model.plateVoltage / 1000 },
                           write: { model.setPlateVoltage($0 * 1000) }),
-                    isEnabled: { model.capacitorOn }),
+                    isEnabled: .when({ model.capacitorOn }, else: "Needs the capacitor")),
             // The CRT demo: the test charge fired crosswise through the gap.
             // It does not confirm: re-firing is the point.
             .action(id: "deflect", title: "Deflect shot", symbol: "arrow.turn.down.right",
-                    isEnabled: { model.capacitorOn },
+                    isEnabled: .when({ model.capacitorOn }, else: "Needs the capacitor"),
                     run: { model.launchProbeThroughGap() }),
             .toggle(id: "bfield", title: "Uniform B", symbol: "arrow.up",
                     isOn: { model.magneticFieldOn }, set: { model.magneticFieldOn = $0 }),
@@ -82,12 +82,13 @@ enum ElectromagnetismModule {
                           range: scaled(FieldModel.magneticFieldRange, by: 1e-3), decimals: 0,
                           read: { model.magneticFieldTesla / 1000 },
                           write: { model.magneticFieldTesla = $0 * 1000 }),
-                    isEnabled: { model.magneticFieldOn }),
+                    isEnabled: .when({ model.magneticFieldOn }, else: "Needs uniform B")),
             // Everything placed goes, the test charge included; the switches
             // stay, because a layer is a setting, not a placed object.
             .action(id: "clear", title: "Clear all", symbol: "trash.slash",
                     confirms: true, destructive: true,
-                    isEnabled: { !model.charges.isEmpty || model.probe != nil },
+                    isEnabled: .when({ !model.charges.isEmpty || model.probe != nil },
+                                     else: "Nothing to clear"),
                     run: { model.clearEverything() }),
         ]
     }

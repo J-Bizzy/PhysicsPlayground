@@ -169,14 +169,19 @@ public enum LightTracer {
         public var power: Double
         /// The element whose glass this stretch runs through, if any.
         public var inside: UUID?
+        /// True when it met nothing — no piece, wall or floor within
+        /// `Room.maxSegment` — so `b` is only where the tracer stopped
+        /// following it, not a place the light arrived.
+        public var escapes: Bool
 
         public init(a: SIMD3<Double>, b: SIMD3<Double>, nanometers: Double, power: Double,
-                    inside: UUID? = nil) {
+                    inside: UUID? = nil, escapes: Bool = false) {
             self.a = a
             self.b = b
             self.nanometers = nanometers
             self.power = power
             self.inside = inside
+            self.escapes = escapes
         }
 
         public var direction: SIMD3<Double> { simd_normalize(b - a) }
@@ -422,7 +427,8 @@ private struct Tracer {
 
         let end = work.origin + nearest * work.direction
         result.segments.append(.init(a: work.origin, b: end, nanometers: work.nanometers,
-                                     power: work.power, inside: nil))
+                                     power: work.power, inside: nil,
+                                     escapes: element == nil && landing == nil))
 
         if let hit = element {
             let candidate = elements[hit.index]

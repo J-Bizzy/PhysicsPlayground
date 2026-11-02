@@ -52,7 +52,7 @@ enum OpticsModule {
                     select: { model.glass = $0 == "crown" ? .nbk7 : .sf11 }),
             .action(id: "clear", title: "Clear all", symbol: "trash",
                     confirms: true, destructive: true,
-                    isEnabled: { !model.pieces.isEmpty },
+                    isEnabled: .when({ !model.pieces.isEmpty }, else: "Nothing to clear"),
                     run: { model.clearPieces() }),
         ]
     }
