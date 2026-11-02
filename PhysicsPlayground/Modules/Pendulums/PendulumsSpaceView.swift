@@ -209,6 +209,8 @@ struct PendulumsSpaceView: View {
                         if let id = wells?.pull(value.entity, at: hand) {
                             drag = RelativeDrag(name: "pivot-\(id.uuidString)",
                                                 target: hand, hand: hand)
+                            renderer?.carriedPivotFromWell = true
+                            renderer?.carriedPivotID = id
                             return
                         }
 
@@ -266,6 +268,9 @@ struct PendulumsSpaceView: View {
                            simd_distance(target, pendulum.pivot) > Self.tapTravel {
                             pressed.moved = true
                             pressedPivot = pressed
+                            // Once it moves it is carried, not tapped: glow and tick.
+                            renderer?.carriedPivotFromWell = false
+                            renderer?.carriedPivotID = id
                         }
                         model.movePivot(id: id, to: target)
                         return
@@ -286,6 +291,7 @@ struct PendulumsSpaceView: View {
                     // be re-hung.
                     if let pressed = pressedPivot {
                         pressedPivot = nil
+                        renderer?.carriedPivotID = nil
                         if !pressed.moved {
                             toggleRing(pressed.id, on: value.entity)
                         }
@@ -299,6 +305,7 @@ struct PendulumsSpaceView: View {
                     bloom.endGrip()
                     defer {
                         renderer?.grabbedID = nil
+                        renderer?.carriedPivotID = nil
                         drag = nil
                         handSampler.reset()
                     }

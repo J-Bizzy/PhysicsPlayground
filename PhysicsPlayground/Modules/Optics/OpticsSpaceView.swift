@@ -137,6 +137,7 @@ struct OpticsSpaceView: View {
                     if let id = wells?.pull(value.entity, at: hand) {
                         model.grab(id: id)
                         pull = RelativeDrag(name: id.uuidString, target: hand, hand: hand)
+                        renderer.carried.carry(id.uuidString, fromWell: true)
                     }
                 }
                 .onEnded { _ in
@@ -147,6 +148,7 @@ struct OpticsSpaceView: View {
                     aiming = nil
                     if let pull, let id = UUID(uuidString: pull.name) { model.release(id: id) }
                     pull = nil
+                    renderer?.carried.carry(nil)
                 }
         )
     }

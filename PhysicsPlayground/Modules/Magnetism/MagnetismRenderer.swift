@@ -109,6 +109,7 @@ final class MagnetismRenderer {
         tickSounds(model)
         syncMagnets(model)
         syncCoils(model)
+        acknowledgePull()
         syncFieldLines(model)
         syncHandCompass(model)
     }
@@ -133,6 +134,26 @@ final class MagnetismRenderer {
     }
 
     private var coilVisuals: [UUID: CoilVisual] = [:]
+
+    /// A magnet or coil just pulled from a well and carried by the view's
+    /// own drag, not a grab session: it wears the glow from its first drawn
+    /// frame and ticks where it is let go (2026-11-02). The well's pop is
+    /// its grab sound.
+    var pulledID: UUID? {
+        didSet {
+            guard pulledID != oldValue else { return }
+            if let entity = pulledEntity { Grasp.letGo(entity) }
+            pulledEntity = nil
+        }
+    }
+    private weak var pulledEntity: Entity?
+
+    private func acknowledgePull() {
+        guard let id = pulledID, pulledEntity == nil,
+              let entity = magnetEntities[id] ?? coilVisuals[id]?.container else { return }
+        pulledEntity = entity
+        Grasp.take(entity, tick: false)
+    }
 
     /// Where the LED's dome stands on the coil: the socket's top, as the
     /// asset is milled (`LED_SEAT` in the script).

@@ -220,6 +220,7 @@ struct CircuitsSpaceView: View {
             // first part's, for CLI screenshots.
             if UserDefaults.standard.bool(forKey: "circRing"),
                let part = model.selectedComponent ?? model.components.first {
+                model.select(id: part.id)
                 ring.openID = part.id
             }
             // `-circSameNet 1` holds the refusal on screen: a lead pulled
@@ -414,6 +415,7 @@ struct CircuitsSpaceView: View {
                     if probeDrag == nil, let meter,
                        let slot = meter.probeSlot(for: value.entity) {
                         probeDrag = slot
+                        if let probe = meter.probe(slot) { Grasp.take(probe) }
                     }
                     if let slot = probeDrag, let meter {
                         let world = SIMD3<Float>(value.convert(
@@ -433,6 +435,7 @@ struct CircuitsSpaceView: View {
                         let local = renderer.root.convert(position: world, from: nil)
                         if meterDrag == nil, meter.isBody(value.entity) {
                             meterDrag = (meter.anchor, local)
+                            Grasp.take(meter.caseEntity)
                         }
                         if let drag = meterDrag {
                             meter.place(at: drag.start + (local - drag.hand))
@@ -488,6 +491,9 @@ struct CircuitsSpaceView: View {
                         spawnedPartID = id
                         partDrag = RelativeDrag(name: id.uuidString, target: hand, hand: hand)
                         renderer.previewComponentID = id
+                        // Carried like any part from its first frame: the glow, the
+                        // lift and the lean. The shelf's pop is its grab sound.
+                        renderer.flashPickup(id: id, tick: false)
                     }
                     switch Self.carryDispatch(
                         leadPullActive: model.leadPull != nil,
@@ -521,6 +527,8 @@ struct CircuitsSpaceView: View {
                         activeTrack = nil
                         return
                     }
+                    if let slot = probeDrag, let probe = meter?.probe(slot) { Grasp.letGo(probe) }
+                    if meterDrag != nil, let meter { Grasp.letGo(meter.caseEntity) }
                     probeDrag = nil
                     meterDrag = nil
                     palette?.endDrag()
@@ -615,6 +623,12 @@ struct CircuitsSpaceView: View {
         if let openID = ring.openID,
            !model.components.contains(where: { $0.id == openID }) {
             ring.openID = nil     // deleted out from under the ring
+        }
+        // The ring, the halo and the readout name one part: a selection that
+        // moves to another part (a tap on its lead or lever, a carry, a new
+        // part from the shelf) folds the ring rather than leave it on the old.
+        if let openID = ring.openID, model.selectedID != openID {
+            ring.openID = nil
         }
         renderer.ringPartID = ring.openID
         guard let uuid = ring.openID,

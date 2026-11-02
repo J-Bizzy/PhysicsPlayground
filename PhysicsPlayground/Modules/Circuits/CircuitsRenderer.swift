@@ -652,6 +652,11 @@ final class CircuitsRenderer {
 
     /// While this part is carried, ghost wires show what a release would connect.
     var previewComponentID: UUID?
+    /// Where the selected part's card stands while its ring is open, in
+    /// the billboarded anchor's frame: 15 cm to the viewer's left and 5 cm
+    /// lower, clear of the petals at any distance the ring is read from.
+    nonisolated static let readoutAside = SIMD3<Float>(-0.15, -0.05, 0)
+
     /// The part whose ring is open. Its bead's callout carries its number
     /// there, so where the part's own label says the same thing it stands
     /// down: the track runs under the part, through where the label hangs.
@@ -847,22 +852,32 @@ final class CircuitsRenderer {
     }
 
     /// Acknowledge a grab: the live glow and a tick on the part just taken.
-    /// The glow stays until `flashRelease`.
-    func flashPickup(id: UUID) {
+    /// The glow stays until `flashRelease`. `tick` false for a part the
+    /// shelf has just handed over, whose pop already spoke; a part born
+    /// this frame has no visual yet, and takes its glow when it gets one.
+    func flashPickup(id: UUID, tick: Bool = true) {
         landings[id] = nil
         carriedID = id
-        guard let holder = visuals[id]?.holder else { return }
+        guard let holder = visuals[id]?.holder else {
+            pendingGlowID = id
+            return
+        }
+        pendingGlowID = nil
         if let previous = pulsedGrabEntity, previous !== holder {
             LiveGlow.set(false, on: previous)
         }
         pulsedGrabEntity = holder
         LiveGlow.set(true, on: holder)
-        SoundPalette.play(.grabTick, on: holder, volume: 0.2)
+        if tick { SoundPalette.play(.grabTick, on: holder, volume: 0.2) }
     }
+
+    /// A part taken before its visual existed (pulled off the shelf).
+    private var pendingGlowID: UUID?
 
     /// Answer a release, on whatever was last picked up.
     func flashRelease() {
         carriedID = nil
+        pendingGlowID = nil
         guard let entity = pulsedGrabEntity else { return }
         LiveGlow.set(false, on: entity)
         SoundPalette.play(.releaseTick, on: entity, volume: 0.18)
@@ -979,6 +994,15 @@ final class CircuitsRenderer {
             // Counter-scaled: the anchor hangs under `viewRoot` (the zoom
             // rig), so its position rides the zoom but its size must not.
             selectedAnchor.scale = SIMD3(repeating: 1 / max(benchScale, 0.001))
+            // With the part's ring open the card stands aside, up and to the
+            // viewer's left (the anchor billboards, so its x is the viewer's):
+            // the petals arc where it hung, and the track runs under the part
+            // to the right (2026-11-02).
+            let aside = ringPartID == selected.id ? Self.readoutAside : .zero
+            for card in selectedAnchor.children {
+                card.position = Motion.isReduced ? aside
+                    : card.position + (aside - card.position) * Float(min(dt * 12, 1))
+            }
         } else {
             selectedAnchor.isEnabled = false
         }
@@ -1234,6 +1258,9 @@ final class CircuitsRenderer {
     private var strainedJunction: UUID?
 
     private func advanceFeel(_ model: CircuitsModel, dt: Double) {
+        if let pending = pendingGlowID, visuals[pending] != nil, carriedID == pending {
+            flashPickup(id: pending, tick: false)
+        }
         for id in Set(lifts.keys).union(carriedID.map { [$0] } ?? []) {
             let target: Float = id == carriedID && !Motion.isReduced ? 1 : 0
             let next = Motion.ease(lifts[id] ?? 0, toward: target, dt: dt, rate: 14)

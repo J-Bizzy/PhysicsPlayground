@@ -210,6 +210,12 @@ final class Multimeter {
         return true
     }
 
+    /// The case, as the thing a hand carries the meter by.
+    var caseEntity: Entity { body }
+
+    /// A probe, as the thing a hand carries.
+    func probe(_ slot: CircuitsModel.ProbeSlot) -> Entity? { probes[slot] }
+
     /// Which probe an entity belongs to, if any.
     func probeSlot(for entity: Entity) -> CircuitsModel.ProbeSlot? {
         for (slot, probe) in probes where isDescendant(entity, of: probe) {

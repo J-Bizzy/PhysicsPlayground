@@ -316,9 +316,16 @@ struct FieldSpaceView: View {
                             name: id == Self.probeWellID
                                 ? FieldRenderer.probeEntityName : id.uuidString,
                             target: hand, hand: hand)
+                        // A charge glows through its own hold; the test charge here.
+                        if id == Self.probeWellID {
+                            renderer.carried.carry(FieldRenderer.probeEntityName, fromWell: true)
+                        }
                         return
                     }
                     drag = beginDrag(entity: value.entity, hand: hand)
+                    if let name = drag?.name, UUID(uuidString: name) == nil {
+                        renderer.carried.carry(name)
+                    }
                 }
                 guard let drag else { return }
                 apply(drag: drag, hand: hand)
@@ -338,6 +345,7 @@ struct FieldSpaceView: View {
                 }
                 bloom.endGrip()
                 drag = nil
+                renderer.carried.carry(nil)
                 flick.reset()
                 model.heldChargeID = nil
             }

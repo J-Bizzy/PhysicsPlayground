@@ -285,6 +285,7 @@ struct OrbitalMechanicsSpaceView: View {
                                     name: candidate.name,
                                     target: prediction.position * model.simToDisplay,
                                     hand: hand)
+                                renderer.carried.carry(candidate.name)
                                 break
                             }
                             if let id = UUID(uuidString: candidate.name),
@@ -317,6 +318,7 @@ struct OrbitalMechanicsSpaceView: View {
                         bloom.endGrip()
                         model.endOrbitEdit()
                         drag = nil
+                        renderer?.carried.carry(nil)
                     }
                     guard let renderer, let drag,
                           drag.name != "prediction-ghost",

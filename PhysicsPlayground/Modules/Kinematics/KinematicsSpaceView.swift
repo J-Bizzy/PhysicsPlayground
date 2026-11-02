@@ -348,6 +348,10 @@ struct KinematicsSpaceView: View {
                         if let id = wells?.pull(value.entity, at: hand) {
                             drag = RelativeDrag(name: id.uuidString,
                                                 target: hand, hand: hand)
+                            // A hoop glows in the hand; a ball does through its own grab.
+                            if model.rings.contains(where: { $0.id == id }) {
+                                renderer?.carried.carry(id.uuidString, fromWell: true)
+                            }
                             return
                         }
                         // A tap on a flying ball must not catch it: a bare press would freeze
@@ -359,6 +363,7 @@ struct KinematicsSpaceView: View {
                             drag = beginDrag(entity: value.entity, hand: hand)
                             // The bead shows its reading while it is held.
                             renderer?.beadHeld = drag?.name == KinematicsRenderer.aimBeadName
+                            renderer?.carried.carry(drag?.name)
                         }
                     }
 
@@ -385,6 +390,7 @@ struct KinematicsSpaceView: View {
                     pressedBall.cancel()
                     bloom.endGrip()
                     renderer?.beadHeld = false
+                    renderer?.carried.carry(nil)
                     defer { drag = nil }
                     guard let drag else { return }
                     let hand = SIMD3<Double>(SIMD3<Float>(value.convert(

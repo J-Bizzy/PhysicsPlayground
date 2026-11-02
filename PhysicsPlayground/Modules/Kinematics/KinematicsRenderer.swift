@@ -186,6 +186,13 @@ final class KinematicsRenderer {
     /// Whether a hand holds the aim bead — set by the SpaceView's drag, so a
     /// handle shows its value while you handle it, whatever the Numbers say.
     var beadHeld = false
+
+    /// What a hand carries that is not a ball — the launcher, its aim bead,
+    /// a hoop — by entity name. It wears the glow while held and ticks as it
+    /// is taken and let go, as a ball always did (2026-11-02); a hoop just
+    /// pulled from its well is found once it is drawn, and its tick is the
+    /// well's pop.
+    let carried = Grasp.Carried()
     /// The layers last applied, so a frame that changes nothing writes nothing.
     private var appliedLayers: (trajectory: Bool, numbers: Bool, apex: Bool, landing: Bool)?
     /// How large each flight's strobe dots are drawn, easing to 0 when they
@@ -670,6 +677,7 @@ final class KinematicsRenderer {
     }
 
     func tick(_ model: KinematicsModel) {
+        carried.find(under: root)
         tickFlightCallout(model)
         tickReleaseCallout(model)
         syncReadyBall(model)

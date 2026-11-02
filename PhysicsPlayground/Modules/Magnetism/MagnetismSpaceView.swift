@@ -119,11 +119,14 @@ struct MagnetismSpaceView: View {
             }
             #endif
             #if DEBUG
-            // `-magRing 1` opens the first magnet's control ring at
-            // launch, so the ring can be screenshot from the CLI.
+            // `-magRing 1` opens the selected magnet's control ring at launch
+            // (the first's when none is), so the ring can be screenshot from
+            // the CLI with its halo on the same magnet.
             if UserDefaults.standard.bool(forKey: "magRing"),
-               let first = model.magnets.first {
-                ring.openID = first.id
+               let magnet = model.magnets.first(where: { $0.id == model.selectedID })
+                   ?? model.magnets.first {
+                model.select(id: magnet.id)
+                ring.openID = magnet.id
             }
             // `-magLayers 0` switches the field lines, the compass and the
             // dynamics off, as More would (`earthFieldOn` has no argument).
@@ -190,6 +193,7 @@ struct MagnetismSpaceView: View {
                             model.grab(id: id)
                             drag = RelativeDrag(name: id.uuidString,
                                                 target: hand, hand: hand)
+                            renderer.pulledID = id
                             return
                         }
                         // Magnets and the compass are not claimed here —
@@ -215,6 +219,7 @@ struct MagnetismSpaceView: View {
                         model.release(id: id)
                     }
                     drag = nil
+                    renderer?.pulledID = nil
                 }
         )
     }

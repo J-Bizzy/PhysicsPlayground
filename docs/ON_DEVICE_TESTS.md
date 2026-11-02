@@ -145,6 +145,34 @@ contradicts this section, this section is current.
 - [ ] **The cut test:** enter all seven labs in sequence; the room's
       brightness moves only at Orbital Mechanics, and ramps rather than steps.
 
+## ⟳ 2026-11-02 — every grab answers (batch 3)
+
+Volume up. Each of these should glow while held, tick as you take it and
+tick as you let go; anything a well hands you glows from the start (its
+pop is the grab sound).
+- [ ] **Circuits:** a part pulled off the shelf lifts, glows and leans
+      toward a seat on its very first carry; the meter's case and each
+      probe; the turntable's rim and deck (ticks, no glow, it is too big
+      for one); a lead pulled fresh from a terminal.
+- [ ] **An empty turntable** (Clear the bench) thuds when you pinch its rim.
+- [ ] **Pendulums:** a rig carried by its collar, and one pulled from
+      either well.
+- [ ] **Magnetism:** a magnet or coil carried straight off the well.
+- [ ] **Projectiles:** the launcher, the aim bead, a hoop (and one from
+      its well).
+- [ ] **Electric Fields:** the test charge (and one from its well), each
+      capacitor plate, the dielectric slab.
+- [ ] **Light & Optics:** a piece from the well. **Orbits:** the ghost.
+- [ ] **The lab anchor (Move the lab):** glows while dragged; a tap on
+      it that recentres the lab pops.
+- [ ] **A full well thuds** (pull pendulums until the wells refuse), and
+      VoiceOver says "No room for another."
+- [ ] **Circuits, one part at a time:** open a part's ring, then tap a
+      different part's lead: the ring folds. Delete a part: nothing is
+      selected after. With a ring open the readout card stands to your
+      upper left, clear of the petals, and comes back over the part when
+      the ring folds. Judge: does the card's move read as making room?
+
 ## ⟳ 2026-11-02 — the calm track on parts and magnets (batch 2)
 
 - [ ] **A resistor clicks through its real values.** Open a resistor's

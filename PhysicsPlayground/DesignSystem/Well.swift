@@ -550,12 +550,21 @@ final class Well {
         }
         // The recoil and the pop only happen when something came out.
         guard let id = specs[index].spawn(hand) else {
-            refusal[index] = 1
+            refuse(index)
             return nil
         }
         dip[index] = 1
         SoundPalette.play(.pop, on: sources[index], volume: 0.5)
         return id
+    }
+
+    /// A mouth with nothing to give — the lab is at its budget: the preview
+    /// dims and recoils as before, and now says so, with the house "no"
+    /// and in words for VoiceOver (2026-11-02). It used to dim in silence.
+    private func refuse(_ index: Int) {
+        refusal[index] = 1
+        SoundPalette.play(.thud, on: sources[index], volume: 0.3)
+        AccessibilityNotification.Announcement("No room for another.").post()
     }
 
     /// VoiceOver's pull: no hand, so no place but the lab's own or the
@@ -565,7 +574,7 @@ final class Well {
         if let place = spec.placeWithoutHands {
             guard let index = sources.firstIndex(where: { $0 === source }) else { return }
             id = place()
-            if id == nil { refusal[index] = 1; return }
+            if id == nil { refuse(index); return }
             dip[index] = 1
             SoundPalette.play(.pop, on: source, volume: 0.5)
         } else {

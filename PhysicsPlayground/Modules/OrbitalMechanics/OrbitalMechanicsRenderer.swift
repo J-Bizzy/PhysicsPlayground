@@ -733,7 +733,12 @@ final class OrbitalMechanicsRenderer {
         }
     }
 
+    /// The prediction ghost while a hand moves it: the glow and the ticks a
+    /// body answers a hand with (2026-11-02).
+    let carried = Grasp.Carried()
+
     func tick(_ model: OrbitalMechanicsModel) {
+        carried.find(under: root)
         frameCounter &+= 1
         tickOrbitalChord(model)
         if frameCounter % 12 == 0 { syncKeplerSweep(model) }

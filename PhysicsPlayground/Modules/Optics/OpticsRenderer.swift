@@ -112,7 +112,12 @@ final class OpticsRenderer {
 
     // MARK: Per frame
 
+    /// A piece just pulled from the well, carried by the view's drag: it
+    /// glows once drawn and ticks where it is let go (2026-11-02).
+    let carried = Grasp.Carried()
+
     func tick(_ model: OpticsModel) {
+        carried.find(under: root)
         syncPieces(model)
         syncSources(model)
         let trace = model.traceIfNeeded()

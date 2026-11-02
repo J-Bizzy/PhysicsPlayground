@@ -275,11 +275,29 @@ final class CircuitsModel {
     /// A hand takes the rim. `time` is the gesture's clock, s.
     @discardableResult
     func beginSpin(hand: SIMD3<Double>, at time: Double) -> Bool {
-        guard scrubTime == nil, leadPull == nil, !components.isEmpty else { return false }
+        guard takeStage() else { return false }
         stageSpinRate = 0
         stageCarryHand = nil
         stageSpin = StageSpin(bearing: bearing(of: hand), time: time, rate: 0)
         return true
+    }
+
+    /// Whether a hand may take the stage, said aloud either way: a tick as
+    /// it takes hold, a thud when there is nothing on it to turn or carry
+    /// (or it is scrubbed, or a lead is in the hand).
+    private func takeStage() -> Bool {
+        let rim = SIMD3(stage.center.x, stage.top, stage.center.y)
+        guard scrubTime == nil, leadPull == nil, !components.isEmpty else {
+            emitSound(.thud, at: rim, volume: 0.3)
+            return false
+        }
+        emitSound(.grabTick, at: rim, volume: 0.2)
+        return true
+    }
+
+    /// The hand has let the stage go.
+    private func letGoOfStage() {
+        emitSound(.releaseTick, at: SIMD3(stage.center.x, stage.top, stage.center.y), volume: 0.2)
     }
 
     /// The circuit turns with the hand about the stage's axis, one to one.
@@ -305,6 +323,7 @@ final class CircuitsModel {
     func endSpin(coasts: Bool, at time: Double) {
         guard let spin = stageSpin else { return }
         stageSpin = nil
+        letGoOfStage()
         let stillFor = time - spin.time
         let rate = coasts && !isPaused && stillFor < 0.1 ? spin.rate : 0
         stageSpinRate = abs(rate) < Self.stageCoastStop
@@ -323,7 +342,7 @@ final class CircuitsModel {
     /// A hand takes the deck's band: the circuit rides it.
     @discardableResult
     func beginStageCarry(hand: SIMD3<Double>) -> Bool {
-        guard scrubTime == nil, leadPull == nil, !components.isEmpty else { return false }
+        guard takeStage() else { return false }
         stageSpinRate = 0
         stageSpin = nil
         stageCarryHand = hand
@@ -341,6 +360,7 @@ final class CircuitsModel {
     func endStageCarry() {
         guard stageCarryHand != nil else { return }
         stageCarryHand = nil
+        letGoOfStage()
         persistSoon()
     }
 
@@ -960,6 +980,10 @@ final class CircuitsModel {
         cancelLeadPull()
         leadPull = LeadPull(source: source, hand: hand)
         updateLeadPull(hand: hand)
+        // Taken as a lifted wire end is: a tick at the lead.
+        if let component = components.first(where: { $0.id == source.componentID }) {
+            emitSound(.grabTick, at: component.terminalPosition(source.end), volume: 0.25)
+        }
     }
 
     /// Lifts an existing wire's end off its terminal into the same lead
@@ -1352,7 +1376,9 @@ final class CircuitsModel {
         guard scrubTime == nil else { return }
         components.removeAll { $0.id == id }
         wires.removeAll { $0.from.componentID == id || $0.to.componentID == id }
-        if selectedID == id { selectedID = components.last?.id }
+        // Nothing is selected after a delete: handing the selection to the
+        // last part added moved its halo and card onto a part no hand chose.
+        if selectedID == id { selectedID = nil }
         // A half-drawn wire cannot survive its own part: clear pull, voice and
         // highlight state.
         if leadPull?.source.componentID == id { cancelLeadPull() }

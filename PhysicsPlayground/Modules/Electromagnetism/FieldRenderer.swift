@@ -73,6 +73,13 @@ final class FieldRenderer {
     /// Where the release tick plays from when the grab ends.
     private weak var pulsedGrabEntity: Entity?
 
+    /// What a hand carries that is not a charge — the test charge, a plate,
+    /// the dielectric slab — by entity name. It wears the glow while held
+    /// and ticks as it is taken and let go, as a charge does (2026-11-02); a
+    /// test charge just pulled from its well is found once it is drawn, and
+    /// its tick is the well's pop.
+    let carried = Grasp.Carried()
+
     /// Entity name for the probe (charges use their UUID string).
     static let probeEntityName = "probe"
 
@@ -269,6 +276,7 @@ final class FieldRenderer {
         room: RoomBox? = .unscanned
     ) {
         // Cheap path — runs every render.
+        carried.find(under: root)
         if let id = heldChargeID {
             if pulsedGrabID != id, let entity = chargeEntities[id] {
                 pulsedGrabID = id

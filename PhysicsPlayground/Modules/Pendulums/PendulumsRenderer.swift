@@ -49,6 +49,13 @@ final class PendulumsRenderer {
     /// Where the release tick plays from when the grab ends.
     private weak var pulsedGrabEntity: Entity?
 
+    /// The rig a hand carries by its collar — moved, or just pulled from a
+    /// well, whose pop already spoke for the grab (2026-11-02).
+    var carriedPivotID: UUID?
+    var carriedPivotFromWell = false
+    private var pulsedPivotID: UUID?
+    private weak var pulsedPivotEntity: Entity?
+
     /// Grabbing starts a new experiment: the old swing's trail would
     /// hang in the air behind the hand, so it clears on grab.
     func clearTrail() {
@@ -266,6 +273,11 @@ final class PendulumsRenderer {
             pulsedGrabID = nil
             pulsedGrabEntity = nil
         }
+        if carriedPivotID == nil {
+            if pulsedPivotID != nil, let entity = pulsedPivotEntity { Grasp.letGo(entity) }
+            pulsedPivotID = nil
+            pulsedPivotEntity = nil
+        }
         for pendulum in model.pendulums {
             let visual = visuals[pendulum.id] ?? makeVisual(for: pendulum)
 
@@ -278,6 +290,12 @@ final class PendulumsRenderer {
                 pulsedGrabEntity = visual.bob
                 LiveGlow.set(true, on: visual.bob)
                 SoundPalette.play(.grabTick, on: visual.bob, volume: 0.2)
+            }
+            if pendulum.id == carriedPivotID, pulsedPivotID != pendulum.id {
+                if let previous = pulsedPivotEntity { LiveGlow.set(false, on: previous) }
+                pulsedPivotID = pendulum.id
+                pulsedPivotEntity = visual.pivot
+                Grasp.take(visual.pivot, tick: !carriedPivotFromWell)
             }
             visual.pivot.position = SIMD3<Float>(pendulum.pivot)
             // A period label belongs to a pendulum you are attending to: Newton's

@@ -16,6 +16,41 @@ A running log of consequential decisions — architectural, physical, or product
 
 (The template sat stranded at line 309, mid-log between two 2026-07-29 entries, until 2026-08-01.)
 
+## 2026-11-02 — Every grab answers, every "no" is heard, and the ring and the selection agree
+
+**Decision:** Everything a hand can take now answers it as the rest of the room does: the glow while held, a tick on taking and a tick on letting go. A well with nothing left to give says no aloud. In Circuit Workshop the ring and the selection always name one part, and the readout card stands aside while the ring is open. This is the third batch of the November polish pass, and it finishes the rule the 2026-10-14 entry set ("the labs answer a hand the same way").
+
+**Context:** The surveys found grabs that were silent and unlit:
+- **Circuits:** a part pulled off the shelf got no glow, no 6 mm lift and no lean (the pull never called `flashPickup`). Also silent were the meter case and probes, the stage's rim and deck, and a lead pulled fresh from a terminal, while lifting an existing wire's end ticked.
+- **Pendulums:** a rig carried by its collar, or pulled from a well.
+- **Magnetism:** a magnet or coil carried straight off the well.
+- **Projectiles:** the launcher, the aim bead and the hoops.
+- **Electric Fields:** the test charge, the capacitor plates and the dielectric slab.
+- **Light & Optics:** a piece pulled from the well.
+- **Orbital Mechanics:** the prediction ghost.
+- **The shell:** the lab anchor.
+
+Two other gaps:
+- **A full well dimmed for under half a second, in silence.**
+- **Circuits' ring and selection drifted apart.** A tap on another part's lead moved the selection, its halo and its card but left the ring on the old part, and a delete handed the selection to whichever part was added last. The simulator stills also showed the card's petals landing on it: the card hangs a fixed 14 cm above the part, and the petals arc above it at a size that grows with distance, so at arm's length they meet.
+
+**Consequences:**
+- **`DesignSystem/Grasp`:** `take` (glow, tick) and `letGo` (glow off, tick), plus `Grasp.Carried`. `Carried` names what a view's own drag carries and finds it once its renderer has drawn it, which is how an object born from a well gets its glow. A well's pop stands in for that grab's tick.
+  - The renderers that already answered keep their own code.
+  - Projectiles, Electric Fields, Light & Optics and Orbits each hold a `carried`.
+  - Magnetism (`pulledID`) and Pendulums (`carriedPivotID`) track theirs by id.
+  - Circuits' `flashPickup` waits for a newborn part's visual (`pendingGlowID`).
+- **The stage** ticks as it is taken and let go, and thuds when there is nothing on it to turn or carry. A fresh lead pull ticks.
+- **The lab anchor** glows and ticks once it moves, and a tap that recentres the lab pops.
+- **`Well.refuse`:** a thud and "No room for another." for VoiceOver.
+- **Circuits selection:**
+  - a delete clears the selection rather than moving it;
+  - a selection that moves to another part folds the ring;
+  - the card eases to `CircuitsRenderer.readoutAside`, 15 cm to the viewer's left and 5 cm down, while its part's ring is open.
+- **Magnetism keeps its selection after a fold or a delete on purpose,** because More's "Selected moment" reads it. Only `-magRing 1` changed: it now opens the selected magnet's ring, so a still shows the halo and the ring on one magnet.
+- **Withdrawn:** the survey's "double pop" on a magnet from the well does not happen. The renderer's arrival pop looks for an entity that is not built until later in the same frame.
+- **Tests:** `GraspTests` covers the carried glow, the stage's yes and no, the lead pull's tick, the selection after a delete, and the card standing aside. What a held object looks like is for the headset.
+
 ## 2026-11-02 — The calm track wherever a value lives on an object
 
 **Decision:** A circuit part's value and a magnet's strength move onto the calm track that charges and masses took on 2026-10-24. It runs under the object rather than out of its surface, and it clicks at real values: the cells you can stack, E6 resistors, bulbs and motors, 1–2.2–4.7 capacitors and inductors, and fast-blow fuse ratings, with a magnet clicking at every whole A·m². This is the second batch of the November polish pass. The owner had already picked the track for charges ("very clunky" before it); this applies the same answer to the two values that still had the old handle.

@@ -103,6 +103,8 @@ struct LabAnchorView: View {
     /// How far this press has moved the anchor — a press that never
     /// moves it is a tap. See `onEnded`.
     @State private var travelled: Float = 0
+    /// Whether the anchor has moved far enough to be carried, not tapped.
+    @State private var carrying = false
     /// Held so it can be cancelled: the view is remounted per lab, and an
     /// uncancelled subscription accumulates one live closure per entry.
     @State private var subscription: EventSubscription?
@@ -145,6 +147,12 @@ struct LabAnchorView: View {
                     // Against the drag's own start (`RelativeDrag.travel(forHand:)`), not
                     // `labPlacement.offset`, which the next line overwrites.
                     travelled = max(travelled, Float(drag.travel(forHand: hand)))
+                    // Carried, not tapped, once it has moved: the glow and the
+                    // tick every held thing answers a hand with.
+                    if travelled >= Self.tapTravel, !carrying {
+                        carrying = true
+                        Grasp.take(root)
+                    }
                     appModel.labPlacement.move(to: next)
                 }
                 // Recentre: a press on the cross-hair that never moves it. Folded into
@@ -152,8 +160,12 @@ struct LabAnchorView: View {
                 // of every module's scene, and a tap recogniser here would win over
                 // every module's own instrument taps.
                 .onEnded { _ in
+                    if carrying { Grasp.letGo(root) }
+                    carrying = false
                     if drag != nil, travelled < Self.tapTravel {
                         appModel.labPlacement.recentre()
+                        // The whole lab moves home: heard, not only seen.
+                        SoundPalette.play(.pop, on: root, volume: 0.4)
                     } else if drag != nil {
                         // Final: write it now rather than leaving it in the debounce window.
                         appModel.labPlacement.endMove()
