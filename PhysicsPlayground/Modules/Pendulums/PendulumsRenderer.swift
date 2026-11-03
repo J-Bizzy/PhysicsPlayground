@@ -41,13 +41,15 @@ final class PendulumsRenderer {
         subscriptions = []
     }
 
-    /// The pendulum whose bob a hand is holding (system-dragged).
-    var grabbedID: UUID?
-    /// The bob already acknowledged with a pickup pulse — one flash per
-    /// grab, not one per frame.
-    private var pulsedGrabID: UUID?
-    /// Where the release tick plays from when the grab ends.
-    private weak var pulsedGrabEntity: Entity?
+    /// The pendulums whose bobs hands are holding — one in each, since
+    /// 2026-11-02.
+    var grabbedIDs: Set<UUID> = []
+    /// The bobs already acknowledged with a pickup pulse — one flash per
+    /// grab, not one per frame — and where each one's release tick plays.
+    private var pulsedGrabs: [UUID: Entity] = [:]
+    /// The held bob whose path the one ghost draws: the first taken that is
+    /// still held.
+    private var ghostID: UUID?
 
     /// The rig a hand carries by its collar — moved, or just pulled from a
     /// well, whose pop already spoke for the grab (2026-11-02).
@@ -265,13 +267,10 @@ final class PendulumsRenderer {
             periodLabels[id] = nil
         }
 
-        if grabbedID == nil {
-            if pulsedGrabID != nil, let entity = pulsedGrabEntity {
-                LiveGlow.set(false, on: entity)
-                SoundPalette.play(.releaseTick, on: entity, volume: 0.18)
-            }
-            pulsedGrabID = nil
-            pulsedGrabEntity = nil
+        for (id, entity) in pulsedGrabs where !grabbedIDs.contains(id) {
+            pulsedGrabs[id] = nil
+            LiveGlow.set(false, on: entity)
+            SoundPalette.play(.releaseTick, on: entity, volume: 0.18)
         }
         if carriedPivotID == nil {
             if pulsedPivotID != nil, let entity = pulsedPivotEntity { Grasp.letGo(entity) }
@@ -281,13 +280,9 @@ final class PendulumsRenderer {
         for pendulum in model.pendulums {
             let visual = visuals[pendulum.id] ?? makeVisual(for: pendulum)
 
-            if pendulum.id == grabbedID, pulsedGrabID != pendulum.id {
-                pulsedGrabID = pendulum.id
-                // Live while held: the glow stays until the hand lets go.
-                if let previous = pulsedGrabEntity, previous !== visual.bob {
-                    LiveGlow.set(false, on: previous)
-                }
-                pulsedGrabEntity = visual.bob
+            if grabbedIDs.contains(pendulum.id), pulsedGrabs[pendulum.id] == nil {
+                // Live while held: the glow stays until that hand lets go.
+                pulsedGrabs[pendulum.id] = visual.bob
                 LiveGlow.set(true, on: visual.bob)
                 SoundPalette.play(.grabTick, on: visual.bob, volume: 0.2)
             }
@@ -685,7 +680,9 @@ final class PendulumsRenderer {
     /// background worker would trade a hitch nobody was losing for lag on
     /// the one thing that must track the hand exactly.
     private func syncGhost(_ model: PendulumsModel) {
-        guard let grabbedID, let pendulum = model.pendulums.first(where: { $0.id == grabbedID }),
+        if ghostID.map({ !grabbedIDs.contains($0) }) ?? true { ghostID = grabbedIDs.first }
+        guard let grabbedID = ghostID,
+              let pendulum = model.pendulums.first(where: { $0.id == grabbedID }),
               pendulum.isGrabbed else {
             ghostEntity.model = nil
             return

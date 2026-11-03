@@ -16,6 +16,33 @@ A running log of consequential decisions — architectural, physical, or product
 
 (The template sat stranded at line 309, mid-log between two 2026-07-29 entries, until 2026-08-01.)
 
+## 2026-11-02 — One object in each hand, in every lab
+
+**Decision:** Every lab now lets each hand hold its own object:
+- a charge (Electric Fields);
+- a bob (Pendulums);
+- a body (Orbital Mechanics);
+- a ball, taken from the well or caught out of the air (Projectiles);
+- a part on the bench (Circuit Workshop).
+
+Magnetism and Light & Optics already did. The table they share is `RenderKit/HandGrabs`: one session per `SpatialEventGesture` pinch, judged once where it closed, released after half a second without a report. Each lab's `begin`/`move`/`end` keep its own rules. Everything that is one-handed by nature stays on the lab's single drag: beads, wells (except the ball well), the shelf, leads and wires, the turntable, the meter, the orbit's beads and the prediction ghost.
+
+**Context:**
+- **The owner:** "If possible, I want to be able to control two different objects at the same time."
+- **Why only one before:** SwiftUI runs one `DragGesture` instance, so a second hand's pinch never reaches it while the first is held. Magnetism found this in August and moved its objects to raw spatial events. The other labs were left "queued behind the owner confirming Magnetism's feel on device", and that confirmation was never recorded.
+- **Why now:** batch 1's resize rule made a second object possible without scaling the lab.
+
+**Consequences:**
+- **Models.** Fields' `heldChargeIDs`, Orbits' `heldIDs` with a `ThrowSampler` per body, and Projectiles' `heldFlightIDs` with a sampler per ball are sets now. Pendulums already kept `isGrabbed` per bob.
+- **Orbits keeps one preview.** `heldBodyID` is the body taken last that is still held; it drives the one release ghost, and an orbit edit counts. `release(id:)` lets go before it looks the body up, so a body merged away under the hand cannot hold `settleMomentum` off for good.
+- **Renderers glow per object.** Fields, Pendulums and Orbits keep a pulse per id. Circuits' carry preview, lift, lean and glow are per part: `previewComponentIDs`, `carriedIDs`, `flashRelease(id:)`.
+- **A press still waits out its travel, per hand.** Where a press was only a press until it travelled 12 mm (a bob, a body, a ball in the air, a part), the lab keeps its own per-hand press. `begin` hands back the hand itself as where the target stands, so the table delivers the hand, and the object is read where it has got to at the moment it is taken.
+- **Projectiles' ball well moved to the hands,** because throwing two balls means pulling the second while the first is held. A hoop from its well stays the drag's.
+- **Circuits stays still under a carry.** A part cannot be taken while the turntable is held or a lead is in flight, and the turntable cannot be taken while a hand carries a part: each moves the parts under the other.
+- **The limit that remains.** While one hand holds a per-hand object, the single drag is listening to that hand, so the other hand cannot start a one-handed verb: a bead, a well, the shelf, a lead. The other order works.
+- **Tests:** `TwoHandsTests` holds the table and each model.
+- **Not yet confirmed on device.** Nothing records that Magnetism's version was ever tried on a headset either.
+
 ## 2026-11-02 — A selected part lights its outline, and its slider hangs clear of it
 
 **Decision:** In Circuit Workshop a selected part no longer stands in a white box. Its own symbol says it is selected: the champagne keyline lights toward white. The coil and the fuse are drawn without a keyline, so their element lights. A part's value track now hangs below the part's own pinch targets, wherever the part is turned, instead of 6.5 cm under its centre. The rail and the bead have larger targets, and the rail lights under the eye.

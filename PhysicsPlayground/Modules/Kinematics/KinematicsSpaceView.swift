@@ -18,17 +18,13 @@ struct KinematicsSpaceView: View {
     @Environment(KinematicsModel.self) private var model
     @State private var renderer: KinematicsRenderer?
     @State private var drag: RelativeDrag?
-    /// The ball this press landed on, held until it has moved far
-    /// enough to be a catch. See `PressLatch`, and the drag's
-    /// `onChanged`.
-    @State private var pressedBall = PressLatch<BallPress>()
-
-    /// A press on a ball in flight — identity only. Where the ball is
-    /// is read at promotion, not here; see `PressLatch`'s header.
-    struct BallPress: Sendable {
-        let id: UUID
-        let name: String
-    }
+    /// A ball in each hand (2026-11-02): the drag is one recogniser and never
+    /// hears the second hand, so balls — from the well or out of the air —
+    /// are held per pinch (`handleHands`).
+    @State private var hands = HandGrabs<UUID>()
+    @State private var holds = BallHolds()
+    /// Kept for `handleHands`: a raw spatial event has no `value.convert`.
+    @State private var sceneContent: RealityViewContent?
     @State private var bloom = Bloom()
     /// Whether the launcher's ring is open. A selection, not a model flag:
     /// out of `reset()`, the snapshot and the `ResetCoverageTests` sweep.
@@ -92,6 +88,7 @@ struct KinematicsSpaceView: View {
             let renderer = KinematicsRenderer()
             renderer.onObjectTap = { handleObjectTap(on: $0) }
             content.add(renderer.root)
+            sceneContent = content
             // Disabled here and raised by `Fade.tick`, so the apparatus arrives
             // rather than appears.
             renderer.root.isEnabled = false
@@ -316,10 +313,9 @@ struct KinematicsSpaceView: View {
             // `Bloom` is a class: a live grip would outlive the view.
             bloom.endGrip()
             drag = nil
-            // A pending press sticks (`press` refuses to overwrite), so an
-            // `onEnded` that never arrives would let the next gesture promote it
-            // against a stale anchor.
-            pressedBall.cancel()
+            // A pending press must not survive to promote against a stale anchor.
+            hands.releaseAll { _ in }
+            holds.byBall = [:]
             // A selection, so it does not survive the lab: the next entry
             // opens on a folded ring like every other module.
             ring.openID = nil
@@ -337,6 +333,11 @@ struct KinematicsSpaceView: View {
                 .onEnded { value in handleObjectTap(on: value.entity) }
         )
         .simultaneousGesture(
+            SpatialEventGesture()
+                .onChanged { handleHands($0) }
+                .onEnded { handleHands($0) }
+        )
+        .simultaneousGesture(
             DragGesture(minimumDistance: 0)
                 .targetedToAnyEntity()
                 .onChanged { value in
@@ -345,9 +346,9 @@ struct KinematicsSpaceView: View {
                     if bloom.updateGrip(hand: SIMD3<Float>(hand)) { return }
                     if drag == nil {
                         if bloom.beginGrip(value.entity, hand: SIMD3<Float>(hand)) { return }
-                        // Born at the fingertips, and dragged by the
-                        // same gesture that made it.
-                        if let id = wells?.pull(value.entity, at: hand) {
+                        // A hoop is born at the fingertips and dragged by the same gesture
+                        // that made it. A ball from the well is a hand's (`handleHands`).
+                        if !isBallWell(value.entity), let id = wells?.pull(value.entity, at: hand) {
                             drag = RelativeDrag(name: id.uuidString,
                                                 target: hand, hand: hand)
                             // A hoop glows in the hand; a ball does through its own grab.
@@ -356,40 +357,16 @@ struct KinematicsSpaceView: View {
                             }
                             return
                         }
-                        // A tap on a flying ball must not catch it: a bare press would freeze
-                        // the ball and release it dead in mid-air. Only the ball needs this;
-                        // the other targets are positional.
-                        if let press = flightPress(on: value.entity) {
-                            pressedBall.press(press, at: hand)
-                        } else {
-                            drag = beginDrag(entity: value.entity, hand: hand)
-                            // The bead shows its reading while it is held.
-                            renderer?.beadHeld = drag?.name == KinematicsRenderer.aimBeadName
-                            renderer?.carried.carry(drag?.name)
-                        }
-                    }
-
-                    // The promotion, once the hand has carried the ball: the drag pairs
-                    // where the ball is now with where the hand is now, so the catch moves
-                    // nothing.
-                    if drag == nil, pressedBall.isPending {
-                        guard let caught = pressedBall.promote(hand: hand),
-                              let flight = model.flights.first(where: {
-                                  $0.id == caught.id
-                              })
-                        else { return }
-                        model.grabBall(id: caught.id)
-                        drag = RelativeDrag(name: caught.name,
-                                            target: flight.state.position,
-                                            hand: hand)
+                        // A ball is a hand's (`handleHands`); `beginDrag` has no flight branch.
+                        drag = beginDrag(entity: value.entity, hand: hand)
+                        // The bead shows its reading while it is held.
+                        renderer?.beadHeld = drag?.name == KinematicsRenderer.aimBeadName
+                        renderer?.carried.carry(drag?.name)
                     }
                     guard let drag else { return }
                     apply(drag: drag, hand: hand)
                 }
                 .onEnded { value in
-                    // A ball press that never became a carry is a tap,
-                    // and a tap on a ball does nothing to the ball.
-                    pressedBall.cancel()
                     bloom.endGrip()
                     renderer?.beadHeld = false
                     renderer?.carried.carry(nil)
@@ -522,29 +499,93 @@ struct KinematicsSpaceView: View {
                     return RelativeDrag(name: candidate.name,
                                         target: ring.position, hand: hand)
                 }
-                // No flight branch. A ball is claimed by `flightPress`
-                // and promoted only once the hand has moved — see the
-                // drag's `onChanged`.
+                // No flight branch: a ball is a hand's (`pressBall`), caught
+                // only once that hand has moved.
                 current = candidate.parent
             }
         }
         return nil
     }
 
-    /// A press that landed on a ball in flight, or nil. Resolves the
-    /// same way `beginDrag` does — up the parent chain to the named
-    /// object — but takes no action, because taking action is exactly
-    /// what a tap must not do here.
-    private func flightPress(on entity: Entity) -> BallPress? {
-        var current: Entity? = entity
+    // MARK: A ball in each hand (2026-11-02)
+    // Throwing is the main act, so both hands can do it: a ball from the
+    // well is in the hand from its first frame, and a ball in the air is
+    // caught only once the hand has carried it `tapTravel` — a tap on a
+    // flying ball must not freeze it and drop it dead in mid-air — reading
+    // where the ball is at that instant. The table hands this view the hand
+    // itself, and each hold keeps its own press and drag; the model keeps a
+    // throw sampler per ball, so each is thrown by its own hand.
+
+    struct BallHold {
+        let press: SIMD3<Double>
+        var drag: RelativeDrag?
+    }
+
+    /// Reference storage, so a hold's per-frame writes do not invalidate the
+    /// view.
+    final class BallHolds { var byBall: [UUID: BallHold] = [:] }
+
+    private static let tapTravel = PressLatch<UUID>.tapTravel
+
+    /// Whether `entity` is the ball well's mouth, which a hand pulls from.
+    private func isBallWell(_ entity: Entity?) -> Bool {
+        guard let entity, let wells, let index = wells.sourceIndex(of: entity) else { return false }
+        return wells.spec(at: index)?.name == "Ball"
+    }
+
+    private func handleHands(_ events: SpatialEventCollection) {
+        guard let content = sceneContent else { return }
+        hands.handle(
+            events,
+            locate: { SIMD3<Double>(SIMD3<Float>(
+                content.convert($0.location3D, from: .local, to: .scene))) },
+            begin: { entity, hand in pressBall(entity, hand: hand) },
+            move: { id, hand in carryBall(id, hand: hand) },
+            end: { session in letGoOfBall(session.target, hand: session.hand) })
+    }
+
+    private func pressBall(_ entity: Entity?, hand: SIMD3<Double>) -> (UUID, SIMD3<Double>)? {
+        // Born at the fingertips, and in the hand from its first frame: the
+        // well's spawn grabs it, arming its throw sampler.
+        if let entity, isBallWell(entity), let id = wells?.pull(entity, at: hand) {
+            holds.byBall[id] = BallHold(press: hand,
+                                        drag: RelativeDrag(name: id.uuidString, target: hand, hand: hand))
+            return (id, hand)
+        }
+        var current = entity
         while let candidate = current {
             if let id = UUID(uuidString: candidate.name),
-               model.flights.contains(where: { $0.id == id }) {
-                return BallPress(id: id, name: candidate.name)
+               let flight = model.flights.first(where: { $0.id == id }) {
+                guard holds.byBall[id] == nil, flight.status != .held else { return nil }
+                holds.byBall[id] = BallHold(press: hand)
+                return (id, hand)
             }
             current = candidate.parent
         }
         return nil
+    }
+
+    private func carryBall(_ id: UUID, hand: SIMD3<Double>) {
+        guard var hold = holds.byBall[id] else { return }
+        defer { holds.byBall[id] = hold }
+        guard let drag = hold.drag else {
+            // The catch, once the hand has carried the ball: the drag pairs where
+            // the ball is now with where the hand is now, so the catch moves nothing.
+            guard simd_distance(hand, hold.press) > Self.tapTravel,
+                  let flight = model.flights.first(where: { $0.id == id }) else { return }
+            model.grabBall(id: id)
+            hold.drag = RelativeDrag(name: id.uuidString, target: flight.state.position, hand: hand)
+            return
+        }
+        model.holdBall(id: id, at: drag.position(forHand: hand))
+    }
+
+    private func letGoOfBall(_ id: UUID, hand: SIMD3<Double>) {
+        // A press that never became a catch was a tap, and a tap on a ball does
+        // nothing to the ball.
+        guard let hold = holds.byBall.removeValue(forKey: id), let drag = hold.drag else { return }
+        model.holdBall(id: id, at: drag.position(forHand: hand))
+        model.releaseBall(id: id)
     }
 
     private func apply(drag: RelativeDrag, hand: SIMD3<Double>) {

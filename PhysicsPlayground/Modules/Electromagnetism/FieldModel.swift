@@ -317,9 +317,10 @@ final class FieldModel {
     // Coulomb force (plus the plates') by the same overdamped
     // force→velocity law the magnetism bench uses.
     var chargesRespond = false
-    /// The charge pinned under the user's hand — it follows the drag,
-    /// never the drift, while everything else reacts to it live.
-    var heldChargeID: UUID?
+    /// The charges pinned under the wearer's hands — one in each, since
+    /// 2026-11-02 — following the drag, never the drift, while everything
+    /// else reacts to them live.
+    var heldChargeIDs: Set<UUID> = []
 
     // MARK: Time Capsule
 
@@ -347,7 +348,7 @@ final class FieldModel {
         var next = charges.map(\.position)
         for j in charges.indices {
             let mover = charges[j]
-            if mover.id == heldChargeID { continue }
+            if heldChargeIDs.contains(mover.id) { continue }
             var field = ElectricField.vector(
                 at: mover.position, dueTo: charges, excluding: j)
             field += capacitorField(at: mover.position)
@@ -378,8 +379,8 @@ final class FieldModel {
                     guard distance < Self.chargeContact, distance > 1e-9 else { continue }
                     let push = (Self.chargeContact - distance) / 2
                     let direction = offset / distance
-                    let aHeld = charges[a].id == heldChargeID
-                    let bHeld = charges[b].id == heldChargeID
+                    let aHeld = heldChargeIDs.contains(charges[a].id)
+                    let bHeld = heldChargeIDs.contains(charges[b].id)
                     if aHeld && bHeld { continue }
                     if aHeld { next[b] += direction * push * 2 }
                     else if bHeld { next[a] -= direction * push * 2 }
@@ -514,7 +515,7 @@ final class FieldModel {
         chargesRespond = false
         // `charges` is replaced wholesale above, so an id naming an old charge
         // (a drag in flight when Reset lands) must be cleared.
-        heldChargeID = nil
+        heldChargeIDs = []
         probe = nil
         probeStatus = .none
         probeTrail = []
@@ -633,6 +634,7 @@ final class FieldModel {
 
     func removeCharge(id: UUID) {
         charges.removeAll { $0.id == id }
+        heldChargeIDs.remove(id)
         if selectedChargeID == id { selectedChargeID = charges.last?.id }
     }
 
@@ -657,11 +659,13 @@ final class FieldModel {
     func removeSelectedCharge() {
         guard let id = selectedChargeID else { return }
         charges.removeAll { $0.id == id }
+        heldChargeIDs.remove(id)
         selectedChargeID = charges.last?.id
     }
 
     func removeAllCharges() {
         charges.removeAll()
+        heldChargeIDs = []
         selectedChargeID = nil
     }
 
@@ -754,7 +758,7 @@ final class FieldModel {
     /// gesture's end: a charge left held never moves freely again, and a
     /// held probe never runs.
     func releaseAll() {
-        heldChargeID = nil
+        heldChargeIDs = []
         if probeStatus == .held { probeStatus = .running }
     }
 
@@ -918,10 +922,9 @@ extension FieldModel: TimeCapsuleRecording {
 
     func restoreCapsuleSnapshot(_ snapshot: CapsuleSnapshot) {
         var restored = snapshot.charges
-        // A restore never drags the held charge out of the fingers holding it.
-        if let heldChargeID,
-           let live = charges.first(where: { $0.id == heldChargeID }) {
-            if let index = restored.firstIndex(where: { $0.id == heldChargeID }) {
+        // A restore never drags a held charge out of the fingers holding it.
+        for live in charges where heldChargeIDs.contains(live.id) {
+            if let index = restored.firstIndex(where: { $0.id == live.id }) {
                 restored[index] = live
             } else {
                 restored.append(live)

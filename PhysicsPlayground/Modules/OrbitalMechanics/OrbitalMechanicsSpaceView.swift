@@ -18,6 +18,12 @@ struct OrbitalMechanicsSpaceView: View {
     @Environment(OrbitalMechanicsModel.self) private var model
     @State private var renderer: OrbitalMechanicsRenderer?
     @State private var drag: RelativeDrag?
+    /// A body in each hand (2026-11-02): the drag is one recogniser and never
+    /// hears the second hand, so bodies are held per pinch (`handleHands`).
+    @State private var hands = HandGrabs<UUID>()
+    @State private var holds = BodyHolds()
+    /// Kept for `handleHands`: a raw spatial event has no `value.convert`.
+    @State private var sceneContent: RealityViewContent?
     @State private var bloom = Bloom()
     /// Which body's ring is open — shared by the tap gesture and the
     /// render loop (see RingState's header for why it's a reference).
@@ -45,6 +51,7 @@ struct OrbitalMechanicsSpaceView: View {
             let renderer = OrbitalMechanicsRenderer()
             renderer.onObjectTap = { handleObjectTap(on: $0) }
             content.add(renderer.root)
+            sceneContent = content
             // Disabled here and raised by `Fade.tick`, so the apparatus arrives
             // rather than appears.
             renderer.root.isEnabled = false
@@ -247,7 +254,19 @@ struct OrbitalMechanicsSpaceView: View {
             // `Bloom` is a class: a live grip would outlive the view.
             bloom.endGrip()
             drag = nil
+            // Let go where they are, not merely forgotten: a body left held never
+            // moves again, and the model outlives this view.
+            hands.releaseAll { session in
+                if holds.byBody.removeValue(forKey: session.target)?.drag != nil {
+                    model.release(id: session.target)
+                }
+            }
         }
+        .simultaneousGesture(
+            SpatialEventGesture()
+                .onChanged { handleHands($0) }
+                .onEnded { handleHands($0) }
+        )
         .simultaneousGesture(
             // A tap must not become a throw: at minimumDistance 0 a tap would
             // hold, zero the velocity and release the planet at rest into the Sun.
@@ -290,14 +309,7 @@ struct OrbitalMechanicsSpaceView: View {
                                 renderer.carried.carry(candidate.name)
                                 break
                             }
-                            if let id = UUID(uuidString: candidate.name),
-                               let body = model.bodies.first(where: { $0.id == id }) {
-                                let target = body.body.position * model.simToDisplay
-                                drag = RelativeDrag(
-                                    name: candidate.name, target: target, hand: hand)
-                                model.grab(id: id, at: target)
-                                break
-                            }
+                            // A body is a hand's (`handleHands`), not this drag's.
                             current = candidate.parent
                         }
                     }
@@ -418,6 +430,73 @@ struct OrbitalMechanicsSpaceView: View {
 
     /// The tap routing, out of the gesture closure so VoiceOver reaches it
     /// too.
+    // MARK: A body in each hand (2026-11-02)
+    // A press is not a grab until it has travelled 12 mm — a tap must not
+    // become a throw, which would zero the velocity and drop the planet into
+    // the Sun — and the body is read where it has got to by then. So the
+    // table hands this view the hand itself, and each hold keeps its own
+    // press and drag.
+
+    struct BodyHold {
+        let press: SIMD3<Double>
+        var drag: RelativeDrag?
+    }
+
+    /// Reference storage, so a hold's per-frame writes do not invalidate the
+    /// view.
+    final class BodyHolds { var byBody: [UUID: BodyHold] = [:] }
+
+    /// The drag's own threshold: `DragGesture(minimumDistance: 0.012)`.
+    private static let tapTravel = 0.012
+
+    private func handleHands(_ events: SpatialEventCollection) {
+        guard let renderer, let content = sceneContent else { return }
+        hands.handle(
+            events,
+            locate: { renderer.displayPoint(fromWorld: SIMD3<Float>(
+                content.convert($0.location3D, from: .local, to: .scene))) },
+            begin: { entity, hand in pressBody(entity, hand: hand) },
+            move: { id, hand in carryBody(id, hand: hand) },
+            end: { session in letGoOfBody(session.target, hand: session.hand) })
+    }
+
+    private func pressBody(_ entity: Entity?, hand: SIMD3<Double>) -> (UUID, SIMD3<Double>)? {
+        var current = entity
+        while let candidate = current {
+            // The prediction ghost and the orbit's beads are the drag's.
+            if candidate.name == "prediction-ghost" { return nil }
+            if let id = UUID(uuidString: candidate.name),
+               model.bodies.contains(where: { $0.id == id }) {
+                guard holds.byBody[id] == nil, !model.heldBodyIDs.contains(id) else { return nil }
+                holds.byBody[id] = BodyHold(press: hand)
+                return (id, hand)
+            }
+            current = candidate.parent
+        }
+        return nil
+    }
+
+    private func carryBody(_ id: UUID, hand: SIMD3<Double>) {
+        guard var hold = holds.byBody[id] else { return }
+        defer { holds.byBody[id] = hold }
+        guard let drag = hold.drag else {
+            guard simd_distance(hand, hold.press) > Self.tapTravel,
+                  !model.heldBodyIDs.contains(id),
+                  let body = model.bodies.first(where: { $0.id == id }) else { return }
+            let target = body.body.position * model.simToDisplay
+            hold.drag = RelativeDrag(name: id.uuidString, target: target, hand: hand)
+            model.grab(id: id, at: target)
+            return
+        }
+        model.hold(id: id, at: drag.position(forHand: hand))
+    }
+
+    private func letGoOfBody(_ id: UUID, hand: SIMD3<Double>) {
+        guard let hold = holds.byBody.removeValue(forKey: id), let drag = hold.drag else { return }
+        model.hold(id: id, at: drag.position(forHand: hand))
+        model.release(id: id)
+    }
+
     private func handleObjectTap(on entity: Entity) {
         if bloom.handleTap(entity) { return }
         // A tap toggles the body's ring and selects it. Matched on the body's

@@ -30,7 +30,14 @@ struct CircuitsSpaceView: View {
     /// The view's single `DragGesture(minimumDistance: 0)` runs on every
     /// tap, so a latch promotes to a pull only past `PressLatch.tapTravel`.
     @State private var leadPress = PressLatch<CircuitsModel.Terminal>()
-    @State private var partPress = PressLatch<UUID>()
+    /// A part in each hand (2026-11-02): the drag is one recogniser and never
+    /// hears the second hand, so parts on the bench are carried per pinch
+    /// (`handleHands`). Leads, wires, the shelf, the stage and the meter stay
+    /// the drag's.
+    @State private var hands = HandGrabs<UUID>()
+    @State private var holds = PartHolds()
+    /// Kept for `handleHands`: a raw spatial event has no `value.convert`.
+    @State private var sceneContent: RealityViewContent?
     /// A wire under a finger, and where it was pressed: which end lifts is
     /// decided once the hand has moved (`CircuitsModel.endToLift`).
     @State private var wirePress = PressLatch<CircuitsModel.WirePress>()
@@ -81,6 +88,7 @@ struct CircuitsSpaceView: View {
             renderer.onWireAction = { model.voiceOverRemoveWire(id: $0) }
             renderer.onStageAction = { model.spinCircuit(by: .pi / 4) }
             content.add(renderer.root)
+            sceneContent = content
             // Disabled here and raised by `Fade.tick`, so the apparatus arrives
             // rather than appears.
             renderer.root.isEnabled = false
@@ -357,7 +365,21 @@ struct CircuitsSpaceView: View {
             // `Bloom` is a class: a live grip would outlive the view.
             bloom.endGrip()
             activeTrack = nil
+            // Set down where they are, not merely forgotten: the model outlives
+            // this view.
+            hands.releaseAll { session in
+                if holds.byPart.removeValue(forKey: session.target)?.drag != nil {
+                    model.release(id: session.target)
+                    renderer?.previewComponentIDs.remove(session.target)
+                    renderer?.flashRelease(id: session.target)
+                }
+            }
         }
+        .simultaneousGesture(
+            SpatialEventGesture()
+                .onChanged { handleHands($0) }
+                .onEnded { handleHands($0) }
+        )
         .gesture(
             TapGesture()
                 .targetedToAnyEntity()
@@ -447,7 +469,7 @@ struct CircuitsSpaceView: View {
 
                     if bloom.updateGrip(hand: handF) { return }
                     if model.leadPull == nil, partDrag == nil, stageDrag == nil,
-                       !leadPress.isPending, !partPress.isPending,
+                       !leadPress.isPending,
                        !wirePress.isPending, !leverPress.isPending,
                        !sourcePress.isPending, !stagePress.isPending {
                         if bloom.beginGrip(value.entity, hand: handF) { return }
@@ -458,9 +480,6 @@ struct CircuitsSpaceView: View {
                     // has moved; until then it is still a tap.
                     if let source = leadPress.promote(hand: hand) {
                         model.beginLeadPull(from: source, hand: hand)
-                    }
-                    if let id = partPress.promote(hand: hand) {
-                        beginCarrying(id, hand: hand, renderer: renderer)
                     }
                     // A joint pulled at strains toward the hand until the
                     // press gives: drawn only, the model's joint is whole.
@@ -479,7 +498,8 @@ struct CircuitsSpaceView: View {
                     _ = leverPress.promote(hand: hand)
                     // A stage press that travels takes hold: the rim turns the
                     // circuit about the stage's axis, the deck's band carries it.
-                    if let hold = stagePress.promote(hand: hand) {
+                    // Not while a hand carries a part: the stage moves the parts under it.
+                    if let hold = stagePress.promote(hand: hand), !holds.isCarrying {
                         let took = hold == .rim
                             ? model.beginSpin(hand: hand, at: CACurrentMediaTime())
                             : model.beginStageCarry(hand: hand)
@@ -492,7 +512,7 @@ struct CircuitsSpaceView: View {
                        let id = palette.pull(source, at: hand) {
                         spawnedPartID = id
                         partDrag = RelativeDrag(name: id.uuidString, target: hand, hand: hand)
-                        renderer.previewComponentID = id
+                        renderer.previewComponentIDs.insert(id)
                         // Carried like any part from its first frame: the glow, the
                         // lift and the lean. The shelf's pop is its grab sound.
                         renderer.flashPickup(id: id, tick: false)
@@ -549,10 +569,12 @@ struct CircuitsSpaceView: View {
                     defer {
                         stagePress.cancel()
                         stageDrag = nil
-                        renderer?.previewComponentID = nil
+                        // Only this drag's own part: a hand may be carrying another.
+                        if let id = spawnedPartID ?? partDrag.flatMap({ UUID(uuidString: $0.name) }) {
+                            renderer?.previewComponentIDs.remove(id)
+                        }
                         renderer?.jointStrain = nil
                         leadPress.cancel()
-                        partPress.cancel()
                         wirePress.cancel()
                         leverPress.cancel()
                         sourcePress.cancel()
@@ -583,8 +605,8 @@ struct CircuitsSpaceView: View {
                         if let before {
                             renderer.easeLanding(id: id, from: before.position, axis: before.axis)
                         }
+                        renderer.flashRelease(id: id)
                     }
-                    renderer.flashRelease()
                 }
         )
         .spatialScale(scaleRig)
@@ -831,8 +853,8 @@ struct CircuitsSpaceView: View {
             // travels.
             leadPress.press(terminal, at: hand)
             return
-        case .body(let id):
-            partPress.press(id, at: hand)
+        case .body:
+            // A part on the bench is a hand's (`handleHands`), not this drag's.
             return
         case .stageRim:
             stagePress.press(.rim, at: hand)
@@ -868,13 +890,86 @@ struct CircuitsSpaceView: View {
         }
     }
 
-    /// A body press that travelled: start carrying it.
-    private func beginCarrying(_ id: UUID, hand: SIMD3<Double>, renderer: CircuitsRenderer) {
-        guard let component = model.components.first(where: { $0.id == id }) else { return }
-        partDrag = RelativeDrag(name: id.uuidString, target: component.position, hand: hand)
-        renderer.previewComponentID = id
-        model.select(id: id)
-        renderer.flashPickup(id: id)
+    // MARK: A part in each hand (2026-11-02)
+    // A press on a part is a tap until it has travelled `PressLatch.tapTravel`
+    // — a tap selects, and a pinch that never moved must not lift the part —
+    // so the table hands this view the hand itself, and each hold keeps its
+    // own press and drag. Bring two parts together, one in each hand, and
+    // each previews, leans and seats on its own.
+
+    struct PartHold {
+        let press: SIMD3<Double>
+        var drag: RelativeDrag?
+    }
+
+    /// Reference storage, so a hold's per-frame writes do not invalidate the
+    /// view.
+    final class PartHolds {
+        var byPart: [UUID: PartHold] = [:]
+        /// Whether a hand has taken a part (past the tap's travel).
+        var isCarrying: Bool { byPart.values.contains { $0.drag != nil } }
+    }
+
+    private func handleHands(_ events: SpatialEventCollection) {
+        guard let renderer, let content = sceneContent else { return }
+        hands.handle(
+            events,
+            locate: { event in
+                // Into the bench's frame, as the drag converts: a part tracks the
+                // hand 1:1 at any zoom.
+                SIMD3<Double>(renderer.viewRoot.convert(
+                    position: SIMD3<Float>(content.convert(event.location3D,
+                                                           from: .local, to: .scene)),
+                    from: nil))
+            },
+            begin: { entity, hand in pressPart(entity, hand: hand) },
+            move: { id, hand in carryPart(id, hand: hand, renderer: renderer) },
+            end: { session in letGoOfPart(session.target, hand: session.hand, renderer: renderer) })
+    }
+
+    private func pressPart(_ entity: Entity?, hand: SIMD3<Double>) -> (UUID, SIMD3<Double>)? {
+        guard let entity,
+              case .body(let id) = Self.resolveGrab(names: Self.nameChain(from: entity), on: model)
+        else { return nil }
+        // One hand to a part; and none while the stage is held or a lead is in
+        // flight, both of which move the parts under it.
+        guard holds.byPart[id] == nil, spawnedPartID != id, stageDrag == nil,
+              model.leadPull == nil else { return nil }
+        // A hand on any part wants the circuit still.
+        model.stopStageCoast()
+        holds.byPart[id] = PartHold(press: hand)
+        return (id, hand)
+    }
+
+    private func carryPart(_ id: UUID, hand: SIMD3<Double>, renderer: CircuitsRenderer) {
+        guard var hold = holds.byPart[id] else { return }
+        defer { holds.byPart[id] = hold }
+        guard let drag = hold.drag else {
+            guard simd_distance(hand, hold.press) > PressLatch<UUID>.tapTravel,
+                  stageDrag == nil,
+                  let component = model.components.first(where: { $0.id == id }) else { return }
+            hold.drag = RelativeDrag(name: id.uuidString, target: component.position, hand: hand)
+            renderer.previewComponentIDs.insert(id)
+            model.select(id: id)
+            renderer.flashPickup(id: id)
+            return
+        }
+        // The grab offset survives; the model composes the rest (swing or rigid
+        // move) in `CircuitsModel.drag`.
+        model.drag(id: id, toward: drag.position(forHand: hand))
+    }
+
+    private func letGoOfPart(_ id: UUID, hand: SIMD3<Double>, renderer: CircuitsRenderer) {
+        // A press that never travelled was a tap, and the tap recogniser owns it.
+        guard let hold = holds.byPart.removeValue(forKey: id), let drag = hold.drag else { return }
+        model.drag(id: id, toward: drag.position(forHand: hand))
+        // A part snapped onto a neighbour glides the last few centimetres rather
+        // than jumping there.
+        let before = model.components.first { $0.id == id }
+        model.release(id: id)
+        if let before { renderer.easeLanding(id: id, from: before.position, axis: before.axis) }
+        renderer.previewComponentIDs.remove(id)
+        renderer.flashRelease(id: id)
     }
 
     private func applyCircuitDrag(_ drag: RelativeDrag, hand: SIMD3<Double>) {

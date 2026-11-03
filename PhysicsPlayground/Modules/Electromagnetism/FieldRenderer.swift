@@ -65,13 +65,12 @@ final class FieldRenderer {
     /// acknowledged with a flash and a tick like every other lab's. Until
     /// 2026-10-14 nothing set it (it was named for a manipulation system the
     /// lab no longer uses), so no charge ever answered a grab. The model moves
-    /// a held charge, so its transform is written like any other.
-    var heldChargeID: UUID?
-    /// The charge already acknowledged with a pickup pulse — one flash
-    /// per grab, not one per frame.
-    private var pulsedGrabID: UUID?
-    /// Where the release tick plays from when the grab ends.
-    private weak var pulsedGrabEntity: Entity?
+    /// a held charge, so its transform is written like any other. A set
+    /// since 2026-11-02: a charge in each hand.
+    var heldChargeIDs: Set<UUID> = []
+    /// The charges already acknowledged with a pickup pulse — one flash per
+    /// grab, not one per frame — and where each one's release tick plays.
+    private var pulsedGrabs: [UUID: Entity] = [:]
 
     /// What a hand carries that is not a charge — the test charge, a plate,
     /// the dielectric slab — by entity name. It wears the glow while held
@@ -237,7 +236,7 @@ final class FieldRenderer {
     /// `room` is what the lines are clipped to; nil (deep space) clips nothing.
     func tick(_ model: FieldModel, room: RoomBox? = .unscanned) {
         self.model = model
-        heldChargeID = model.heldChargeID
+        heldChargeIDs = model.heldChargeIDs
         syncProbeTrail(model)
         render(
                 charges: model.charges,
@@ -277,24 +276,17 @@ final class FieldRenderer {
     ) {
         // Cheap path — runs every render.
         carried.find(under: root)
-        if let id = heldChargeID {
-            if pulsedGrabID != id, let entity = chargeEntities[id] {
-                pulsedGrabID = id
-                // Live while held: the glow stays until the hand lets go.
-                if let previous = pulsedGrabEntity, previous !== entity {
-                    LiveGlow.set(false, on: previous)
-                }
-                pulsedGrabEntity = entity
-                LiveGlow.set(true, on: entity)
-                SoundPalette.play(.grabTick, on: entity, volume: 0.2)
-            }
-        } else {
-            if pulsedGrabID != nil, let entity = pulsedGrabEntity {
-                LiveGlow.set(false, on: entity)
-                SoundPalette.play(.releaseTick, on: entity, volume: 0.18)
-            }
-            pulsedGrabID = nil
-            pulsedGrabEntity = nil
+        // Live while held: the glow stays until that hand lets go.
+        for id in heldChargeIDs where pulsedGrabs[id] == nil {
+            guard let entity = chargeEntities[id] else { continue }
+            pulsedGrabs[id] = entity
+            LiveGlow.set(true, on: entity)
+            SoundPalette.play(.grabTick, on: entity, volume: 0.2)
+        }
+        for (id, entity) in pulsedGrabs where !heldChargeIDs.contains(id) {
+            pulsedGrabs[id] = nil
+            LiveGlow.set(false, on: entity)
+            SoundPalette.play(.releaseTick, on: entity, volume: 0.18)
         }
         syncChargeEntities(charges, selectedID: selectedID)
         syncProbeEntity(probe, isPositive: probeIsPositive)

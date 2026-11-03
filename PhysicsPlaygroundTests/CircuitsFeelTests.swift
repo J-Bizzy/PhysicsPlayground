@@ -44,7 +44,7 @@ final class CircuitsFeelTests: XCTestCase {
                        accuracy: 1e-4)
         XCTAssertEqual(holder.position.x, Float(held.position.x), accuracy: 1e-6, "only up")
 
-        renderer.flashRelease()
+        renderer.flashRelease(id: bulb)
         tick(renderer, model, frames: 60)
         XCTAssertLessThan(simd_distance(SIMD3<Double>(holder.position), component(model, bulb).position), 1e-6)
         XCTAssertEqual(renderer.displayPose(of: component(model, bulb)).position, component(model, bulb).position)

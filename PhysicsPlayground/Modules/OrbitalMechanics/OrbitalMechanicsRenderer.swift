@@ -30,10 +30,9 @@ final class OrbitalMechanicsRenderer {
         orbitRing.teardown()
     }
 
-    /// The body already acknowledged with a pickup pulse — one flash per grab.
-    private var pulsedGrabID: UUID?
-    /// Where the release tick plays from when the grab ends.
-    private weak var pulsedGrabEntity: Entity?
+    /// The bodies already acknowledged with a pickup pulse — one flash per
+    /// grab — and where each one's release tick plays.
+    private var pulsedGrabs: [UUID: Entity] = [:]
 
     /// Where the system center sits in the room.
     static let systemPosition = SIMD3<Float>(0, 1.25, -1.2)
@@ -879,16 +878,13 @@ final class OrbitalMechanicsRenderer {
                 ]))
             }
 
-            // A grab is acknowledged once, read off the model (`heldBodyID`);
-            // until 2026-10-14 this keyed on a flag nothing set. The model
-            // carries a held body, so its transform is written like any other.
-            if orbiting.id == model.heldBodyID, pulsedGrabID != orbiting.id {
-                pulsedGrabID = orbiting.id
-                // Live while held: the glow stays until the hand lets go.
-                if let previous = pulsedGrabEntity, previous !== slot.entity {
-                    LiveGlow.set(false, on: previous)
-                }
-                pulsedGrabEntity = slot.entity
+            // A grab is acknowledged once, read off the model (`heldBodyIDs`, one
+            // body in each hand since 2026-11-02); until 2026-10-14 this keyed on
+            // a flag nothing set. The model carries a held body, so its
+            // transform is written like any other.
+            if model.heldBodyIDs.contains(orbiting.id), pulsedGrabs[orbiting.id] == nil {
+                // Live while held: the glow stays until that hand lets go.
+                pulsedGrabs[orbiting.id] = slot.entity
                 LiveGlow.set(true, on: slot.entity)
                 SoundPalette.play(.grabTick, on: slot.entity, volume: 0.2)
             }
@@ -899,13 +895,10 @@ final class OrbitalMechanicsRenderer {
             bodyPool.slots[index].entity.isEnabled = false
             if index < bodyLabels.count { bodyLabels[index].isEnabled = false }
         }
-        if model.heldBodyID == nil {
-            if pulsedGrabID != nil, let entity = pulsedGrabEntity {
-                LiveGlow.set(false, on: entity)
-                SoundPalette.play(.releaseTick, on: entity, volume: 0.18)
-            }
-            pulsedGrabID = nil
-            pulsedGrabEntity = nil
+        for (id, entity) in pulsedGrabs where !model.heldBodyIDs.contains(id) {
+            pulsedGrabs[id] = nil
+            LiveGlow.set(false, on: entity)
+            SoundPalette.play(.releaseTick, on: entity, volume: 0.18)
         }
 
         if let primary = model.primaryBody {

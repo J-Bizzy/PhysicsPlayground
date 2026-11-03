@@ -251,9 +251,15 @@ final class OrbitalMechanicsModel {
 
     // MARK: Hold / throw
 
-    private var heldID: UUID?
-    /// `PhysicsCore.ThrowSampler` — shared with Projectiles and Pendulums.
-    private var throwSampler = ThrowSampler()
+    /// The bodies in a hand — one in each, since 2026-11-02 — and an orbit
+    /// edit's body: each "attracts but does not move".
+    private var heldIDs: Set<UUID> = []
+    /// The body most recently taken, while it is still held: the one the
+    /// release preview draws.
+    private var lastHeldID: UUID?
+    /// `PhysicsCore.ThrowSampler` per held body — shared with Projectiles
+    /// and Pendulums.
+    private var throwSamplers: [UUID: ThrowSampler] = [:]
 
     init() {
         reset()
@@ -312,7 +318,7 @@ final class OrbitalMechanicsModel {
     /// restored capsule frame never reaches this — its Sun already carries
     /// the mass its multiplier says, so `applySunMass` returns before it.
     func settleMomentum() {
-        guard heldID == nil, !bodies.isEmpty else { return }
+        guard heldIDs.isEmpty, !bodies.isEmpty else { return }
         let mass = bodies.reduce(0) { $0 + $1.body.mass }
         guard mass > 0 else { return }
         let drift = NBody.momentum(of: bodies.map(\.body)) / mass
@@ -538,11 +544,12 @@ final class OrbitalMechanicsModel {
 
     func grab(id: UUID, at displayPoint: SIMD3<Double>, timestamp: Double = CACurrentMediaTime()) {
         guard bodies.contains(where: { $0.id == id }) else { return }
-        heldID = id
+        heldIDs.insert(id)
+        lastHeldID = id
         selectedID = id
         capturedPointName = nil
         capturedBodyID = nil
-        throwSampler.reset()
+        throwSamplers[id] = ThrowSampler()
         hold(id: id, at: displayPoint, timestamp: timestamp)
     }
 
@@ -551,24 +558,25 @@ final class OrbitalMechanicsModel {
         guard let index = bodies.firstIndex(where: { $0.id == id }) else { return }
         bodies[index].body.position = displayPoint * displayToSim
         bodies[index].body.velocity = .zero
-        guard heldID == id else { return }
-        throwSampler.record(displayPoint, at: timestamp)
+        guard heldIDs.contains(id) else { return }
+        throwSamplers[id]?.record(displayPoint, at: timestamp)
     }
 
-    /// The sim velocity the body would get if released now.
-    func currentHandVelocity(timestamp: Double = CACurrentMediaTime()) -> SIMD3<Double> {
-        guard let handVelocity = throwSampler.velocity(at: timestamp) else { return .zero }
+    /// The sim velocity a held body would get if released now.
+    func currentHandVelocity(of id: UUID,
+                             timestamp: Double = CACurrentMediaTime()) -> SIMD3<Double> {
+        guard let handVelocity = throwSamplers[id]?.velocity(at: timestamp) else { return .zero }
         return Self.throwVelocityScale * handVelocity
     }
 
     func release(id: UUID, timestamp: Double = CACurrentMediaTime()) {
-        guard let index = bodies.firstIndex(where: { $0.id == id }) else { return }
-        defer {
-            heldID = nil
-            throwSampler.reset()
-        }
-        guard heldID == id else { return }
-        let thrown = currentHandVelocity(timestamp: timestamp)
+        // Let go first, even of a body merged away under the hand: a stale id
+        // would hold the momentum settle off for good.
+        let wasHeld = heldIDs.remove(id) != nil
+        let thrown = currentHandVelocity(of: id, timestamp: timestamp)
+        throwSamplers[id] = nil
+        if lastHeldID == id { lastHeldID = heldIDs.first }
+        guard wasHeld, let index = bodies.firstIndex(where: { $0.id == id }) else { return }
         bodies[index].body.velocity = insertionVelocity(for: bodies[index].body, handVelocity: thrown)
         // The trail behind it described a path it is no longer on.
         bodies[index].trail.clear()
@@ -592,11 +600,13 @@ final class OrbitalMechanicsModel {
             capturedBodyID = nil
         }
         // The throw put momentum into the system; the room does not drift for it.
-        heldID = nil
         settleMomentum()
     }
 
-    var heldBodyID: UUID? { heldID }
+    /// The body the release preview is for: the most recently taken still
+    /// held, an orbit edit's included.
+    var heldBodyID: UUID? { lastHeldID.flatMap { heldIDs.contains($0) ? $0 : nil } ?? heldIDs.first }
+    var heldBodyIDs: Set<UUID> { heldIDs }
 
     // MARK: The orbit as an object
     // Bead drags set the ellipse's shape and plane directly, in closed form
@@ -627,7 +637,7 @@ final class OrbitalMechanicsModel {
     func orbitFrame(for id: UUID) -> ApsisFrame? {
         if let orbitEdit, orbitEdit.bodyID == id { return orbitEdit.frame }
         // A held body has no orbit: `hold` zeroes velocity, so the conic is a degenerate radial line.
-        if heldID == id { return nil }
+        if heldIDs.contains(id) { return nil }
         guard let orbiting = bodies.first(where: { $0.id == id }),
               let primary = ringPrimary(for: orbiting) else { return nil }
         return ApsisFrame(
@@ -661,8 +671,9 @@ final class OrbitalMechanicsModel {
             bodyID: bodyID,
             otherRadius: frame.radius(at: apsis == .near ? .far : .near),
             frame: frame)
-        // `heldID` means "attracts but does not move"; not via `hold(id:at:)`, which zeroes velocity — this path writes position and velocity.
-        heldID = bodyID
+        // Held means "attracts but does not move"; not via `hold(id:at:)`, which zeroes velocity — this path writes position and velocity.
+        heldIDs.insert(bodyID)
+        lastHeldID = bodyID
         selectedID = bodyID
         return true
     }
@@ -691,7 +702,7 @@ final class OrbitalMechanicsModel {
     func endOrbitEdit() {
         guard let edit = orbitEdit else { return }
         orbitEdit = nil
-        heldID = nil
+        heldIDs.remove(edit.bodyID)
         guard let index = bodies.firstIndex(where: { $0.id == edit.bodyID }) else { return }
         // The trail behind it described an orbit that no longer exists.
         bodies[index].trail.clear()
@@ -712,10 +723,11 @@ final class OrbitalMechanicsModel {
 
     /// Snapshot for the release preview, hand velocity substituted; lookahead ~600 sim days.
     func heldPredictionInputs(timestamp: Double = CACurrentMediaTime()) -> PredictionInputs? {
-        guard let heldID, let index = bodies.firstIndex(where: { $0.id == heldID }) else { return nil }
+        guard let heldID = heldBodyID,
+              let index = bodies.firstIndex(where: { $0.id == heldID }) else { return nil }
         var snapshot = bodies.map(\.body)
         snapshot[index].velocity = insertionVelocity(
-            for: snapshot[index], handVelocity: currentHandVelocity(timestamp: timestamp))
+            for: snapshot[index], handVelocity: currentHandVelocity(of: heldID, timestamp: timestamp))
         return PredictionInputs(
             bodies: snapshot, index: index,
             dt: 12 * 3600,
@@ -831,7 +843,7 @@ final class OrbitalMechanicsModel {
 
         var system = bodies.map(\.body)
         var trails = bodies.map(\.trail)
-        var frozen = bodies.map { $0.id == heldID }
+        var frozen = bodies.map { heldIDs.contains($0.id) }
         var softening = softeningRadii
         var reference = Self.heaviestIndex(in: system)
         let floorRadius = Self.trailFloorDisplayRadius * displayToSim
@@ -858,7 +870,7 @@ final class OrbitalMechanicsModel {
                 merge(pair.0, pair.1)
                 system = bodies.map(\.body)
                 trails = bodies.map(\.trail)
-                frozen = bodies.map { $0.id == heldID }
+                frozen = bodies.map { heldIDs.contains($0.id) }
                 softening = softeningRadii
                 reference = Self.heaviestIndex(in: system)
             }
@@ -1039,9 +1051,10 @@ final class OrbitalMechanicsModel {
         capturedPointName = nil
         capturedBodyID = nil
         bodies.removeAll()
-        heldID = nil
+        heldIDs = []
+        lastHeldID = nil
         orbitEdit = nil
-        throwSampler.reset()
+        throwSamplers = [:]
         sunMassMultiplier = 1.0
         gMultiplier = 1.0
         timeScale = 1.0

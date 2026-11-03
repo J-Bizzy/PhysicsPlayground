@@ -77,7 +77,7 @@ final class FreeChargeAndFreezeTests: XCTestCase {
         model.addCharge(positive: true)
         model.addCharge(positive: false)
         model.chargesRespond = true
-        model.heldChargeID = model.charges[0].id
+        model.heldChargeIDs = [model.charges[0].id]
         let heldBefore = model.charges[0].position
         let freeBefore = model.charges[1].position
 

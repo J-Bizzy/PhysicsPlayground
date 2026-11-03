@@ -41,8 +41,9 @@ final class CircuitsRenderer {
         subscriptions = []
     }
 
-    /// Where the release tick plays from when the grab ends.
-    private weak var pulsedGrabEntity: Entity?
+    /// The parts glowing in a hand — one in each, since 2026-11-02 — and
+    /// where each one's release tick plays.
+    private var pulsedGrabs: [UUID: Entity] = [:]
 
     /// Parent for the selected component's readout attachment.
     let selectedAnchor = Entity()
@@ -795,8 +796,9 @@ final class CircuitsRenderer {
 
     // MARK: Connection previews & drag-to-wire
 
-    /// While this part is carried, ghost wires show what a release would connect.
-    var previewComponentID: UUID?
+    /// While these parts are carried — one in each hand — ghost wires show
+    /// what a release would connect.
+    var previewComponentIDs: Set<UUID> = []
     /// Where the selected part's card stands while its ring is open, in
     /// the billboarded anchor's frame: 15 cm to the viewer's left and 5 cm
     /// lower, clear of the petals at any distance the ring is read from.
@@ -896,7 +898,7 @@ final class CircuitsRenderer {
     private func syncConnectionPreviews(_ model: CircuitsModel) {
         var pairs: [(a: SIMD3<Float>, b: SIMD3<Float>,
                      target: CircuitsModel.Terminal, refused: Bool)] = []
-        if let id = previewComponentID {
+        for id in previewComponentIDs {
             for pair in model.pendingJoins(for: id) {
                 if let a = terminalWorld(pair.from, model),
                    let b = terminalWorld(pair.to, model) {
@@ -1002,31 +1004,27 @@ final class CircuitsRenderer {
     /// this frame has no visual yet, and takes its glow when it gets one.
     func flashPickup(id: UUID, tick: Bool = true) {
         landings[id] = nil
-        carriedID = id
+        carriedIDs.insert(id)
         guard let holder = visuals[id]?.holder else {
-            pendingGlowID = id
+            pendingGlowIDs.insert(id)
             return
         }
-        pendingGlowID = nil
-        if let previous = pulsedGrabEntity, previous !== holder {
-            LiveGlow.set(false, on: previous)
-        }
-        pulsedGrabEntity = holder
+        pendingGlowIDs.remove(id)
+        pulsedGrabs[id] = holder
         LiveGlow.set(true, on: holder)
         if tick { SoundPalette.play(.grabTick, on: holder, volume: 0.2) }
     }
 
-    /// A part taken before its visual existed (pulled off the shelf).
-    private var pendingGlowID: UUID?
+    /// Parts taken before their visuals existed (pulled off the shelf).
+    private var pendingGlowIDs: Set<UUID> = []
 
-    /// Answer a release, on whatever was last picked up.
-    func flashRelease() {
-        carriedID = nil
-        pendingGlowID = nil
-        guard let entity = pulsedGrabEntity else { return }
+    /// Answer the release of the part `id`, which a hand picked up.
+    func flashRelease(id: UUID) {
+        carriedIDs.remove(id)
+        pendingGlowIDs.remove(id)
+        guard let entity = pulsedGrabs.removeValue(forKey: id) else { return }
         LiveGlow.set(false, on: entity)
         SoundPalette.play(.releaseTick, on: entity, volume: 0.18)
-        pulsedGrabEntity = nil
     }
 
     // MARK: Taking hold of the stage (2026-10-18)
@@ -1392,9 +1390,9 @@ final class CircuitsRenderer {
         return t * t * (3 - 2 * t)
     }
 
-    /// The part a hand holds; each part's lift, 0…1, easing up while held
-    /// and back down after; the pose a held part leans toward this frame.
-    private var carriedID: UUID?
+    /// The parts hands hold; each part's lift, 0…1, easing up while held
+    /// and back down after; the pose each held part leans toward this frame.
+    private var carriedIDs: Set<UUID> = []
     private var lifts: [UUID: Float] = [:]
     private var leans: [UUID: (position: SIMD3<Double>, axis: SIMD3<Double>, weight: Double)] = [:]
 
@@ -1404,24 +1402,27 @@ final class CircuitsRenderer {
     private var strainedJunction: UUID?
 
     private func advanceFeel(_ model: CircuitsModel, dt: Double) {
-        if let pending = pendingGlowID, visuals[pending] != nil, carriedID == pending {
+        for pending in pendingGlowIDs where visuals[pending] != nil && carriedIDs.contains(pending) {
             flashPickup(id: pending, tick: false)
         }
-        for id in Set(lifts.keys).union(carriedID.map { [$0] } ?? []) {
-            let target: Float = id == carriedID && !Motion.isReduced ? 1 : 0
+        for id in Set(lifts.keys).union(carriedIDs) {
+            let target: Float = carriedIDs.contains(id) && !Motion.isReduced ? 1 : 0
             let next = Motion.ease(lifts[id] ?? 0, toward: target, dt: dt, rate: 14)
             lifts[id] = next == 0 ? nil : next
         }
         leans = [:]
-        guard let id = carriedID, !Motion.isReduced, model.leadPull == nil,
-              let component = model.components.first(where: { $0.id == id }),
-              let alignment = model.alignment(for: id),
-              let target = model.components.first(where: { $0.id == alignment.target.componentID })?
-                .terminalPosition(alignment.target.end) else { return }
-        let distance = min(simd_distance(component.terminalPosition(0), target),
-                           simd_distance(component.terminalPosition(1), target))
-        let weight = Self.pullInWeight(distance: distance)
-        if weight > 0 { leans[id] = (alignment.position, alignment.axis, weight) }
+        guard !Motion.isReduced, model.leadPull == nil else { return }
+        for id in carriedIDs {
+            guard let component = model.components.first(where: { $0.id == id }),
+                  let alignment = model.alignment(for: id),
+                  let target = model.components
+                      .first(where: { $0.id == alignment.target.componentID })?
+                      .terminalPosition(alignment.target.end) else { continue }
+            let distance = min(simd_distance(component.terminalPosition(0), target),
+                               simd_distance(component.terminalPosition(1), target))
+            let weight = Self.pullInWeight(distance: distance)
+            if weight > 0 { leans[id] = (alignment.position, alignment.axis, weight) }
+        }
     }
 
     /// A joint's junction stretched toward the hand pulling it apart, up to

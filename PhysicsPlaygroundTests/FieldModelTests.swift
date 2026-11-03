@@ -579,12 +579,12 @@ final class FieldModelTests: XCTestCase {
     /// test charge, so neither comes back held on the next visit.
     func testLeavingTheLabMidDragLetsGo() {
         let model = FieldModel()
-        model.heldChargeID = model.charges.first?.id
+        model.heldChargeIDs = Set(model.charges.map(\.id))
         model.dropProbe()
         model.holdProbe(at: SIMD3(0.2, 1.2, -1.0))
 
         model.releaseAll()
-        XCTAssertNil(model.heldChargeID)
+        XCTAssertTrue(model.heldChargeIDs.isEmpty)
         XCTAssertEqual(model.probeStatus, .running)
     }
 }

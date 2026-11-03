@@ -32,6 +32,11 @@ struct FieldSpaceView: View {
     @Environment(AppModel.self) private var appModel
     @State private var renderer: FieldRenderer?
     @State private var drag: RelativeDrag?
+    /// A charge in each hand (2026-11-02): the drag above is one recogniser
+    /// and never hears the second hand, so charges are held per pinch here.
+    @State private var hands = HandGrabs<UUID>()
+    /// Kept for `handleHands`: a raw spatial event has no `value.convert`.
+    @State private var sceneContent: RealityViewContent?
 
     /// The per-object control ring: flip, delete, and the size handle.
     @State private var bloom = Bloom()
@@ -63,6 +68,7 @@ struct FieldSpaceView: View {
             // alone, and a test charge comes out of its well when you want one.
 
             renderer.viewRoot.addChild(bloom.root)
+            sceneContent = content
 
             install(into: renderer)
 
@@ -105,12 +111,52 @@ struct FieldSpaceView: View {
             // in the module.
             bloom.endGrip()
             drag = nil
+            hands.releaseAll { _ in }
             // Released, not merely forgotten: the model outlives this view.
             model.releaseAll()
         }
         .spatialScale(scaleRig)
         .simultaneousGesture(tap)
+        .simultaneousGesture(
+            SpatialEventGesture()
+                .onChanged { handleHands($0) }
+                .onEnded { handleHands($0) }
+        )
         .simultaneousGesture(drags)
+    }
+
+    // MARK: A charge in each hand
+
+    private func handleHands(_ events: SpatialEventCollection) {
+        guard let renderer, let content = sceneContent else { return }
+        hands.handle(
+            events,
+            locate: { event in
+                // Through the scaled root, as the drag converts: what you hold
+                // stays under your fingers at every scale.
+                renderer.displayPoint(fromWorld: SIMD3<Float>(
+                    content.convert(event.location3D, from: .local, to: .scene)))
+            },
+            begin: { entity, _ in beginHold(on: entity) },
+            move: { id, position in model.moveCharge(id: id, to: position) },
+            end: { session in model.heldChargeIDs.remove(session.target) })
+    }
+
+    /// A fresh pinch on a charge takes it. Anything else — the plates, the
+    /// slab, the test charge, a well, a bead — is the drag's; and a second
+    /// pinch on a held charge takes nothing (it is the resize, if it closed
+    /// with the first).
+    private func beginHold(on entity: Entity?) -> (UUID, SIMD3<Double>)? {
+        guard let entity else { return nil }
+        for name in Self.ancestorNames(of: entity) {
+            guard let id = UUID(uuidString: name),
+                  let charge = model.charges.first(where: { $0.id == id }) else { continue }
+            guard !model.heldChargeIDs.contains(id) else { return nil }
+            model.select(id: id)
+            model.heldChargeIDs.insert(id)
+            return (id, charge.position)
+        }
+        return nil
     }
 
     // MARK: Installing the instruments
@@ -346,10 +392,13 @@ struct FieldSpaceView: View {
                     }
                 }
                 bloom.endGrip()
+                // Only this drag's own charge: the other hand may hold one.
+                if let id = drag.flatMap({ UUID(uuidString: $0.name) }) {
+                    model.heldChargeIDs.remove(id)
+                }
                 drag = nil
                 renderer.carried.carry(nil)
                 flick.reset()
-                model.heldChargeID = nil
             }
     }
 
@@ -377,9 +426,15 @@ struct FieldSpaceView: View {
                 return RelativeDrag(name: name, target: target, hand: hand)
             }
         }
+        // A named charge is a hand's (`beginHold`); only an anonymous pinch
+        // near one falls back to the nearest here.
+        if names.contains(where: { name in
+            UUID(uuidString: name).map { id in model.charges.contains { $0.id == id } } ?? false
+        }) { return nil }
         if let id = Self.resolveCharge(
                 names: names, hand: hand,
                 charges: model.charges.map { ($0.id, $0.position) }),
+           !model.heldChargeIDs.contains(id),
            let charge = model.charges.first(where: { $0.id == id }) {
             model.select(id: id)
             return RelativeDrag(name: id.uuidString, target: charge.position, hand: hand)
@@ -396,7 +451,7 @@ struct FieldSpaceView: View {
         } else if drag.name == FieldRenderer.probeEntityName {
             model.holdProbe(at: position)
         } else if let id = UUID(uuidString: drag.name) {
-            model.heldChargeID = id
+            model.heldChargeIDs.insert(id)
             model.moveCharge(id: id, to: position)
         }
     }

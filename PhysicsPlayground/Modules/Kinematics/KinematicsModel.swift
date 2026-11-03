@@ -352,11 +352,13 @@ final class KinematicsModel {
         return caught
     }
 
-    /// Hand-motion samples for the held ball (shared `PhysicsCore.ThrowSampler`),
+    /// Hand-motion samples for each held ball (shared `PhysicsCore.ThrowSampler`),
     /// kept long enough for `releaseVelocity` to look back past the
-    /// follow-through.
-    private var throwSampler = ThrowSampler(window: 0.16)
-    private var heldFlightID: UUID?
+    /// follow-through. A ball in each hand since 2026-11-02, each thrown by
+    /// its own hand.
+    private var throwSamplers: [UUID: ThrowSampler] = [:]
+    private var heldFlightIDs: Set<UUID> = []
+    private static let throwWindow = 0.16
     /// The last `launchSerial` handed out.
     private var launchCounter = 0
     private func nextLaunchSerial() -> Int {
@@ -458,16 +460,16 @@ final class KinematicsModel {
         flights.removeAll()
         lastFlight = nil
         latestThrowID = nil
-        heldFlightID = nil
-        throwSampler.reset()
+        heldFlightIDs = []
+        throwSamplers = [:]
     }
 
     // MARK: Throwing
 
     func grabBall(id: UUID) {
         guard let index = flights.firstIndex(where: { $0.id == id }) else { return }
-        heldFlightID = id
-        throwSampler.reset()
+        heldFlightIDs.insert(id)
+        throwSamplers[id] = ThrowSampler(window: Self.throwWindow)
         flights[index].status = .held
         // A re-thrown ball starts a fresh flight record.
         flights[index].dots.removeAll()
@@ -482,21 +484,20 @@ final class KinematicsModel {
     func holdBall(id: UUID, at position: SIMD3<Double>, timestamp: Double = CACurrentMediaTime()) {
         guard let index = flights.firstIndex(where: { $0.id == id }) else { return }
         flights[index].state = ParticleDynamics.State(position: position)
-        guard heldFlightID == id else { return }
-        throwSampler.record(position, at: timestamp)
+        guard heldFlightIDs.contains(id) else { return }
+        throwSamplers[id]?.record(position, at: timestamp)
     }
 
     /// Releases the held ball with the velocity the hand let go at — its
     /// fastest stretch just before the pinch was reported open, not the
     /// follow-through after (`ThrowSampler.releaseVelocity`).
     func releaseBall(id: UUID, timestamp: Double = CACurrentMediaTime()) {
+        // Let go first, even of a ball cleared away under the hand.
+        let sampler = throwSamplers.removeValue(forKey: id)
+        heldFlightIDs.remove(id)
         guard let index = flights.firstIndex(where: { $0.id == id }) else { return }
-        defer {
-            heldFlightID = nil
-            throwSampler.reset()
-        }
 
-        guard let handVelocity = throwSampler.releaseVelocity(at: timestamp) else {
+        guard let handVelocity = sampler?.releaseVelocity(at: timestamp) else {
             flights[index].status = .staged
             return
         }
@@ -519,10 +520,11 @@ final class KinematicsModel {
     /// Leaving the lab mid-carry never delivers the gesture's end, and a
     /// ball left `.held` hangs glowing in the air on the next visit.
     func releaseAll() {
-        guard let id = heldFlightID else { return }
-        // No samples, no velocity: the release is a set-down, not a throw.
-        throwSampler.reset()
-        releaseBall(id: id)
+        for id in heldFlightIDs {
+            // No samples, no velocity: the release is a set-down, not a throw.
+            throwSamplers[id] = nil
+            releaseBall(id: id)
+        }
     }
 
     // MARK: Hoops
@@ -1121,10 +1123,9 @@ extension KinematicsModel: TimeCapsuleRecording {
         for index in restored.indices where restored[index].status == .held {
             restored[index].status = .staged
         }
-        // The present hand wins: a live-held ball is never moved by a restore.
-        if let heldID = heldFlightID,
-           let live = flights.first(where: { $0.id == heldID }) {
-            if let index = restored.firstIndex(where: { $0.id == heldID }) {
+        // The present hands win: a live-held ball is never moved by a restore.
+        for live in flights where heldFlightIDs.contains(live.id) {
+            if let index = restored.firstIndex(where: { $0.id == live.id }) {
                 restored[index] = live
             } else {
                 restored.append(live)

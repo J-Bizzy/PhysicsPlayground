@@ -147,6 +147,33 @@ contradicts this section, this section is current.
 - [ ] **The cut test:** enter all seven labs in sequence; the room's
       brightness moves only at Orbital Mechanics, and ramps rather than steps.
 
+## ⟳ 2026-11-02 — one object in each hand (hands, batch 3)
+
+Supersedes "Two hands, two objects — where each module stands" below:
+every lab has the second grab now. Try Magnetism first — it has had it
+since August and was never confirmed here — then:
+- [ ] **Electric Fields:** a charge in each hand. Both follow, the field
+      lines bend between them live, and nothing resizes.
+- [ ] **Pendulums:** pull two cradle balls back, one in each hand, and let
+      go together: both swing, each with its own hand's push. A tap on a
+      bob still only opens its ring.
+- [ ] **Orbital Mechanics:** a planet in each hand. Throw one and keep the
+      other: only the thrown one moves off, and the release ghost follows
+      the one you took last.
+- [ ] **Projectiles:** take a ball from the well with each hand, one after
+      the other, and throw both — each flies at its own hand's speed. Catch
+      a ball out of the air while holding another.
+- [ ] **Circuit Workshop:** a part in each hand; bring their ends together
+      and let go of both: they seat and wire, each previewing its join
+      while carried. Turning the turntable while carrying a part does
+      nothing; neither does taking a part while turning it.
+- [ ] **The limit:** with one hand holding something, a one-handed verb
+      with the other (a bead, a well, the shelf, pulling a lead) does not
+      start — start it first, then take the object. Judge whether that
+      order is ever a problem.
+- [ ] **Both hands on the SAME object, together,** still resizes in the
+      four labs that resize.
+
 ## ⟳ 2026-11-02 — Circuits: the outline, and sliders you can grab (hands, batch 2)
 
 - [ ] **Tap a part:** no box appears round it. Its symbol's outline turns
