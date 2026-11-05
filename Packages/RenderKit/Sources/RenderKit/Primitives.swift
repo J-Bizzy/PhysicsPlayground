@@ -21,6 +21,113 @@ public enum Primitives {
         mesh(.init("sphere", radius)) { .generateSphere(radius: radius) }
     }
 
+    /// A sphere of `segments` facets around and half as many pole to pole,
+    /// for a small thing drawn often: `generateSphere` is about 8 000
+    /// triangles at any radius, and Electric Fields' charges, halo and wells
+    /// were 30 000 of its opening's 84 000 (2026-11-03). Forty around is
+    /// 1 600 triangles, smooth at a charge's 3 cm.
+    public static func sphere(radius: Float, segments: Int) -> MeshResource {
+        mesh(.init("sphere", radius, Float(segments))) {
+            let around = max(segments, 6)
+            let rings = max(around / 2, 3)
+            var positions: [SIMD3<Float>] = []
+            var normals: [SIMD3<Float>] = []
+            var coordinates: [SIMD2<Float>] = []
+            for ring in 0...rings {
+                let v = Float(ring) / Float(rings)
+                let polar = v * .pi
+                for step in 0...around {
+                    let u = Float(step) / Float(around)
+                    let azimuth = u * 2 * .pi
+                    let normal = SIMD3<Float>(sin(polar) * cos(azimuth), cos(polar),
+                                              sin(polar) * sin(azimuth))
+                    positions.append(normal * radius)
+                    normals.append(normal)
+                    coordinates.append(SIMD2(u, 1 - v))
+                }
+            }
+            let stride = UInt32(around + 1)
+            var indices: [UInt32] = []
+            for ring in 0..<UInt32(rings) {
+                for step in 0..<UInt32(around) {
+                    let a = ring * stride + step, b = a + 1, c = a + stride, d = c + 1
+                    // Wound to face outward; the poles' slivers are skipped.
+                    if ring > 0 { indices += [a, b, c] }
+                    if ring < UInt32(rings) - 1 { indices += [b, d, c] }
+                }
+            }
+            var descriptor = MeshDescriptor(name: "sphere")
+            descriptor.positions = MeshBuffers.Positions(positions)
+            descriptor.normals = MeshBuffers.Normals(normals)
+            descriptor.textureCoordinates = MeshBuffers.TextureCoordinates(coordinates)
+            descriptor.primitives = .triangles(indices)
+            return (try? MeshResource.generate(from: [descriptor]))
+                ?? .generateSphere(radius: radius)
+        }
+    }
+
+    /// A flat bar with rounded corners, `segments` facets to a corner: its
+    /// faces flat and its depth square — a sign's stroke, in 80 triangles
+    /// where a rounded `generateBox` is 13 000 at any size (2026-11-03).
+    public static func roundedBar(size: SIMD3<Float>, cornerRadius: Float,
+                                  segments: Int = 4) -> MeshResource {
+        mesh(.init("roundedBar", size.x, size.y, size.z, cornerRadius, Float(segments))) {
+            let half = size / 2
+            let radius = min(cornerRadius, half.x, half.y)
+            // The outline, counter-clockwise seen from +z, a quarter arc at
+            // each corner, with the outward normal of each point.
+            var outline: [(point: SIMD2<Float>, normal: SIMD2<Float>)] = []
+            let centres: [SIMD2<Float>] = [[half.x - radius, half.y - radius],
+                                           [-(half.x - radius), half.y - radius],
+                                           [-(half.x - radius), -(half.y - radius)],
+                                           [half.x - radius, -(half.y - radius)]]
+            for (corner, centre) in centres.enumerated() {
+                for step in 0...max(segments, 1) {
+                    let angle = (Float(corner) + Float(step) / Float(max(segments, 1))) * .pi / 2
+                    let normal = SIMD2<Float>(cos(angle), sin(angle))
+                    outline.append((centre + radius * normal, normal))
+                }
+            }
+            var positions: [SIMD3<Float>] = []
+            var normals: [SIMD3<Float>] = []
+            var indices: [UInt32] = []
+            let count = UInt32(outline.count)
+            // The two faces, each fanned from its centre.
+            for (z, facing) in [(half.z, Float(1)), (-half.z, Float(-1))] {
+                let centre = UInt32(positions.count)
+                positions.append([0, 0, z])
+                normals.append([0, 0, facing])
+                for entry in outline {
+                    positions.append([entry.point.x, entry.point.y, z])
+                    normals.append([0, 0, facing])
+                }
+                for i in 0..<count {
+                    let a = centre + 1 + i, b = centre + 1 + (i + 1) % count
+                    indices += facing > 0 ? [centre, a, b] : [centre, b, a]
+                }
+            }
+            // The rim, front ring then back ring.
+            let rim = UInt32(positions.count)
+            for z in [half.z, -half.z] {
+                for entry in outline {
+                    positions.append([entry.point.x, entry.point.y, z])
+                    normals.append([entry.normal.x, entry.normal.y, 0])
+                }
+            }
+            for i in 0..<count {
+                let front = rim + i, frontNext = rim + (i + 1) % count
+                let back = front + count, backNext = frontNext + count
+                indices += [front, back, frontNext, frontNext, back, backNext]
+            }
+            var descriptor = MeshDescriptor(name: "rounded-bar")
+            descriptor.positions = MeshBuffers.Positions(positions)
+            descriptor.normals = MeshBuffers.Normals(normals)
+            descriptor.primitives = .triangles(indices)
+            return (try? MeshResource.generate(from: [descriptor]))
+                ?? .generateBox(size: size, cornerRadius: cornerRadius)
+        }
+    }
+
     public static func box(size: SIMD3<Float>, cornerRadius: Float = 0) -> MeshResource {
         mesh(.init("box", size.x, size.y, size.z, cornerRadius)) {
             .generateBox(size: size, cornerRadius: cornerRadius)

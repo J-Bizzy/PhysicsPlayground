@@ -90,6 +90,53 @@ public struct TubeBuffers: Sendable {
         }
     }
 
+    /// Arrowheads riding a set of lines, appended to that set's own buffers
+    /// so they draw with it as one mesh instead of an entity each (2026-11-03:
+    /// Electric Fields' opening dipole was 185 cones, 185 draws). A cone of
+    /// `sides` facets is centred on each point, its apex along its direction,
+    /// wound to face outward.
+    public nonisolated static func appendCones(
+        to buffers: inout TubeBuffers, at points: [SIMD3<Float>],
+        directions: [SIMD3<Float>], height: Float, radius: Float, sides: Int = 12
+    ) {
+        for (point, direction) in zip(points, directions) {
+            let length = simd_length(direction)
+            guard length > 1e-9 else { continue }
+            let tangent = direction / length
+            let reference: SIMD3<Float> = abs(tangent.y) < 0.9 ? [0, 1, 0] : [1, 0, 0]
+            let side = simd_normalize(simd_cross(tangent, reference))
+            let up = simd_cross(tangent, side)
+            let base = point - tangent * (height / 2)
+            let apex = point + tangent * (height / 2)
+
+            // The slanted face: a ring round the base and one apex.
+            let ring = UInt32(buffers.positions.count)
+            for s in 0..<sides {
+                let angle = 2 * Float.pi * Float(s) / Float(sides)
+                let out = cos(angle) * side + sin(angle) * up
+                buffers.positions.append(base + radius * out)
+                buffers.normals.append(simd_normalize(height * out + radius * tangent))
+            }
+            let tip = UInt32(buffers.positions.count)
+            buffers.positions.append(apex)
+            buffers.normals.append(tangent)
+            // The base, facing back down the line.
+            let cap = UInt32(buffers.positions.count)
+            buffers.positions.append(base)
+            buffers.normals.append(-tangent)
+            for s in 0..<sides {
+                let angle = 2 * Float.pi * Float(s) / Float(sides)
+                buffers.positions.append(base + radius * (cos(angle) * side + sin(angle) * up))
+                buffers.normals.append(-tangent)
+            }
+            for s in 0..<UInt32(sides) {
+                let next = (s + 1) % UInt32(sides)
+                buffers.indices += [ring + s, ring + next, tip]
+                buffers.indices += [cap, cap + 1 + next, cap + 1 + s]
+            }
+        }
+    }
+
     /// Pure vertex math — safe on any thread.
     public nonisolated static func buffers(
         lines: [[SIMD3<Float>]], radius: Float = 0.0016, sides: Int = 5

@@ -147,6 +147,24 @@ contradicts this section, this section is current.
 - [ ] **The cut test:** enter all seven labs in sequence; the room's
       brightness moves only at Orbital Mechanics, and ramps rather than steps.
 
+## ⟳ 2026-11-03 — Electric Fields, lighter
+
+- [ ] **Open Electric Fields and look around the dipole for ten seconds:**
+      no stutter as you turn your head. Judge: does it feel as smooth as
+      Projectiles?
+- [ ] **Drag a charge quickly round the other:** the lines and their
+      arrowheads keep up and nothing hitches. Do it again with
+      Equipotentials on.
+- [ ] **Look closely at a line that passes near you:** smooth curves, no
+      visible corners, round arrowheads.
+- [ ] **The charges' + and − signs** read as before (flat bars with
+      rounded ends, now square-edged in depth).
+- [ ] **Pull a test charge, turn on Uniform B, let it go:** it circles with
+      one green trail fading to nothing behind it, the trail's head always
+      on the charge. Pause: the trail holds.
+- [ ] **Capacitor on:** no glass slab flashes up and fades as you enter the
+      lab with the capacitor off.
+
 ## ⟳ 2026-11-03 — Cut on a lead dot
 
 - [ ] **Tap a wired lead dot** on the starter loop: its net lights as

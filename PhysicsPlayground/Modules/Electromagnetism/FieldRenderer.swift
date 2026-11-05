@@ -90,6 +90,11 @@ final class FieldRenderer {
     static let probeNegativeColor = DesignTokens.Palette.probeNegativeUI
     static let lineColor = DesignTokens.Palette.fieldLineUI
     static let chargeRadius: Float = 0.03
+    /// Facets round a charge and its halo, and round the small spheres (the
+    /// probe, the wells' previews): `generateSphere` was 8 000 triangles
+    /// apiece (2026-11-03).
+    static let chargeFacets = 40
+    static let previewFacets = 32
 
     /// How big a charge is actually drawn right now — the Bloom's grip
     /// rides this so the handle sits on the sphere's own surface and
@@ -122,12 +127,16 @@ final class FieldRenderer {
     nonisolated static let arrowExclusionRadius = 0.09
     /// Arc-length spacing of the arrowheads riding each field line.
     nonisolated static let arrowSpacing: Float = 0.17
+    /// An arrowhead's cone: drawn in the core line's own mesh.
+    nonisolated static let arrowHeight: Float = 0.022
+    nonisolated static let arrowRadius: Float = 0.0085
+    /// How sparsely a traced line is drawn: a point every 5 cm along a
+    /// straight run, and wherever the heading has turned 5° (at 10° a line
+    /// passing near the eye showed its corners).
+    nonisolated static let lineSpacing: Float = 0.05
+    nonisolated static let lineTurn: Float = .pi / 36
 
     private var model: FieldModel?
-    /// Bare arrowhead cones riding the field lines. The line itself is
-    /// the shaft — consecutive heads follow the curve, so the arrows bend
-    /// with the line instead of laying straight chords over it.
-    private let arrowHeads: EntityPool<ModelEntity>
     private var chargeEntities: [UUID: ModelEntity] = [:]
     private var chargeHalos: [UUID: ModelEntity] = [:]
     /// The vertical stroke of each charge's sign glyph — hidden on a
@@ -176,14 +185,6 @@ final class FieldRenderer {
     private var appliedCharges: [PointCharge] = []
 
     init() {
-        let headMesh = Primitives.cone(height: 0.022, radius: 0.0085)
-        let headMaterial = UnlitMaterial(color: FieldRenderer.lineColor)
-        arrowHeads = EntityPool(budget: 400) { container in
-            let head = ModelEntity(mesh: headMesh, materials: [headMaterial])
-            container.addChild(head)
-            return head
-        }
-
         // Everything derived from the traced field lives under one root:
         // while a single charge is dragged, the whole pattern translates
         // rigidly with it (exact for one charge — the field just moves),
@@ -191,12 +192,11 @@ final class FieldRenderer {
         root.addChild(Lighting.keyLight())
         root.addChild(viewRoot)
         viewRoot.addChild(fieldFlowRoot)
-        // The glow halo sits under the arrowheads and the bright core so
+        // The glow halo sits under the bright core and its arrowheads so
         // the crisp line and heads read over the soft bloom.
         fieldFlowRoot.addChild(lineGlowEntity)
         // Casing under the bright core: darkness first, light on top.
         fieldFlowRoot.addChild(lineCasingEntity)
-        fieldFlowRoot.addChild(arrowHeads.root)
         linesEntity.isEnabled = false
         fieldFlowRoot.addChild(linesEntity)
         lineGlowEntity.isEnabled = false
@@ -308,9 +308,6 @@ final class FieldRenderer {
         for layer in [linesEntity, lineCasingEntity, lineGlowEntity] {
             Fade.tick(layer, visible: showLines && hasSources)
         }
-        if !showLines || !hasSources {
-            arrowHeads.hideAll()
-        }
         let visibilityChanged = showLines != lastShowLines
         let roomChanged = room != lastRoom
         if showLines
@@ -334,7 +331,7 @@ final class FieldRenderer {
 
     // MARK: Background field geometry (the traced lines)
 
-    private nonisolated struct GeometryJob: Sendable {
+    nonisolated struct GeometryJob: Sendable {
         var charges: [PointCharge]
         var region: FieldModel.SamplingRegion
         var wantLines: Bool
@@ -348,27 +345,6 @@ final class FieldRenderer {
 
     /// The room the lines were last traced for; `.some(nil)` is deep space.
     private var lastRoom: RoomBox??
-
-    /// Re-aims the arrowhead pool at the given points, each cone rotated
-    /// from its rest +y onto the line's local direction there.
-    private func syncArrowHeads(points: [SIMD3<Double>], directions: [SIMD3<Double>]) {
-        for (index, slot) in arrowHeads.slots.enumerated() {
-            guard index < points.count, index < directions.count else {
-                slot.entity.isEnabled = false
-                continue
-            }
-            let direction = directions[index]
-            let length = simd_length(direction)
-            guard length > 1e-12 else {
-                slot.entity.isEnabled = false
-                continue
-            }
-            slot.entity.isEnabled = true
-            slot.entity.position = SIMD3<Float>(points[index])
-            slot.entity.orientation = simd_quatf(
-                from: [0, 1, 0], to: SIMD3<Float>(direction / length))
-        }
-    }
 
     /// While a lone charge moves, translate the whole traced pattern with
     /// it — exact physics (one charge's field is the same everywhere, just
@@ -561,21 +537,24 @@ final class FieldRenderer {
                                   SIMD3(center.x + x, yTop, center.z + z)])
                 }
             }
-            if let mesh = TubeMesh.tube(lines: lines) {
-                bFieldRoot.addChild(ModelEntity(mesh: mesh, materials: [material]))
-            }
-            // Arrowheads chained up each line (cones point +y already).
-            let coneMesh = Primitives.cone(height: 0.02, radius: 0.008)
+            // Arrowheads chained up each line, in the lines' own mesh: as
+            // entities they were 112 draws (2026-11-03).
+            var heads: [SIMD3<Float>] = []
             for x in lattice {
                 for z in lattice {
                     var y = yBottom + 0.12
                     while y < yTop - 0.06 {
-                        let head = ModelEntity(mesh: coneMesh, materials: [material])
-                        head.position = [center.x + x, y, center.z + z]
-                        bFieldRoot.addChild(head)
+                        heads.append([center.x + x, y, center.z + z])
                         y += FieldRenderer.arrowSpacing
                     }
                 }
+            }
+            var buffers = TubeMesh.buffers(lines: lines)
+            TubeMesh.appendCones(to: &buffers, at: heads,
+                                 directions: Array(repeating: [0, 1, 0], count: heads.count),
+                                 height: 0.02, radius: 0.008)
+            if let mesh = TubeMesh.mesh(from: buffers) {
+                bFieldRoot.addChild(ModelEntity(mesh: mesh, materials: [material]))
             }
             viewRoot.addChild(bFieldRoot)
         }
@@ -691,6 +670,9 @@ final class FieldRenderer {
             slab.name = "dielectric-slab"
             Grabbable.configureTouchTarget(slab, box: [1, 1, 1])
             SpatialActions.describe(slab, label: "Dielectric slab")
+            // Built hidden, as the plates are: built shown, it faded out on
+            // every entry with no capacitor, drawn all the while.
+            slab.isEnabled = false
             viewRoot.addChild(slab)
             dielectricSlab = slab
 
@@ -704,6 +686,7 @@ final class FieldRenderer {
                 Grabbable.configureTouchTarget(
                     holder, box: [0.11, 0.05, 0.09],
                     offset: [0, 0, -0.05])
+                holder.isEnabled = false
                 viewRoot.addChild(holder)
                 slabHandle = holder
             }
@@ -799,7 +782,7 @@ final class FieldRenderer {
 
         while chargeDots.count < wanted.count && chargeDots.count < 96 {
             let dot = ModelEntity(
-                mesh: Primitives.sphere(radius: 0.007),
+                mesh: Primitives.sphere(radius: 0.007, segments: 12),
                 materials: [Materials.energized(
                     DesignTokens.Palette.positiveUI, glow: 0.5)])
             dot.scale = [0.4, 1, 1]   // a bead flattened against the face
@@ -828,7 +811,7 @@ final class FieldRenderer {
         }
     }
 
-    private nonisolated struct GeometryResult: Sendable {
+    nonisolated struct GeometryResult: Sendable {
         var sourceCharges: [PointCharge] = []
         var tube = TubeBuffers()
         /// A near-black tube swept fatter than the core, drawn underneath it:
@@ -838,14 +821,12 @@ final class FieldRenderer {
         /// A fatter, fainter tube along the same lines — the soft glow
         /// halo that makes the field read as light, not wire.
         var tubeGlow = TubeBuffers()
-        /// Sample points along the lines where arrowheads ride, with the
-        /// true field vector there (direction and strength for the pool's
-        /// log-brightness ramp).
+        /// Where the arrowheads ride, at regular arc length along the lines.
+        /// They are drawn in `tube`, the core's own mesh.
         var arrowPoints: [SIMD3<Double>] = []
-        var arrowVectors: [SIMD3<Double>] = []
     }
 
-    private nonisolated static func computeGeometry(_ job: GeometryJob) -> GeometryResult {
+    nonisolated static func computeGeometry(_ job: GeometryJob) -> GeometryResult {
         var result = GeometryResult()
         result.sourceCharges = job.charges
 
@@ -866,16 +847,24 @@ final class FieldRenderer {
             let lines = (job.room.map { $0.clip(polylines: traced) } ?? traced)
                 .filter { $0.count > 2 }
                 .map { $0.map(SIMD3<Float>.init) }
-            result.tube = TubeMesh.buffers(lines: lines, radius: FieldRenderer.lineRadius)
+            // Thinned before they become tubes, as Magnetism's are: the tracer
+            // steps 1.2 cm and three tubes are swept from the same lines, so
+            // a straight far-field run was a ring every step. `decimated`
+            // keeps every point a curve needs (2026-11-03).
+            let drawn = TubeMesh.decimated(lines, spacing: Self.lineSpacing,
+                                           maximumTurn: Self.lineTurn)
+            result.tube = TubeMesh.buffers(lines: drawn, radius: FieldRenderer.lineRadius)
             result.tubeCasing = TubeMesh.buffers(
-                lines: lines,
+                lines: drawn,
                 radius: Materials.casingRadius(forCore: FieldRenderer.lineRadius))
             result.tubeGlow = TubeMesh.buffers(
-                lines: lines,
+                lines: drawn,
                 radius: Materials.glowRadius(forCore: FieldRenderer.lineRadius))
 
             // Arrowheads at regular arc length along every line — the line
-            // carries the path, the arrows carry the direction.
+            // carries the path, the arrows carry the direction — walked on the
+            // traced line, not the thinned one, so they sit where the field is.
+            var directions: [SIMD3<Float>] = []
             for line in lines {
                 var nextAt = FieldRenderer.arrowSpacing * 0.6
                 var walked: Float = 0
@@ -889,14 +878,18 @@ final class FieldRenderer {
                         }
                         if !nearCharge {
                             result.arrowPoints.append(point)
-                            result.arrowVectors.append(
-                                ElectricField.vector(at: point, dueTo: job.charges))
+                            directions.append(SIMD3<Float>(
+                                ElectricField.vector(at: point, dueTo: job.charges)))
                         }
                         nextAt += FieldRenderer.arrowSpacing
                     }
                     walked += step
                 }
             }
+            TubeMesh.appendCones(to: &result.tube,
+                                 at: result.arrowPoints.map(SIMD3<Float>.init),
+                                 directions: directions,
+                                 height: Self.arrowHeight, radius: Self.arrowRadius)
         }
 
         return result
@@ -908,7 +901,6 @@ final class FieldRenderer {
         LiveTube.apply(result.tubeCasing, to: lineCasingEntity, material: lineCasingMaterial)
         LiveTube.apply(result.tube, to: linesEntity, material: lineMaterial)
         LiveTube.apply(result.tubeGlow, to: lineGlowEntity, material: lineGlowMaterial)
-        syncArrowHeads(points: result.arrowPoints, directions: result.arrowVectors)
         // Fresh geometry is anchored to its own charge layout; re-derive
         // the warp so there's no pop when it lands mid-drag.
         appliedCharges = result.sourceCharges
@@ -971,12 +963,12 @@ final class FieldRenderer {
         let bar = barLength ?? min(radius * 0.9, 0.015)
         let thickness = max(bar * 0.27, 0.0025)
         let horizontal = ModelEntity(
-            mesh: Primitives.box(size: [bar, thickness, 0.002], cornerRadius: 0.001),
+            mesh: Primitives.roundedBar(size: [bar, thickness, 0.002], cornerRadius: 0.001),
             materials: [stroke])
         horizontal.position = [0, 0, radius * 1.2]
         pivot.addChild(horizontal)
         let vertical = ModelEntity(
-            mesh: Primitives.box(size: [thickness, bar, 0.002], cornerRadius: 0.001),
+            mesh: Primitives.roundedBar(size: [thickness, bar, 0.002], cornerRadius: 0.001),
             materials: [stroke])
         vertical.position = [0, 0, radius * 1.2]
         pivot.addChild(vertical)
@@ -989,7 +981,8 @@ final class FieldRenderer {
     static let wellPreviewRadius: Float = 0.024
 
     static func chargePreview(isPositive: Bool) -> Entity {
-        let sphere = ModelEntity(mesh: Primitives.sphere(radius: wellPreviewRadius),
+        let sphere = ModelEntity(mesh: Primitives.sphere(radius: wellPreviewRadius,
+                                                         segments: previewFacets),
                                  materials: [chargeMaterial(isPositive: isPositive)])
         sphere.addChild(signGlyph(isPositive: isPositive, radius: wellPreviewRadius))
         return sphere
@@ -1000,7 +993,7 @@ final class FieldRenderer {
     static func probePreview(isPositive: Bool) -> Entity {
         let radius = wellPreviewRadius * 0.8
         let sphere = ModelEntity(
-            mesh: Primitives.sphere(radius: radius),
+            mesh: Primitives.sphere(radius: radius, segments: previewFacets),
             materials: [Materials.energized(
                 isPositive ? DesignTokens.Palette.probePositiveUI
                            : DesignTokens.Palette.probeNegativeUI, glow: 0.4)])
@@ -1010,7 +1003,7 @@ final class FieldRenderer {
 
     private func makeChargeEntity(for charge: PointCharge) -> ModelEntity {
         let sphere = ModelEntity(
-            mesh: Primitives.sphere(radius: Self.chargeRadius),
+            mesh: Primitives.sphere(radius: Self.chargeRadius, segments: Self.chargeFacets),
             materials: [Self.chargeMaterial(isPositive: charge.isPositive)]
         )
         // Name carries the charge's identity so manipulation event handlers
@@ -1026,7 +1019,8 @@ final class FieldRenderer {
 
         // Translucent halo shown on the selected charge.
         let halo = SelectionHalo.make(
-            mesh: Primitives.sphere(radius: Self.chargeRadius * 1.35))
+            mesh: Primitives.sphere(radius: Self.chargeRadius * 1.35,
+                                    segments: Self.chargeFacets))
         sphere.addChild(halo)
 
         // The sign glyph: a billboarded + (or −, with the vertical stroke
@@ -1038,11 +1032,11 @@ final class FieldRenderer {
         let strokeMaterial = Materials.energized(
             UIColor(white: 0.97, alpha: 1), roughness: 0.22, glow: 0.2)
         let horizontal = ModelEntity(
-            mesh: Primitives.box(size: [0.024, 0.0062, 0.005], cornerRadius: 0.0022),
+            mesh: Primitives.roundedBar(size: [0.024, 0.0062, 0.005], cornerRadius: 0.0022),
             materials: [strokeMaterial])
         horizontal.position = [0, 0, Self.chargeRadius * 1.15]
         let vertical = ModelEntity(
-            mesh: Primitives.box(size: [0.0062, 0.024, 0.005], cornerRadius: 0.0022),
+            mesh: Primitives.roundedBar(size: [0.0062, 0.024, 0.005], cornerRadius: 0.0022),
             materials: [strokeMaterial])
         vertical.position = [0, 0, Self.chargeRadius * 1.15]
         vertical.isEnabled = charge.isPositive
@@ -1097,71 +1091,92 @@ final class FieldRenderer {
 
     // MARK: The probe's trail
 
-    /// The probe's path as pooled beads fading toward the tail — transform
-    /// writes on entities built once, where a swept tube would regenerate a
-    /// mesh per point. Under `viewRoot`, so the path scales with the field.
-    private lazy var probeTrailPool: EntityPool<ModelEntity> = {
-        let mesh = Primitives.sphere(radius: 0.0042)
-        let pool = EntityPool<ModelEntity>(budget: FieldModel.probeTrailLength) { container in
-            let bead = ModelEntity(mesh: mesh,
-                                   materials: [UnlitMaterial(color: Self.probePositiveColor)])
-            container.addChild(bead)
-            return bead
-        }
-        viewRoot.addChild(pool.root)
-        return pool
+    /// The probe's path as one ribbon fading toward the tail (2026-11-03). It
+    /// was 190 pooled beads, each its own transparent draw of an 8 000-triangle
+    /// sphere: 1.5 million triangles while a test charge flew, and 190
+    /// transforms written every frame. Rewritten at most 30 times a second,
+    /// with a leader moved by transform alone carrying it on to the probe, as
+    /// Orbital Mechanics' trails are. Under `viewRoot`, so it scales with the
+    /// field.
+    private lazy var probeRibbon: TrailRibbons? = {
+        let ribbon = TrailRibbons(slots: 1, capacity: FieldModel.probeTrailLength,
+                                  rotation: 3)
+        if let ribbon { viewRoot.addChild(ribbon.entity) }
+        return ribbon
     }()
-    private var appliedTrailPolarity: Bool?
-    /// How many trail beads the taper was last computed for: fade and scale
-    /// are functions of index and trail length, so once the trail is full
-    /// they are the same numbers every frame.
-    private var appliedTrailCount: Int?
+    private lazy var probeLeader: ModelEntity = {
+        let leader = ModelEntity(mesh: Primitives.cylinder(height: 1, radius: 1),
+                                 materials: [Materials.unlit(Self.probePositiveColor)])
+        leader.isEnabled = false
+        viewRoot.addChild(leader)
+        return leader
+    }()
+    /// The house fade, loaded once; the trail is flat until it lands.
+    private var trailFadeRamp: TextureResource?
+    private var trailRampRequested = false
+    private var appliedTrailKey: String?
+    private var committedTrailHead: SIMD3<Float>?
+    private var lastTrailCommit = -Double.infinity
+    nonisolated static let trailInterval = 1.0 / 30
+    /// The ribbon's radius: the old beads' at their middle.
+    nonisolated static let trailRadius: Float = 0.0028
 
     private func syncProbeTrail(_ model: FieldModel) {
         let trail = model.probeTrail
-        guard trail.count > 1 else {
-            probeTrailPool.hideAll()
+        guard trail.count > 1, let ribbon = probeRibbon else {
+            if committedTrailHead != nil, let ribbon = probeRibbon {
+                ribbon.clear(slot: 0)
+                ribbon.commit()
+            }
+            committedTrailHead = nil
+            probeLeader.isEnabled = false
             return
         }
-        // Recolour only when the polarity actually flips — the sign can
-        // be changed mid-flight, and the trail behind the probe should
-        // say which particle drew it.
+        if !trailRampRequested {
+            trailRampRequested = true
+            Task { [weak self] in self?.trailFadeRamp = await Materials.fadeRamp() }
+        }
+        // Recoloured only when the polarity flips: the sign can change
+        // mid-flight, and the path should say which particle drew it.
         let positive = model.probeIsPositive
-        if appliedTrailPolarity != positive {
+        let key = "\(positive)|\(trailFadeRamp != nil)"
+        if appliedTrailKey != key {
+            appliedTrailKey = key
             let color = positive ? Self.probePositiveColor : Self.probeNegativeColor
-            let material = Materials.unlit(color, opacity: 0.9)
-            for slot in probeTrailPool.slots {
-                slot.payload.model?.materials = [material]
-            }
-            appliedTrailPolarity = positive
+            ribbon.setMaterial(trailFadeRamp.map { Materials.fadedLine(color, ramp: $0, opacity: 0.8) }
+                               ?? Materials.unlit(color, opacity: 0.5), slot: 0)
+            probeLeader.model?.materials = [Materials.unlit(color, opacity: 0.8)]
         }
 
-        let count = min(trail.count, probeTrailPool.budget)
-        // The newest points are the ones worth keeping when the path is
-        // longer than the pool.
-        let visible = trail.suffix(count)
-        let taperChanged = appliedTrailCount != count
-        appliedTrailCount = count
-        for (index, point) in visible.enumerated() {
-            let slot = probeTrailPool.slots[index]
-            slot.entity.isEnabled = true
-            slot.entity.position = SIMD3<Float>(point)
-            // Fade and taper toward the tail, so the curve reads with a direction.
-            // Index-derived, rewritten only when the trail's length changes.
-            guard taperChanged else { continue }
-            let age = Float(index) / Float(max(count - 1, 1))
-            slot.entity.scale = SIMD3(repeating: 0.35 + 0.65 * age)
-            slot.entity.components.set(
-                OpacityComponent(opacity: 0.12 + 0.68 * age))
+        let head = SIMD3<Float>(trail[trail.count - 1])
+        let wall = CACurrentMediaTime()
+        if head != committedTrailHead, wall - lastTrailCommit >= Self.trailInterval {
+            lastTrailCommit = wall
+            let points = trail.suffix(ribbon.capacity).map(SIMD3<Float>.init)
+            let last = Float(max(points.count - 1, 1))
+            ribbon.update(slot: 0, points: points,
+                          ages: points.indices.map { Float($0) / last },
+                          radius: Self.trailRadius)
+            ribbon.commit()
+            committedTrailHead = head
         }
-        for index in count..<probeTrailPool.slots.count {
-            probeTrailPool.slots[index].entity.isEnabled = false
+
+        // Every frame, by transform alone: from the head last written to the
+        // probe's newest point.
+        guard let from = committedTrailHead else { probeLeader.isEnabled = false; return }
+        let span = head - from
+        let length = simd_length(span)
+        probeLeader.isEnabled = length > 0.0005
+        if length > 0.0005 {
+            probeLeader.position = from + span / 2
+            probeLeader.orientation = VectorFieldArrows.rotationFromYAxis(to: span / length)
+            probeLeader.scale = SIMD3(Self.trailRadius, length, Self.trailRadius)
         }
     }
 
     private func makeProbeEntity() -> ModelEntity {
         let sphere = ModelEntity(
-            mesh: Primitives.sphere(radius: Self.probeRadius),
+            mesh: Primitives.sphere(radius: Self.probeRadius, segments: Self.previewFacets),
             materials: [Materials.energized(Self.probePositiveColor)]
         )
         sphere.name = Self.probeEntityName

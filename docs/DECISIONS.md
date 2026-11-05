@@ -16,6 +16,33 @@ A running log of consequential decisions — architectural, physical, or product
 
 (The template sat stranded at line 309, mid-log between two 2026-07-29 entries, until 2026-08-01.)
 
+## 2026-11-03 — Electric Fields draws in a handful of meshes
+
+**Decision:** Electric Fields now draws about a tenth of what it did:
+- **Arrowheads ride in the core line's own mesh** (`TubeMesh.appendCones`), as do the uniform B field's. They were one entity each.
+- **Traced lines are thinned before they become tubes** (`TubeMesh.decimated`: a point every 5 cm along a straight run, and wherever the heading turns 5°). Arrowheads are still placed on the traced line.
+- **Charges, their halo, the probe and the wells' previews** use a sphere of set facets (`Primitives.sphere(radius:segments:)`, 1 600 triangles at 40). Every sign stroke is a flat rounded bar (`Primitives.roundedBar`, 80 triangles).
+- **The test charge's trail is one fading ribbon** (`TrailRibbons`, one slot), written at most 30 times a second, with a leader moved by transform alone carrying it to the probe, as Orbital Mechanics' trails are. It was 190 beads.
+- **The dielectric slab is built hidden,** as the plates are. Built shown, it faded out on every entry with no capacitor, drawn all the while.
+
+**Context:** The owner: "the electric fields module is quite laggy". The simulator never showed it (90 Hz, main thread 21–26 % busy), because the Mac's GPU hides what a headset pays for. Counted the way `CircuitBudgetTests` counts:
+
+| Scene | Before | After |
+|---|---|---|
+| The opening dipole | 170 476 triangles, 194 draws | about 26 000, 9 |
+| A test charge circling in uniform B | 1 751 332, 500 | about 31 000, 14 |
+| The capacitor on | 767 346, 354 | about 80 000, 111 |
+| The three wells' previews | 89 532 | 3 280 |
+
+`generateSphere` is about 8 000 triangles at any radius and a rounded `generateBox` 13 000, so each trail bead, charge dot and sign stroke cost that much. In the simulator the main thread went from 21 % to 4 % busy at rest, and from 26 % to 6 % with free charges.
+
+**Consequences:**
+- **`FieldBudgetTests` holds the budget:** the opening dipole at ≤ 16 draws and ≤ 40 000 triangles, a flying test charge at ≤ 40 draws, the previews at ≤ 6 000 triangles, and more lines adding no draws.
+- **The trail no longer tapers,** only fades: a ribbon has one radius. It fades through the house ramp to nothing, where the beads stopped at 12 %.
+- **Still one entity each:** the capacitor's surface-charge dots (up to 96, now 12-facet beads). They move every frame while the gap is dragged, so they stay transforms.
+- **Not built:** tracing coarse while a charge is held. Once the tubes were thinned the trace was about a millisecond, so there was nothing to win.
+- **The same two costs are in Magnetism:** a pooled arrowhead per line point (600) and `generate*` spheres. Its lines are already thinned.
+
 ## 2026-11-03 — A lead dot offers Cut
 
 **Decision:** Tapping a wired lead dot in Circuit Workshop, or a joint's brass junction, still lights its net. It now also stands one petal just over the node: Cut. Cut takes every wire on that end and only that end. At a joint it parts the two leads. A bare dot and a cable open nothing. A second tap on the same node folds the petal and the net together. The petal folds by itself once there is nothing left to cut, when the selection moves to another part, or when a lead is pulled. It does not arm: a wire is undone by drawing it again, as a part's Delete is undone by the shelf.
