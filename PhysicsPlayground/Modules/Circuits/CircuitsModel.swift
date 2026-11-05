@@ -848,6 +848,26 @@ final class CircuitsModel {
         persistSoon()
     }
 
+    /// The wires on one lead: what a lead's Cut petal takes off.
+    func wires(at terminal: Terminal) -> [Wire] {
+        wires.filter { $0.from == terminal || $0.to == terminal }
+    }
+
+    /// Cut every wire on one lead, and only that lead (2026-11-03, the
+    /// owner's pop-up on a dot). The part's own Detach takes all of its
+    /// wires; this takes one end's.
+    func cutWires(at terminal: Terminal) {
+        guard scrubTime == nil else { return }
+        let touching = Set(wires(at: terminal).map(\.id))
+        guard !touching.isEmpty else { return }
+        wires.removeAll { touching.contains($0.id) }
+        clearNetHighlight()
+        if let component = components.first(where: { $0.id == terminal.componentID }) {
+            emitSound(.thud, at: component.terminalPosition(terminal.end), volume: 0.4)
+        }
+        persistSoon()
+    }
+
     /// Why a connection did not happen — a refusal is a thing the bench shows,
     /// not a silent `return`.
     enum ConnectOutcome: Equatable {

@@ -206,6 +206,8 @@ final class Bloom {
     /// Per-petal reveal, staggered behind the parent so the ring
     /// unfurls rather than appearing.
     private var petalReveals: [Float] = []
+    /// How far above the object the petals stand, at one metre.
+    private var petalLift: Float = Bloom.ringRadius
 
     /// The live drag on the grip, if any.
     /// `trackStart` is where the calm track began when the hand took it,
@@ -234,6 +236,9 @@ final class Bloom {
     // bloom holds constant angular size at any range. Sized and placed to
     // Clear the physics, not sit beside it.
     private static let ringRadius: Float = 0.235
+    /// A lead's ring (2026-11-03): one petal, just over a dot a few
+    /// millimetres across, where the part's own ring would stand it 23 cm up.
+    static let leadRingLift: Float = 0.075
     /// How far the handle travels from the low end of the range to the
     /// high, at one metre: the stalk's full stretch.
     private static let gripTrackLength: Float = 0.14
@@ -261,17 +266,20 @@ final class Bloom {
     private(set) var targetID: AnyHashable?
 
     /// Rebuilds only when the target actually changes.
+    /// `lift` stands the petals that far above the object, at one metre.
     func retarget(_ id: AnyHashable,
                   petals: @autoclosure () -> [Petal],
-                  grip: @autoclosure () -> Grip?) {
+                  grip: @autoclosure () -> Grip?,
+                  lift: Float? = nil) {
         guard targetID != id else { return }
         targetID = id
-        configure(petals: petals(), grip: grip())
+        configure(petals: petals(), grip: grip(), lift: lift)
     }
 
     func clearTarget() { targetID = nil }
 
-    func configure(petals: [Petal], grip: Grip?) {
+    func configure(petals: [Petal], grip: Grip?, lift: Float? = nil) {
+        petalLift = lift ?? Self.ringRadius
         // Rebuilding the ring destroys the entity the armed index refers to,
         // so the arm cannot survive it.
         armedPetal = nil
@@ -341,6 +349,8 @@ final class Bloom {
             root.addChild(callout.root)
             label = callout
         }
+        // A ring with no grip has no reading: the last object's would linger.
+        if grip == nil { label?.isEnabled = false }
         // Named on every retarget, not only when built: one ring serves every
         // object in a lab, and Electric Fields' probe "Charge" was announced
         // as the charge's "Strength" because that grip came first.
@@ -423,7 +433,7 @@ final class Bloom {
             let spread = Self.ringArc * Float(count - 1)
             let angle = -spread / 2 + Self.ringArc * Float(index)
             // Petals arc above the object, never in front of it.
-            let lift = Self.ringRadius * r
+            let lift = petalLift * r
             entity.position = SIMD3(sin(angle) * lift,
                                     cos(angle) * lift,
                                     0)

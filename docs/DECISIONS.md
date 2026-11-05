@@ -16,6 +16,20 @@ A running log of consequential decisions — architectural, physical, or product
 
 (The template sat stranded at line 309, mid-log between two 2026-07-29 entries, until 2026-08-01.)
 
+## 2026-11-03 — A lead dot offers Cut
+
+**Decision:** Tapping a wired lead dot in Circuit Workshop, or a joint's brass junction, still lights its net. It now also stands one petal just over the node: Cut. Cut takes every wire on that end and only that end. At a joint it parts the two leads. A bare dot and a cable open nothing. A second tap on the same node folds the petal and the net together. The petal folds by itself once there is nothing left to cut, when the selection moves to another part, or when a lead is pulled. It does not arm: a wire is undone by drawing it again, as a part's Delete is undone by the shelf.
+
+**Context:**
+- **The owner:** "bring back the little pop up when I select a node at the end of any component to like cut it."
+- **No dot ever had a ring.** The nearest thing was the part's own ring (tap the body), whose Detach takes every wire on the part.
+- **A wire came off only by being pulled off** (2026-08-11) or by Detach. Neither takes one end's wires in one pinch.
+
+**Consequences:**
+- **Bloom takes a lift.** A ring may stand its petals nearer the object (`Bloom.leadRingLift`, 7.5 cm at a metre, against the part ring's 23.5 cm), because a dot is a few millimetres across. A ring with no grip now hides the last ring's reading instead of leaving it showing.
+- **`CircuitsModel.cutWires(at:)`** sits beside `detachComponent(id:)`. The ring's logic is pure statics on the view (`leadRing(for:on:)`, `isLive`, `partID`, `cutPetal`, `cut`), so `CircuitsLeadRingTests` can drive it without a headset.
+- **`-circLeadRing <componentIndex>,<end>`** opens a dot's ring for a still. Like `-circHighlight`, it runs after the bench-shaping arguments.
+
 ## 2026-11-02 — One object in each hand, in every lab
 
 **Decision:** Every lab now lets each hand hold its own object:

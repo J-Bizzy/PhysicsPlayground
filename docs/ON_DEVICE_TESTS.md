@@ -147,6 +147,28 @@ contradicts this section, this section is current.
 - [ ] **The cut test:** enter all seven labs in sequence; the room's
       brightness moves only at Orbital Mechanics, and ramps rather than steps.
 
+## ⟳ 2026-11-03 — Cut on a lead dot
+
+- [ ] **Tap a wired lead dot** on the starter loop: its net lights as
+      before, and one scissors petal stands a few centimetres above the dot,
+      not up where a part's ring stands.
+      Pinch it: that end's wires come off, the bulb goes dark, the net
+      unlights and the petal folds. The part's other end keeps its wire.
+- [ ] **Tap a dot with nothing on it:** no petal. Only its net lights.
+- [ ] **Tap the same dot twice:** the second tap folds the petal and the lit
+      net together.
+- [ ] **Tap a joint's brass junction** (two parts seated nose to tail): the
+      same petal stands over it, and Cut parts the two leads.
+- [ ] **Tap along a cable:** the net lights, no petal (a cable is not a
+      node).
+- [ ] **With a dot's petal up,** tap the part's body: the petal folds and
+      the part's own ring opens (Detach, Delete, the value track). Tap empty
+      space: everything folds.
+- [ ] **Pull a lead whose petal is up:** the petal folds as the wire comes
+      out of the dot.
+- [ ] **Judge:** is the petal close enough to read as the dot's, without
+      covering the part beside it?
+
 ## ⟳ 2026-11-02 — one object in each hand (hands, batch 3)
 
 Supersedes "Two hands, two objects — where each module stands" below:

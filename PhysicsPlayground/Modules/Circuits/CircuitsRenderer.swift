@@ -2401,7 +2401,9 @@ final class CircuitsRenderer {
         }
     }
 
-    private func terminalWorld(_ terminal: CircuitsModel.Terminal, _ model: CircuitsModel) -> SIMD3<Float>? {
+    /// Where a lead is drawn, in the bench's frame: the model's place for it,
+    /// eased while its part lands, leans or lifts.
+    func terminalWorld(_ terminal: CircuitsModel.Terminal, _ model: CircuitsModel) -> SIMD3<Float>? {
         guard let component = model.components.first(where: { $0.id == terminal.componentID })
         else { return nil }
         // The model owns where a lead is, carried or not; a landing eases

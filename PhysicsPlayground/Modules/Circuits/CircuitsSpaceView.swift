@@ -13,6 +13,13 @@ import SwiftUI
 import RealityKit
 import RenderKit
 
+/// Which lead or joint has its Cut ring open. A reference type, as
+/// `RingState` is: the tap and the render loop must share one live value.
+@MainActor
+final class LeadRingState {
+    var target: CircuitsSpaceView.LeadRing?
+}
+
 struct CircuitsSpaceView: View {
     @Environment(CircuitsModel.self) private var model
     @State private var renderer: CircuitsRenderer?
@@ -27,6 +34,9 @@ struct CircuitsSpaceView: View {
     /// Which component's ring is open — shared by the tap gesture and
     /// the render loop (see RingState's header).
     @State private var ring = RingState()
+    /// The lead or joint whose Cut ring is open, if any. Never open with
+    /// `ring` — one bloom serves both.
+    @State private var leadRing = LeadRingState()
     /// The view's single `DragGesture(minimumDistance: 0)` runs on every
     /// tap, so a latch promotes to a pull only past `PressLatch.tapTravel`.
     @State private var leadPress = PressLatch<CircuitsModel.Terminal>()
@@ -319,6 +329,20 @@ struct CircuitsSpaceView: View {
                     let end = parts.count > 1 ? (Int(parts[1]) ?? 0) : 0
                     model.highlightNet(containing: .init(
                         componentID: model.components[index].id, end: end))
+                }
+            }
+            // `-circLeadRing <componentIndex>,<end>` opens that lead's Cut ring,
+            // as a tap on its dot would.
+            if let spec = UserDefaults.standard.string(forKey: "circLeadRing") {
+                let parts = spec.split(separator: ",")
+                if let index = parts.first.flatMap({ Int($0) }),
+                   index < model.components.count {
+                    let end = parts.count > 1 ? (Int(parts[1]) ?? 0) : 0
+                    let terminal = CircuitsModel.Terminal(
+                        componentID: model.components[index].id, end: end)
+                    model.select(id: terminal.componentID)
+                    model.highlightNet(containing: terminal)
+                    leadRing.target = Self.leadRing(for: .lead(terminal), on: model)
                 }
             }
             // `-circUnplug <wireIndex>,<end>` lifts that wire end into the
@@ -655,6 +679,22 @@ struct CircuitsSpaceView: View {
             ring.openID = nil
         }
         renderer.ringPartID = ring.openID
+        let viewer = appModel.room.headPosition.map {
+            renderer.viewRoot.convert(position: SIMD3<Float>($0), from: nil)
+        }
+        if let lead = leadRing.target,
+           ring.openID != nil || model.leadPull != nil || !Self.isLive(lead, on: model)
+            || model.selectedID != Self.partID(of: lead, on: model) {
+            // Cut, unwired, a lead in the hand, or the selection moved on.
+            leadRing.target = nil
+        }
+        if let lead = leadRing.target,
+           let anchor = Self.anchor(of: lead, on: model, renderer: renderer) {
+            bloom.retarget(lead, petals: [Self.cutPetal(for: lead, on: model)],
+                           grip: nil, lift: Bloom.leadRingLift)
+            bloom.update(anchor: anchor, viewer: viewer, revealTarget: 1, dt: dt)
+            return
+        }
         guard let uuid = ring.openID,
               let part = model.components.first(where: { $0.id == uuid }) else {
             bloom.update(anchor: .zero, viewer: nil, revealTarget: 0, dt: dt)
@@ -698,9 +738,6 @@ struct CircuitsSpaceView: View {
                         })
                 : nil)
 
-        let viewer = appModel.room.headPosition.map {
-            renderer.viewRoot.convert(position: SIMD3<Float>($0), from: nil)
-        }
         bloom.update(anchor: SIMD3<Float>(part.position),
                      viewer: viewer, revealTarget: 1, dt: dt)
     }
@@ -768,6 +805,82 @@ struct CircuitsSpaceView: View {
 
     /// Which part of the stage a hand holds.
     enum StageHold: Equatable, Sendable { case rim, deck }
+
+    /// A node's ring (2026-11-03, owner's call): tap a wired dot, or a
+    /// joint's junction, and one petal stands over it — Cut. The part's own
+    /// ring keeps Detach, which takes every wire on the part.
+    enum LeadRing: Hashable {
+        /// A lead dot: Cut takes every wire on that end, and only that end.
+        case lead(CircuitsModel.Terminal)
+        /// A joint's junction, one target for two leads: Cut parts them.
+        case joint(UUID)
+    }
+
+    /// The ring a tap on `grab` opens: a lead with a wire on it, or a
+    /// joint. A bare lead has nothing to cut, and a cable is not a node.
+    static func leadRing(for grab: Grab, on model: CircuitsModel) -> LeadRing? {
+        switch grab {
+        case .lead(let terminal):
+            return model.wires(at: terminal).isEmpty ? nil : .lead(terminal)
+        case .wire(let id):
+            guard let wire = model.wires.first(where: { $0.id == id }),
+                  model.isJoint(wire) else { return nil }
+            return .joint(id)
+        default:
+            return nil
+        }
+    }
+
+    /// Whether the ring still has something to cut; once it is cut, it folds.
+    static func isLive(_ ring: LeadRing, on model: CircuitsModel) -> Bool {
+        switch ring {
+        case .lead(let terminal):
+            !model.wires(at: terminal).isEmpty
+        case .joint(let id):
+            model.wires.first { $0.id == id }.map(model.isJoint) ?? false
+        }
+    }
+
+    /// The part the ring belongs to: a selection that moves off it folds it.
+    static func partID(of ring: LeadRing, on model: CircuitsModel) -> UUID? {
+        switch ring {
+        case .lead(let terminal): terminal.componentID
+        case .joint(let id): model.wires.first { $0.id == id }?.from.componentID
+        }
+    }
+
+    /// The ring's one petal. It never arms: undo is a new wire, as a part's
+    /// Delete is undone by the shelf.
+    static func cutPetal(for ring: LeadRing, on model: CircuitsModel) -> Bloom.Petal {
+        .init(name: "Cut", symbol: "scissors", tint: DesignTokens.Palette.neutralActionUI) {
+            cut(ring, on: model)
+        }
+    }
+
+    /// What the Cut petal does.
+    static func cut(_ ring: LeadRing, on model: CircuitsModel) {
+        switch ring {
+        case .lead(let terminal):
+            model.cutWires(at: terminal)
+        case .joint(let id):
+            model.deleteWire(id: id)
+            model.clearNetHighlight()
+        }
+    }
+
+    /// Where the ring stands: on the dot as drawn, or between a joint's leads.
+    private static func anchor(of ring: LeadRing, on model: CircuitsModel,
+                               renderer: CircuitsRenderer) -> SIMD3<Float>? {
+        switch ring {
+        case .lead(let terminal):
+            return renderer.terminalWorld(terminal, model)
+        case .joint(let id):
+            guard let wire = model.wires.first(where: { $0.id == id }),
+                  let a = renderer.terminalWorld(wire.from, model),
+                  let b = renderer.terminalWorld(wire.to, model) else { return nil }
+            return (a + b) / 2
+        }
+    }
 
     static func resolveGrab(names: [String], on model: CircuitsModel) -> Grab {
         let grab = resolvePartGrab(names: names, on: model)
@@ -982,15 +1095,19 @@ struct CircuitsSpaceView: View {
 
     /// A tap only selects — it never wires and never deletes.
     private func handleTap(on entity: Entity) {
-        switch Self.resolveGrab(names: Self.nameChain(from: entity), on: model) {
+        let grab = Self.resolveGrab(names: Self.nameChain(from: entity), on: model)
+        switch grab {
         case .lead(let terminal):
             // An armed meter is a question and the terminal is the answer.
             if model.multimeterArmed {
                 model.probeTap(terminal)
             } else {
                 model.select(id: terminal.componentID)
-                // "What is this connected to?" — answered by lighting the net.
-                model.highlightNet(containing: terminal)
+                // "What is this connected to?" — answered by lighting the net,
+                // and a wired lead offers its Cut.
+                toggleLeadRing(Self.leadRing(for: grab, on: model), on: entity) {
+                    model.highlightNet(containing: terminal)
+                }
             }
             return
         case .wire(let id):
@@ -1001,18 +1118,24 @@ struct CircuitsSpaceView: View {
                 model.probeTap(wire.from)
                 return
             }
-            model.selectWire(id: id)
+            // A joint's junction is a node too: it offers its Cut. Along a
+            // cable a tap only lights the net.
+            toggleLeadRing(Self.leadRing(for: grab, on: model), on: entity) {
+                model.selectWire(id: id)
+            }
             return
         case .lever(let id):
             // Select only: the toggle lives on the drag path's settled press, since
             // both gestures complete on a clean tap. VoiceOver toggles through
             // `onLeverAction`.
+            leadRing.target = nil
             model.select(id: id)
             return
         case .stageRim, .stageDeck:
             // A tap on the stage is a tap on empty space.
             break
         case .body(let id):
+            leadRing.target = nil
             model.clearNetHighlight()
             if ring.openID == id {
                 ring.openID = nil
@@ -1028,11 +1151,31 @@ struct CircuitsSpaceView: View {
             break
         }
         // Tapping nothing folds the ring and clears the lit net.
-        if ring.openID != nil || model.highlightedNet != nil {
+        if ring.openID != nil || leadRing.target != nil || model.highlightedNet != nil {
             SoundPalette.play(.releaseTick, on: entity, volume: 0.3)
         }
         ring.openID = nil
+        leadRing.target = nil
         model.clearNetHighlight()
+    }
+
+    /// A tap on a lead or a joint: a second tap on the one whose ring is
+    /// open folds it and its lit net; otherwise `select` lights the net and
+    /// `opening`, when there is something to cut, opens its ring.
+    private func toggleLeadRing(_ opening: LeadRing?, on entity: Entity,
+                                select: () -> Void) {
+        if let opening, leadRing.target == opening {
+            leadRing.target = nil
+            model.clearNetHighlight()
+            SoundPalette.play(.releaseTick, on: entity, volume: 0.3)
+            return
+        }
+        select()
+        leadRing.target = opening
+        if opening != nil {
+            ring.openID = nil
+            SoundPalette.play(.pop, on: entity, volume: 0.35)
+        }
     }
 
 
