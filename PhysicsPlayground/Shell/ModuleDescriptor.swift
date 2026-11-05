@@ -93,13 +93,19 @@ struct PhysicsAdjustable: Identifiable {
 }
 
 /// One secondary control a lab offers behind More. Drawn by the shell in
-/// the one control language; the lab only says what it is.
+/// the one control language; the lab only says what it is, and the shell
+/// decides where it stands (`MoreLayout`): choices first, then the layers
+/// as a grid of tiles, then each switch with what it reveals, sliders,
+/// verbs, and Clear at the foot beside Reset.
 enum MoreItem: Identifiable {
     /// Whether a control can be used now and, when it cannot, why. The
     /// reason is drawn as one dim line under the greyed control and given
     /// to VoiceOver as its hint (2026-11-02, owner's call): a grey control
     /// with no word was a question nobody answered. One closure, so the
-    /// greying and its reason cannot disagree.
+    /// greying and its reason cannot disagree. A control that only means
+    /// something after a switch in More is not greyed but hidden under it
+    /// (`group`, 2026-11-04); this is for what waits on the room, a
+    /// budget or an empty bench.
     struct Availability {
         /// Nil while the control can be used; otherwise what it waits for.
         let reason: () -> String?
@@ -135,12 +141,20 @@ enum MoreItem: Identifiable {
                 selected: () -> String?, select: (String) -> Void)
     /// A quantity with no object to stretch.
     case slider(PhysicsAdjustable, isEnabled: Availability = .always)
-    /// A set of like verbs — things you could add — as one wrapping grid.
-    /// `isEnabled` greys the whole grid, for a lab that has no room left.
+    /// A set of like verbs — things you could add, circuits you could load
+    /// — as one menu button (a wrapping grid until 2026-11-04). `note`
+    /// heads the list and says what a choice does; `isEnabled` greys the
+    /// button, for a lab that has no room left.
     case verbs(id: String, title: String,
                items: [(id: String, label: String, symbol: String)],
+               note: String? = nil,
                isEnabled: Availability = .always,
                run: (String) -> Void)
+    /// A switch (or a verb) and the controls that only mean something
+    /// after it: drawn under it, indented, while `reveals` holds, and not
+    /// at all otherwise (2026-11-04, owner's call — "hidden until on",
+    /// where they stood greyed with "Needs the capacitor" under each).
+    indirect case group(lead: MoreItem, reveals: () -> Bool, items: [MoreItem])
 
     /// Why this control cannot be used now, or nil when it can.
     var unavailableReason: String? {
@@ -149,7 +163,8 @@ enum MoreItem: Identifiable {
         case .action(_, _, _, _, _, let gate, _): gate.reason()
         case .choice: nil
         case .slider(_, let gate): gate.reason()
-        case .verbs(_, _, _, let gate, _): gate.reason()
+        case .verbs(_, _, _, _, let gate, _): gate.reason()
+        case .group(let lead, _, _): lead.unavailableReason
         }
     }
 
@@ -159,9 +174,27 @@ enum MoreItem: Identifiable {
         case .action(let id, _, _, _, _, _, _): id
         case .choice(let id, _, _, _, _): id
         case .slider(let adjustable, _): adjustable.id
-        case .verbs(let id, _, _, _, _): id
+        case .verbs(let id, _, _, _, _, _): id
+        case .group(let lead, _, _): lead.id
         }
     }
+
+    /// This item and everything it holds, lead first: what a lookup by id
+    /// or a sweep over every control reads, whether or not it is showing.
+    var all: [MoreItem] {
+        switch self {
+        case let .group(lead, _, items): lead.all + items.flatMap(\.all)
+        default: [self]
+        }
+    }
+}
+
+extension Array where Element == MoreItem {
+    /// Every control in this list, the ones a group holds included.
+    var everyItem: [MoreItem] { flatMap(\.all) }
+
+    /// The control with this id, wherever it stands.
+    func item(_ id: String) -> MoreItem? { everyItem.first { $0.id == id } }
 }
 
 /// The descriptor's window onto a module's Time Capsule, as closures so

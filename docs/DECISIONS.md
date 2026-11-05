@@ -16,6 +16,30 @@ A running log of consequential decisions — architectural, physical, or product
 
 (The template sat stranded at line 309, mid-log between two 2026-07-29 entries, until 2026-08-01.)
 
+## 2026-11-04 — More is three tabs, and a dependent is hidden until its switch is on
+
+**Decision:** A lab's More panel is three tabs: **Lab**, **Values** and **Room**.
+- **Lab** places the lab's controls by kind, in the same order in every lab (`MoreLayout`):
+  - choices as one segmented row (Orbital Mechanics' clock, Light & Optics' glass);
+  - the plain switches as two-column tiles, symbol over name;
+  - each switch with the controls it reveals;
+  - sliders;
+  - verbs, with a list of like verbs as one menu ("Add a world", "Load a circuit");
+  - Clear and Reset together at the foot.
+- **Values** is the live numbers, as before.
+- **Room** is Move the lab, Deep space, the dimming slider and Settings.
+- **A control that only means something after a switch in More is hidden until that switch is on.** It stands indented under the switch (`MoreItem.group(lead:reveals:items:)`). These are Plate voltage and Deflect shot under Capacitor, B under Uniform B, Earth's field under Hand compass, Wind under Air resistance, True drift speed under Electron flow, and the spring under Coupled pair once a spring exists. The dimming slider is not there in Deep space.
+- **The family grows by two:** `ControlSegments` (the stock segmented control) and `ControlMenu` (a bordered capsule that opens a list). `ControlToggle` gains a `tile` and a `wide` presentation.
+
+**Context:** The owner: "clean up the big UI menu for each module, it is very messy." More was one scroll of everything. Electric Fields' panel had four switches, two greyed sliders and a greyed button, each with a "Needs the capacitor" line under it. Orbital Mechanics' clock wrapped onto two rows, and nine world buttons ran off the bottom. The owner chose three tabs, and "hidden until on" over greyed-with-reason for dependents.
+
+**Consequences:**
+- **This reverses 2026-11-02 for dependents only.** A control waiting on something outside More still greys and says why: Walls bounce in Deep space, the custom ball's mass, Add a world at the budget, Twin suns, Clear on an empty bench.
+- **A preset no longer arms.** Opening the menu and choosing from it are two presses on two targets, which is what arming asked for. The menu's note says the choice replaces the bench. Clear the bench, Clear all and Reset still arm.
+- **The module lists say what a lab offers, never where it stands.** `[MoreItem].everyItem` and `item(_:)` reach controls inside a group. `LabMoreTests` holds every item to exactly one band, every reveal to its switch, and the menus to every choice they replaced.
+- **The panel is 440 pt wide** (was 400), so two tiles hold "Equipotentials" side by side. It opens on Lab every time. `-moreTab lab|values|room` opens it on a tab for a still; `-moreValues 1` now means `-moreTab values`.
+- **Not touched:** the home's More.
+
 ## 2026-11-03 — Electric Fields draws in a handful of meshes
 
 **Decision:** Electric Fields now draws about a tenth of what it did:

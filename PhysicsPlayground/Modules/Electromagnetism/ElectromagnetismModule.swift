@@ -62,27 +62,33 @@ enum ElectromagnetismModule {
             .toggle(id: "free", title: "Free charges", symbol: "arrow.left.and.right",
                     isOn: { model.chargesRespond }, set: { model.chargesRespond = $0 }),
             // "Capacitor", not "Parallel plates": it names the apparatus.
-            .toggle(id: "plates", title: "Capacitor", symbol: "square.split.2x1",
-                    isOn: { model.capacitorOn }, set: { model.capacitorOn = $0 }),
-            // A voltage has no extent to stretch; the plates' gap does, and
-            // that is a drag on a plate.
-            .slider(.init(id: "plateVoltage", label: "Plate voltage ΔV", unit: "kV",
-                          range: scaled(FieldModel.plateVoltageRange, by: 1e-3), decimals: 1,
-                          read: { model.plateVoltage / 1000 },
-                          write: { model.setPlateVoltage($0 * 1000) }),
-                    isEnabled: .when({ model.capacitorOn }, else: "Needs the capacitor")),
-            // The CRT demo: the test charge fired crosswise through the gap.
-            // It does not confirm: re-firing is the point.
-            .action(id: "deflect", title: "Deflect shot", symbol: "arrow.turn.down.right",
-                    isEnabled: .when({ model.capacitorOn }, else: "Needs the capacitor"),
-                    run: { model.launchProbeThroughGap() }),
-            .toggle(id: "bfield", title: "Uniform B", symbol: "arrow.up",
-                    isOn: { model.magneticFieldOn }, set: { model.magneticFieldOn = $0 }),
-            .slider(.init(id: "uniformB", label: "Uniform field B", unit: "kT",
-                          range: scaled(FieldModel.magneticFieldRange, by: 1e-3), decimals: 0,
-                          read: { model.magneticFieldTesla / 1000 },
-                          write: { model.magneticFieldTesla = $0 * 1000 }),
-                    isEnabled: .when({ model.magneticFieldOn }, else: "Needs uniform B")),
+            .group(lead: .toggle(id: "plates", title: "Capacitor", symbol: "square.split.2x1",
+                                 isOn: { model.capacitorOn }, set: { model.capacitorOn = $0 }),
+                   reveals: { model.capacitorOn },
+                   items: [
+                       // A voltage has no extent to stretch; the plates' gap does,
+                       // and that is a drag on a plate.
+                       .slider(.init(id: "plateVoltage", label: "Plate voltage ΔV", unit: "kV",
+                                     range: scaled(FieldModel.plateVoltageRange, by: 1e-3),
+                                     decimals: 1,
+                                     read: { model.plateVoltage / 1000 },
+                                     write: { model.setPlateVoltage($0 * 1000) })),
+                       // The CRT demo: the test charge fired crosswise through the
+                       // gap. It does not confirm: re-firing is the point.
+                       .action(id: "deflect", title: "Deflect shot", symbol: "arrow.turn.down.right",
+                               run: { model.launchProbeThroughGap() }),
+                   ]),
+            .group(lead: .toggle(id: "bfield", title: "Uniform B", symbol: "arrow.up",
+                                 isOn: { model.magneticFieldOn },
+                                 set: { model.magneticFieldOn = $0 }),
+                   reveals: { model.magneticFieldOn },
+                   items: [
+                       .slider(.init(id: "uniformB", label: "Uniform field B", unit: "kT",
+                                     range: scaled(FieldModel.magneticFieldRange, by: 1e-3),
+                                     decimals: 0,
+                                     read: { model.magneticFieldTesla / 1000 },
+                                     write: { model.magneticFieldTesla = $0 * 1000 })),
+                   ]),
             // Everything placed goes, the test charge included; the switches
             // stay, because a layer is a setting, not a placed object.
             .action(id: "clear", title: "Clear all", symbol: "trash.slash",

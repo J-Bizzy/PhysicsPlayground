@@ -147,6 +147,26 @@ contradicts this section, this section is current.
 - [ ] **The cut test:** enter all seven labs in sequence; the room's
       brightness moves only at Orbital Mechanics, and ramps rather than steps.
 
+## ⟳ 2026-11-04 — More in three tabs
+
+- [ ] **Open More in each lab:** it opens on Lab. Lab, Values and Room
+      switch with one pinch on the row at the top, and the panel is only
+      as tall as the tab.
+- [ ] **Tiles:** pinch a layer tile on and off. It reads as on (white)
+      without a second look, and no name is cut off.
+- [ ] **Hidden until on:** in Electric Fields, turn Capacitor on. Plate
+      voltage and Deflect shot appear under it, indented. Turn it off and
+      they go. Do the same with Uniform B, Magnetism's Hand compass,
+      Projectiles' Air resistance and Circuits' Electron flow.
+- [ ] **Pendulums:** pinch Coupled pair. The Spring slider appears under it.
+- [ ] **Menus:** Orbital Mechanics' "Add a world" opens a list of the nine
+      worlds, and a choice adds that world. Circuits' "Load a circuit" says
+      it replaces the bench, and a choice loads that circuit at once.
+- [ ] **Clock:** one row of six speeds. Each segment takes a pinch cleanly.
+- [ ] **Foot:** Clear and Reset each ask "Tap again" before they act.
+- [ ] **Room tab:** Move the lab, Deep space, Dim the room and Settings.
+      In Deep space the dimming slider is gone.
+
 ## ⟳ 2026-11-03 — Electric Fields, lighter
 
 - [ ] **Open Electric Fields and look around the dipole for ten seconds:**

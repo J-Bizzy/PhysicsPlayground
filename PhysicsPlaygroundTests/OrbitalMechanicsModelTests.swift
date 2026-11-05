@@ -798,9 +798,9 @@ final class OrbitalMechanicsModelTests: XCTestCase {
         }
         XCTAssertFalse(isEnabled(), "Twin suns stayed lit with no room for a second sun")
         let worlds = try XCTUnwrap(more.first { $0.id == "worlds" })
-        guard case let .verbs(_, _, _, gridEnabled, _) = worlds else {
-            return XCTFail("Add a world is no longer a grid")
+        guard case let .verbs(_, _, _, _, menuEnabled, _) = worlds else {
+            return XCTFail("Add a world is no longer a menu")
         }
-        XCTAssertFalse(gridEnabled(), "Add a world stayed lit at the budget")
+        XCTAssertFalse(menuEnabled(), "Add a world stayed lit at the budget")
     }
 }

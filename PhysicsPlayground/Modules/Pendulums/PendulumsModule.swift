@@ -46,19 +46,23 @@ enum PendulumsModule {
             // is ideal and swings for ever.
             .toggle(id: "friction", title: "Air resistance", symbol: "wind",
                     isOn: { model.frictionOn }, set: { model.frictionOn = $0 }),
-            // Two pendulums and a spring, ready to trade their swing.
-            .action(id: "coupledPair", title: "Coupled pair", symbol: "link",
-                    isEnabled: .when({ model.pendulums.count + 2 <= PendulumsModel.pendulumBudget },
-                                     else: "No room for two more pendulums"),
-                    run: { model.addCoupledPair() }),
-            // A spring has no handle of its own to stretch, so its constant is a
-            // slider — and only while there is a spring to set.
-            .slider(PhysicsAdjustable(id: "springStiffness", label: "Spring",
-                                      unit: "N/m", range: PendulumsModel.stiffnessRange,
-                                      decimals: 1,
-                                      read: { model.springStiffness },
-                                      write: { model.setSpringStiffness($0) }),
-                    isEnabled: .when({ !model.springs.isEmpty }, else: "Needs a coupled pair")),
+            // Two pendulums and a spring, ready to trade their swing. A spring
+            // has no handle of its own to stretch, so its constant is a
+            // slider, under the verb that hangs one — and only while there
+            // is a spring to set.
+            .group(lead: .action(id: "coupledPair", title: "Coupled pair", symbol: "link",
+                                 isEnabled: .when({ model.pendulums.count + 2
+                                                      <= PendulumsModel.pendulumBudget },
+                                                  else: "No room for two more pendulums"),
+                                 run: { model.addCoupledPair() }),
+                   reveals: { !model.springs.isEmpty },
+                   items: [
+                       .slider(PhysicsAdjustable(id: "springStiffness", label: "Spring",
+                                                 unit: "N/m", range: PendulumsModel.stiffnessRange,
+                                                 decimals: 1,
+                                                 read: { model.springStiffness },
+                                                 write: { model.setSpringStiffness($0) })),
+                   ]),
         ]
     }
 

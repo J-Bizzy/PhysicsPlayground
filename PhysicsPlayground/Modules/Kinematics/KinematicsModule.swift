@@ -60,15 +60,17 @@ enum KinematicsModule {
                     isOn: { model.respectRoomWalls },
                     set: { model.respectRoomWalls = $0 },
                     isEnabled: .when(roomInReach, else: "No walls in Deep space")),
-            .toggle(id: "air", title: "Air resistance", symbol: "wind",
-                    isOn: { model.airResistance },
-                    set: { model.airResistance = $0 }),
-            // Wind blows through air or not at all.
-            .slider(.init(id: "wind", label: "Wind", unit: "m/s",
-                          range: KinematicsModel.windSpeedRange, decimals: 1,
-                          read: { model.windSpeed },
-                          write: { model.windSpeed = $0 }),
-                    isEnabled: .when({ model.airResistance }, else: "Needs air resistance")),
+            // Wind blows through air or not at all: it stands under the air.
+            .group(lead: .toggle(id: "air", title: "Air resistance", symbol: "wind",
+                                 isOn: { model.airResistance },
+                                 set: { model.airResistance = $0 }),
+                   reveals: { model.airResistance },
+                   items: [
+                       .slider(.init(id: "wind", label: "Wind", unit: "m/s",
+                                     range: KinematicsModel.windSpeedRange, decimals: 1,
+                                     read: { model.windSpeed },
+                                     write: { model.windSpeed = $0 })),
+                   ]),
             // The custom ball's only free number; its diameter stays 10 cm.
             .slider(.init(id: "customMass", label: "Custom ball mass", unit: "kg",
                           range: KinematicsModel.customMassRange, decimals: 2,

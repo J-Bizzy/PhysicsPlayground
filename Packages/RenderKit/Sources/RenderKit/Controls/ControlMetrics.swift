@@ -3,7 +3,9 @@
 //  RenderKit — Controls
 //
 //  The one control family: `ControlButton`, `ControlToggle`,
-//  `ControlSlider` and `MoreButton`, used for every control the app
+//  `ControlSlider`, `ControlSegments`, `ControlMenu` and `MoreButton`
+//  (the segments and the menu joined on 2026-11-04, for More's tabs, its
+//  clock and its lists of things to add), used for every control the app
 //  draws, in a window or standing in the room. Stock visionOS glass,
 //  system hover, SF Symbols, targets of at least 60 pt. In the room the
 //  same SwiftUI views ride an entity (`ControlAttachment`), so a plate
@@ -34,6 +36,9 @@ public enum ControlMetrics {
     public static let panelPadding: CGFloat = 18
     /// A glass panel's corner radius.
     public static let panelRadius: CGFloat = 32
+    /// A tile's corner radius: rounder than a card, squarer than a capsule,
+    /// so a grid of them reads as a grid rather than a stack of pills.
+    public static let tileRadius: CGFloat = 18
     /// How long a confirming control stays armed: long enough to read
     /// "Tap again" and decide, short enough that walking away disarms it.
     public static let armWindow: Double = 4.0

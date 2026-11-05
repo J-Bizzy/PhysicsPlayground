@@ -43,13 +43,16 @@ enum MagnetismModule {
                     isOn: { model.dynamicsOn }, set: { model.dynamicsOn = $0 }),
             .toggle(id: "lines", title: "Field lines", symbol: "scribble",
                     isOn: { model.showFieldLines }, set: { model.showFieldLines = $0 }),
-            .toggle(id: "handCompass", title: "Hand compass", symbol: "location.north.circle",
-                    isOn: { model.compassOn }, set: { model.compassOn = $0 }),
             // Whether the room stands on a planet. Only the compass reads it,
-            // so without the compass it has nothing to change.
-            .toggle(id: "earth", title: "Earth's field", symbol: "globe",
-                    isOn: { model.earthFieldOn }, set: { model.earthFieldOn = $0 },
-                    isEnabled: .when({ model.compassOn }, else: "Needs the hand compass")),
+            // so it stands under the compass, and only while the compass is on.
+            .group(lead: .toggle(id: "handCompass", title: "Hand compass",
+                                 symbol: "location.north.circle",
+                                 isOn: { model.compassOn }, set: { model.compassOn = $0 }),
+                   reveals: { model.compassOn },
+                   items: [
+                       .toggle(id: "earth", title: "Earth's field", symbol: "globe",
+                               isOn: { model.earthFieldOn }, set: { model.earthFieldOn = $0 }),
+                   ]),
         ]
     }
 

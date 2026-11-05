@@ -38,26 +38,42 @@ enum CircuitsModule {
             }
         )
     }
-    /// What More holds for the bench: the four views of the current, Clear,
-    /// and the five authored circuits. Every load confirms — `loadPreset`
-    /// starts by clearing a bench that persists across launches.
+    /// What More holds for the bench: the four views of the current, the
+    /// five authored circuits in one menu, and Clear. `loadPreset` starts
+    /// by clearing a bench that persists across launches, so the menu says
+    /// so before you choose.
     static func more(_ model: CircuitsModel) -> [MoreItem] {
-        var items: [MoreItem] = [
-            .toggle(id: "flow", title: "Electron flow", symbol: "circle.dotted",
-                    isOn: { model.showElectronFlow },
-                    set: { model.showElectronFlow = $0 }),
+        [
             // True speed slows the flow it draws, so it has nothing to show
-            // without the flow on.
-            .toggle(id: "truespeed", title: "True drift speed", symbol: "tortoise",
-                    isOn: { model.trueSpeedMode },
-                    set: { model.trueSpeedMode = $0 },
-                    isEnabled: .when({ model.showElectronFlow }, else: "Needs electron flow")),
+            // without the flow on: it stands under it, and only then.
+            .group(lead: .toggle(id: "flow", title: "Electron flow", symbol: "circle.dotted",
+                                 isOn: { model.showElectronFlow },
+                                 set: { model.showElectronFlow = $0 }),
+                   reveals: { model.showElectronFlow },
+                   items: [
+                       .toggle(id: "truespeed", title: "True drift speed", symbol: "tortoise",
+                               isOn: { model.trueSpeedMode },
+                               set: { model.trueSpeedMode = $0 }),
+                   ]),
             .toggle(id: "bfield", title: "Magnetic field", symbol: "circle.hexagongrid",
                     isOn: { model.showMagneticField },
                     set: { model.showMagneticField = $0 }),
             .toggle(id: "skyline", title: "Voltage skyline", symbol: "building.2",
                     isOn: { model.showVoltageHeights },
                     set: { model.showVoltageHeights = $0 }),
+            // One menu, not five buttons. Choosing from it is the second
+            // press a loaded preset's arming used to ask for, and its note
+            // says what the choice does to the bench.
+            .verbs(id: "presets", title: "Load a circuit",
+                   items: CircuitsModel.Preset.allCases.map {
+                       (id: $0.rawValue, label: $0.displayName, symbol: "bolt.horizontal")
+                   },
+                   note: "Replaces what is on the bench",
+                   run: { id in
+                       guard let preset = CircuitsModel.Preset(rawValue: id) else { return }
+                       model.loadPreset(preset)
+                       model.commitBench()
+                   }),
             .action(id: "clear", title: "Clear the bench", symbol: "trash.slash",
                     confirms: true, destructive: true,
                     isEnabled: .when({ !model.components.isEmpty }, else: "The bench is empty"),
@@ -66,15 +82,6 @@ enum CircuitsModule {
                         model.commitBench()
                     }),
         ]
-        items += CircuitsModel.Preset.allCases.map { preset in
-            .action(id: "preset-\(preset.rawValue)", title: "Load \(preset.displayName)",
-                    symbol: "bolt.horizontal", confirms: true,
-                    run: {
-                        model.loadPreset(preset)
-                        model.commitBench()
-                    })
-        }
-        return items
     }
 
     /// The live numbers More shows: the bench in two numbers,

@@ -4,7 +4,8 @@
 //
 //  One control language (2026-10-14). Every control the app draws is
 //  the family in `RenderKit/Controls` — `ControlButton`, `ControlToggle`,
-//  `ControlSlider`, `MoreButton` — whether it stands in a window or in
+//  `ControlSlider`, `ControlSegments`, `ControlMenu`, `MoreButton` —
+//  whether it stands in a window or in
 //  the room. Fourteen ways to draw a control grew one feature at a time;
 //  this keeps a fifteenth from starting.
 //
@@ -64,7 +65,8 @@ final class ControlLanguageCriterionTests: XCTestCase {
         XCTAssertTrue(offenders.isEmpty, """
             these lines draw a control outside the one family:
             \(offenders.joined(separator: "\n"))
-            Use ControlButton, ControlToggle, ControlSlider or MoreButton \
+            Use ControlButton, ControlToggle, ControlSlider, ControlSegments, \
+            ControlMenu or MoreButton \
             (RenderKit/Controls). If the family cannot say what you need, \
             grow the family — do not start a second language.
             """)

@@ -19,6 +19,15 @@ public struct ControlToggle: View {
         case button
         /// Name and switch across a row: one line of a settings list.
         case row
+        /// A latching button that runs the width of its column, symbol
+        /// over name: one cell of a grid of layers (2026-11-04). The name
+        /// gets the cell's whole width, so "Equipotentials" stands on one
+        /// line where, beside its symbol, it broke as "Equipoten-tials".
+        case tile
+        /// A latching button across the whole width, symbol and name: a
+        /// switch with controls of its own under it, the size of the
+        /// buttons it stands among.
+        case wide
     }
 
     private let title: String
@@ -68,6 +77,37 @@ public struct ControlToggle: View {
             .toggleStyle(.button)
             .buttonStyle(.bordered)
             .buttonBorderShape(iconOnly ? .circle : .capsule)
+            .controlSize(.extraLarge)
+            .help(title)
+            .accessibilityLabel(title)
+        case .tile:
+            Toggle(isOn: $isOn) {
+                VStack(alignment: .leading, spacing: 6) {
+                    Image(systemName: systemImage ?? "circle")
+                        .font(.body.weight(.semibold))
+                    Text(title)
+                        .font(.body.weight(.medium))
+                        .lineLimit(2)
+                        .multilineTextAlignment(.leading)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .frame(maxWidth: .infinity, minHeight: ControlMetrics.minimumTarget,
+                       alignment: .leading)
+            }
+            .toggleStyle(.button)
+            .buttonStyle(.bordered)
+            .buttonBorderShape(.roundedRectangle(radius: ControlMetrics.tileRadius))
+            .controlSize(.extraLarge)
+            .help(title)
+            .accessibilityLabel(title)
+        case .wide:
+            Toggle(isOn: $isOn) {
+                Label(title, systemImage: systemImage ?? "circle")
+                    .labelStyle(.controlLabel(iconOnly: false, fillsWidth: true))
+            }
+            .toggleStyle(.button)
+            .buttonStyle(.bordered)
+            .buttonBorderShape(.capsule)
             .controlSize(.extraLarge)
             .help(title)
             .accessibilityLabel(title)
