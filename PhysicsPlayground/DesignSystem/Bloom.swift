@@ -820,7 +820,7 @@ final class Bloom {
         // The bead stays bright and solid — the handle your fingers hunt
         // for; the glass language is for surfaces a control sits on.
         let bead = ModelEntity(
-            mesh: Primitives.sphere(radius: 0.014),
+            mesh: Primitives.sphere(radius: 0.014, segments: 24),
             materials: [Materials.grip(roughness: 0.15,
                                        emissive: UIColor(white: 1, alpha: 1),
                                        glow: 0.35)])

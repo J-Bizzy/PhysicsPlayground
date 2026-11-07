@@ -260,7 +260,7 @@ extension HubVignettes {
             bench.addChild(collar)
             let line = ModelEntity(mesh: unitCylinder, materials: [cable])
             bench.addChild(line)
-            let bob = ModelEntity(mesh: Primitives.sphere(radius: radius), materials: [satin])
+            let bob = ModelEntity(mesh: Primitives.sphere(radius: radius, segments: 32), materials: [satin])
             bob.name = "cradle-bob-\(index)"
             bench.addChild(bob)
             rigs.append((bob, line, pivot))
@@ -361,10 +361,10 @@ extension HubVignettes {
         let screen = Entity()
         screen.position = SIMD3<Float>(layout.screenPoint)
         screen.orientation = simd_quatf(from: [0, 0, 1], to: SIMD3<Float>(layout.screenNormal))
-        let card = ModelEntity(mesh: Primitives.box(size: [0.07, 0.10, 0.003], cornerRadius: 0.002),
+        let card = ModelEntity(mesh: Primitives.roundedBar(size: [0.07, 0.10, 0.003], cornerRadius: 0.002),
                                materials: [Materials.machined(UIColor(white: 0.93, alpha: 1), roughness: 0.8)])
         screen.addChild(card)
-        let cardFrame = ModelEntity(mesh: Primitives.box(size: [0.078, 0.108, 0.002], cornerRadius: 0.003),
+        let cardFrame = ModelEntity(mesh: Primitives.roundedBar(size: [0.078, 0.108, 0.002], cornerRadius: 0.003),
                                     materials: [graphite])
         cardFrame.position.z = -0.002
         screen.addChild(cardFrame)
@@ -377,22 +377,28 @@ extension HubVignettes {
         // The beams: a bright core in a soft sleeve of its own colour, and
         // a spot where each colour lands on the card.
         let beamCount = 16
+        // Disabled until a stroke uses them: scaled to nothing they were
+        // still 32 draws a frame (2026-11-06). Scaled to nothing as well,
+        // because `visualBounds` counts a disabled child, and `fitStage`
+        // measures the bench by it.
         let cores = (0..<beamCount).map { _ -> ModelEntity in
             let core = ModelEntity(mesh: unitCylinder, materials: [])
             core.scale = SIMD3(repeating: 1e-5)
+            core.isEnabled = false
             bench.addChild(core)
             return core
         }
         let sleeves = (0..<beamCount).map { _ -> ModelEntity in
             let sleeve = ModelEntity(mesh: unitCylinder, materials: [])
             sleeve.scale = SIMD3(repeating: 1e-5)
+            sleeve.isEnabled = false
             bench.addChild(sleeve)
             return sleeve
         }
         // Each spot is one wavelength's colour for good: painted once.
         let spots = spectrumColours.map { nanometers -> ModelEntity in
             let rgb = Spectrum.linearRGB(nanometers: nanometers)
-            let spot = ModelEntity(mesh: Primitives.sphere(radius: 0.0075),
+            let spot = ModelEntity(mesh: Primitives.sphere(radius: 0.0075, segments: 12),
                                    materials: [Materials.unlit(OpticsRenderer.color(rgb), opacity: 0.85)])
             spot.isEnabled = false
             bench.addChild(spot)
@@ -449,8 +455,12 @@ extension HubVignettes {
                 guard index < strokes.count else {
                     cores[index].scale = SIMD3(repeating: 1e-5)
                     sleeves[index].scale = SIMD3(repeating: 1e-5)
+                    cores[index].isEnabled = false
+                    sleeves[index].isEnabled = false
                     continue
                 }
+                cores[index].isEnabled = true
+                sleeves[index].isEnabled = true
                 let stroke = strokes[index]
                 stretch(cores[index], from: stroke.a, to: stroke.b, radius: 0.0032)
                 stretch(sleeves[index], from: stroke.a, to: stroke.b, radius: 0.0085)
@@ -600,7 +610,7 @@ extension HubVignettes {
 
         // Two graphite saddles the coil rests in.
         for x in [Float(-0.03), 0.03] {
-            let saddle = ModelEntity(mesh: Primitives.box(size: [0.012, 0.010, 0.07], cornerRadius: 0.003),
+            let saddle = ModelEntity(mesh: Primitives.roundedBar(size: [0.012, 0.010, 0.07], cornerRadius: 0.003),
                                      materials: [Materials.graphite()])
             saddle.position = [x, 0.005, 0]
             bench.addChild(saddle)
@@ -648,7 +658,7 @@ extension HubVignettes {
         // The launcher as the lab builds it: a machined sphere and the
         // milled barrel, aimed.
         let launcherMaterial = Materials.machined(DesignTokens.Palette.launcherUI)
-        let sphere = ModelEntity(mesh: Primitives.sphere(radius: 0.05), materials: [launcherMaterial])
+        let sphere = ModelEntity(mesh: Primitives.sphere(radius: 0.05, segments: 32), materials: [launcherMaterial])
         sphere.position = base
         bench.addChild(sphere)
         let barrel = Entity()
@@ -703,13 +713,13 @@ extension HubVignettes {
 
         // The ball and the dots it leaves, as the lab lays them.
         let ballRadius: Float = 0.03
-        let ball = ModelEntity(mesh: Primitives.sphere(radius: ballRadius),
+        let ball = ModelEntity(mesh: Primitives.sphere(radius: ballRadius, segments: 32),
                                materials: [Materials.energized(DesignTokens.Palette.projectileUI, glow: 0.45)])
         bench.addChild(ball)
         let dotMaterial = Materials.unlit(DesignTokens.Palette.projectileUI, opacity: 0.6)
         let dotSpacing = 0.035
         let dots = (0..<Int(flight / dotSpacing) + 2).map { _ -> ModelEntity in
-            let dot = ModelEntity(mesh: Primitives.sphere(radius: 0.008), materials: [dotMaterial])
+            let dot = ModelEntity(mesh: Primitives.sphere(radius: 0.008, segments: 12), materials: [dotMaterial])
             bench.addChild(dot)
             return dot
         }

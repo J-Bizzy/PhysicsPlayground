@@ -462,7 +462,7 @@ final class OpticsRenderer {
     static func laserModel(glow: UIColor) -> (Entity, ModelEntity) {
         let holder = Entity()
         let length = Float(OpticsModel.laserLength)
-        let body = ModelEntity(mesh: Primitives.box(size: [0.03, 0.03, length], cornerRadius: 0.006),
+        let body = ModelEntity(mesh: Primitives.roundedBar(size: [0.03, 0.03, length], cornerRadius: 0.006),
                                materials: [Materials.graphite(UIColor(white: 0.2, alpha: 1))])
         holder.addChild(body)
         let collar = ModelEntity(mesh: Primitives.cylinder(height: 0.012, radius: 0.0125),
@@ -470,7 +470,7 @@ final class OpticsRenderer {
         collar.orientation = simd_quatf(angle: .pi / 2, axis: [1, 0, 0])
         collar.position = [0, 0, length / 2 + 0.004]
         holder.addChild(collar)
-        let lamp = ModelEntity(mesh: Primitives.sphere(radius: 0.004),
+        let lamp = ModelEntity(mesh: Primitives.sphere(radius: 0.004, segments: 12),
                                materials: [Materials.unlit(glow)])
         lamp.position = [0, 0, length / 2 + 0.01]
         holder.addChild(lamp)
@@ -543,7 +543,7 @@ final class OpticsRenderer {
 
     private func buildAimBead() {
         aimBead.name = Self.aimBeadName
-        let bead = ModelEntity(mesh: Primitives.sphere(radius: 0.013),
+        let bead = ModelEntity(mesh: Primitives.sphere(radius: 0.013, segments: 24),
                                materials: [Materials.energized(Self.accent, glow: 0.5)])
         aimBead.addChild(bead)
         Grabbable.configureTouchTarget(

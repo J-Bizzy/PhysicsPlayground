@@ -243,8 +243,8 @@ final class CircuitsRenderer {
                         ?? entity.children.lazy.compactMap { $0.components[ModelComponent.self]?.mesh }.first
                 }
         }
-        return (mesh("core") ?? Primitives.sphere(radius: 0.0026),
-                mesh("halo") ?? Primitives.sphere(radius: 0.0045))
+        return (mesh("core") ?? Primitives.sphere(radius: 0.0026, segments: 12),
+                mesh("halo") ?? Primitives.sphere(radius: 0.0045, segments: 12))
     }
 
     // MARK: The bench's magnetic field
@@ -488,7 +488,7 @@ final class CircuitsRenderer {
         if let dot = PropCache.instance(named: dotAssetName) {
             holder.addChild(dot)
         } else {
-            holder.addChild(ModelEntity(mesh: Primitives.sphere(radius: contactRadius),
+            holder.addChild(ModelEntity(mesh: Primitives.sphere(radius: contactRadius, segments: 16),
                                         materials: [contactMaterial]))
         }
         return holder
@@ -2437,7 +2437,7 @@ final class CircuitsRenderer {
     }
 
     private let fieldFront = ModelEntity(
-        mesh: Primitives.sphere(radius: 0.012),
+        mesh: Primitives.sphere(radius: 0.012, segments: 24),
         materials: [UnlitMaterial(color: UIColor(
             red: 1.0, green: 0.95, blue: 0.6, alpha: 1))])
     private var fieldFrontPhase = 0.0

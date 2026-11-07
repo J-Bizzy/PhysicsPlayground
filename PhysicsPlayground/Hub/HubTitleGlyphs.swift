@@ -132,7 +132,7 @@ final class HubTitleGlyphs {
                     // light where the dot was, the app's one accent.
                     let box = part.visualBounds(relativeTo: hinge)
                     let radius = max(box.extents.x, box.extents.y) * 0.56
-                    let particle = ModelEntity(mesh: Primitives.sphere(radius: radius),
+                    let particle = ModelEntity(mesh: Primitives.sphere(radius: radius, segments: 24),
                                                materials: [Self.particleFinish()])
                     particle.name = "title-dot"
                     particle.position = box.center

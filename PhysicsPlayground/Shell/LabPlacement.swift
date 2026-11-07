@@ -213,7 +213,7 @@ struct LabAnchorView: View {
         // object.
         for axis in [SIMD3<Float>(1, 0, 0), SIMD3<Float>(0, 0, 1)] {
             let bar = ModelEntity(
-                mesh: Primitives.box(size: [0.13, 0.004, 0.007], cornerRadius: 0.002),
+                mesh: Primitives.roundedBar(size: [0.13, 0.004, 0.007], cornerRadius: 0.002),
                 materials: [Materials.energized(accent, glow: 0.5)])
             // The first bar aims [1,0,0] at itself, the degenerate parallel case.
             bar.orientation = rotation(from: [1, 0, 0], to: axis)

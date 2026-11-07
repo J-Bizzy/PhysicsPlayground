@@ -62,7 +62,7 @@ public final class Callout {
         self.textSize = textSize
         self.offset = offset
 
-        let dotMesh = Primitives.sphere(radius: 0.006)
+        let dotMesh = Primitives.sphere(radius: 0.006, segments: 12)
         let dotModel = ModelEntity(mesh: dotMesh,
                                    materials: [Materials.energized(color, glow: 0.8)])
         dot.addChild(dotModel)

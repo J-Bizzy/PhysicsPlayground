@@ -56,8 +56,9 @@ final class MagnetismRenderer {
     private let lineGlowEntity = ModelEntity()
     /// Core radius of a field loop; the casing is swept from it.
     nonisolated static let lineRadius: Float = 0.0016
-    /// Direction cones riding the field loops, N→S outside the magnet.
-    private let arrowHeads: EntityPool<ModelEntity>
+    /// The core tube carries the direction cones too (N→S outside the
+    /// magnet), appended to its buffers in `computeLines`: an arrowhead was
+    /// an entity each, 300 draws on the opening bench (2026-11-06).
     private let lineMaterial = UnlitMaterial(color: MagnetismRenderer.lineColor)
     /// The near-black outline the bright core sits against — passthrough
     /// is a bright medium, so a pale loop needs the contrast casing.
@@ -71,14 +72,6 @@ final class MagnetismRenderer {
     private var lastLineInputs: [BarMagnet]?
 
     init() {
-        let headMesh = Primitives.cone(height: 0.02, radius: 0.0078)
-        let headMaterial = UnlitMaterial(color: MagnetismRenderer.lineColor)
-        arrowHeads = EntityPool(budget: 600) { container in
-            let head = ModelEntity(mesh: headMesh, materials: [headMaterial])
-            container.addChild(head)
-            return head
-        }
-
         root.addChild(Lighting.keyLight())
         root.addChild(viewRoot)
         // Order is the treatment: casing (darkness) under the glow,
@@ -86,7 +79,6 @@ final class MagnetismRenderer {
         viewRoot.addChild(lineCasingEntity)
         viewRoot.addChild(lineGlowEntity)
         viewRoot.addChild(linesEntity)
-        viewRoot.addChild(arrowHeads.root)
 
         // At most 30 times a second while a magnet moves: each result is
         // three tubes written in place (`GeometryPipeline.minimumInterval`).
@@ -189,7 +181,7 @@ final class MagnetismRenderer {
 
     /// The LED as it stands in its socket: a short body and a domed lens.
     static func ledDome() -> ModelEntity {
-        let dome = ModelEntity(mesh: Primitives.sphere(radius: ledRadius),
+        let dome = ModelEntity(mesh: Primitives.sphere(radius: ledRadius, segments: 16),
                                materials: [ledOffMaterial])
         dome.position = [0, ledSeat + ledRadius * 0.85, 0]
         let body = ModelEntity(mesh: Primitives.cylinder(height: ledRadius, radius: ledRadius),
@@ -340,7 +332,7 @@ final class MagnetismRenderer {
         var shell = Materials.frostedGlass(
             UIColor(white: 0.62, alpha: 1), opacity: 0.20, frost: 0.35)
         shell.emissiveIntensity = 0.08
-        let orb = ModelEntity(mesh: Primitives.sphere(radius: Self.compassRadius),
+        let orb = ModelEntity(mesh: Primitives.sphere(radius: Self.compassRadius, segments: 48),
                               materials: [shell])
         handCompass.addChild(orb)
 
@@ -348,14 +340,16 @@ final class MagnetismRenderer {
         // in section, because a blade seen edge-on disappears.
         let needle = Entity()
         let north = ModelEntity(
-            mesh: Primitives.box(size: [0.008, 0.040, 0.008], cornerRadius: 0.003),
+            mesh: Self.bar(width: 0.008, length: 0.040, cornerRadius: 0.003),
             materials: [Materials.energized(DesignTokens.Palette.positiveUI, glow: 0.35)])
         north.position = [0, 0.020, 0]
+        north.orientation = Self.barUpright
         let south = ModelEntity(
-            mesh: Primitives.box(size: [0.008, 0.040, 0.008], cornerRadius: 0.003),
+            mesh: Self.bar(width: 0.008, length: 0.040, cornerRadius: 0.003),
             materials: [Materials.energized(UIColor(white: 0.9, alpha: 1),
                                             metallic: 0.6, glow: 0.0)])
         south.position = [0, -0.020, 0]
+        south.orientation = Self.barUpright
         needle.addChild(north)
         needle.addChild(south)
         // The poles say their names: the same extruded ivory letters the bar
@@ -373,7 +367,7 @@ final class MagnetismRenderer {
         // A dark bead at the pivot, so the needle reads as suspended at
         // the centre rather than as two bars floating in glass.
         let hub = ModelEntity(
-            mesh: Primitives.sphere(radius: 0.007),
+            mesh: Primitives.sphere(radius: 0.007, segments: 12),
             materials: [Materials.machined(UIColor(white: 0.22, alpha: 1))])
         needle.addChild(hub)
         handCompass.addChild(needle)
@@ -543,24 +537,45 @@ final class MagnetismRenderer {
     /// An extruded, centred pole letter in warm ivory — generateText's
     /// origin is the baseline's left edge, so the glyph is re-centred
     /// from its measured bounds.
+    private static var poleLetterMeshes: [String: MeshResource] = [:]
+
     private static func poleLetter(_ text: String) -> ModelEntity {
-        let mesh = MeshResource.generateText(
-            text,
-            extrusionDepth: 0.006,
-            font: .systemFont(ofSize: 0.034, weight: .heavy),
-            containerFrame: .zero,
-            alignment: .center,
-            lineBreakMode: .byClipping)
+        // Two letters, milled once: every magnet and the well's preview
+        // built four fresh extrusions each (2026-11-06).
+        let mesh: MeshResource
+        if let cached = poleLetterMeshes[text] {
+            mesh = cached
+        } else {
+            mesh = MeshResource.generateText(
+                text,
+                extrusionDepth: 0.006,
+                font: .systemFont(ofSize: 0.034, weight: .heavy),
+                containerFrame: .zero,
+                alignment: .center,
+                lineBreakMode: .byClipping)
+            poleLetterMeshes[text] = mesh
+        }
         let entity = ModelEntity(
             mesh: mesh,
             materials: [Materials.energized(UIColor(red: 0.98, green: 0.96, blue: 0.90, alpha: 1),
                                             roughness: 0.3, glow: 0.12)])
+        entity.name = "pole-letter"
         let bounds = entity.visualBounds(relativeTo: nil)
         entity.position = [-bounds.center.x, -bounds.center.y, 0]
         let pivot = ModelEntity()
         pivot.addChild(entity)
         return pivot
     }
+
+    /// A square-section bar standing along y with its long edges rounded
+    /// and its ends flat — a bar magnet's half, its chrome band, a compass
+    /// needle. `Primitives.roundedBar` rounds in x/y and extrudes along z,
+    /// so the bar is milled lying and stood up with `barUpright`: 80
+    /// triangles where a rounded `generateBox` was 13 000 (2026-11-06).
+    static func bar(width: Float, length: Float, cornerRadius: Float) -> MeshResource {
+        Primitives.roundedBar(size: [width, width, length], cornerRadius: cornerRadius)
+    }
+    static let barUpright = simd_quatf(angle: .pi / 2, axis: [1, 0, 0])
 
     /// The magnet as the well shows it: the same halves, colours, chrome
     /// band and pole letters as the real thing, minus the halo and the
@@ -571,13 +586,15 @@ final class MagnetismRenderer {
         let w: Float = 0.05
 
         let north = ModelEntity(
-            mesh: Primitives.box(size: [w, half, w], cornerRadius: 0.006),
+            mesh: bar(width: w, length: half, cornerRadius: 0.006),
             materials: [Materials.energized(northColor, roughness: 0.28, glow: 0.16)])
         north.position = [0, half / 2, 0]
+        north.orientation = barUpright
         let south = ModelEntity(
-            mesh: Primitives.box(size: [w, half, w], cornerRadius: 0.006),
+            mesh: bar(width: w, length: half, cornerRadius: 0.006),
             materials: [Materials.energized(southColor, roughness: 0.28, glow: 0.16)])
         south.position = [0, -half / 2, 0]
+        south.orientation = barUpright
         container.addChild(north)
         container.addChild(south)
 
@@ -593,8 +610,9 @@ final class MagnetismRenderer {
         }
 
         let band = ModelEntity(
-            mesh: Primitives.box(size: [w + 0.006, 0.014, w + 0.006], cornerRadius: 0.004),
+            mesh: bar(width: w + 0.006, length: 0.014, cornerRadius: 0.004),
             materials: [Materials.machined(UIColor(white: 0.86, alpha: 1))])
+        band.orientation = barUpright
         container.addChild(band)
 
         // Lying along the bar's own axis, tipped a little toward the
@@ -611,13 +629,15 @@ final class MagnetismRenderer {
         let w: Float = 0.05
 
         let north = ModelEntity(
-            mesh: Primitives.box(size: [w, half, w], cornerRadius: 0.006),
+            mesh: Self.bar(width: w, length: half, cornerRadius: 0.006),
             materials: [Materials.energized(Self.northColor, roughness: 0.28, glow: 0.16)])
         north.position = [0, half / 2, 0]
+        north.orientation = Self.barUpright
         let south = ModelEntity(
-            mesh: Primitives.box(size: [w, half, w], cornerRadius: 0.006),
+            mesh: Self.bar(width: w, length: half, cornerRadius: 0.006),
             materials: [Materials.energized(Self.southColor, roughness: 0.28, glow: 0.16)])
         south.position = [0, -half / 2, 0]
+        south.orientation = Self.barUpright
         container.addChild(north)
         container.addChild(south)
 
@@ -637,13 +657,16 @@ final class MagnetismRenderer {
         // A polished chrome band at the waist — the seam of a real bar
         // magnet, and a crisp divider between the poles.
         let band = ModelEntity(
-            mesh: Primitives.box(size: [w + 0.006, 0.014, w + 0.006], cornerRadius: 0.004),
+            mesh: Self.bar(width: w + 0.006, length: 0.014, cornerRadius: 0.004),
             materials: [Materials.machined(UIColor(white: 0.86, alpha: 1))])
+        band.orientation = Self.barUpright
         container.addChild(band)
 
-        // Selection halo (a soft box shell), hidden until selected.
-        let halo = SelectionHalo.make(mesh: Primitives.box(
-            size: [w + 0.03, half * 2 + 0.03, w + 0.03], cornerRadius: 0.012))
+        // Selection halo (a soft shell the bar's own shape), hidden until
+        // selected — and the opening selects a magnet, so it is drawn.
+        let halo = SelectionHalo.make(mesh: Self.bar(
+            width: w + 0.03, length: half * 2 + 0.03, cornerRadius: 0.012))
+        halo.orientation = Self.barUpright
         container.addChild(halo)
         magnetHalos[magnet.id] = halo
 
@@ -671,12 +694,11 @@ final class MagnetismRenderer {
         var core = TubeBuffers()
         var casing = TubeBuffers()
         var glow = TubeBuffers()
-        /// Sample points along the loops where arrowheads ride, with
-        /// the local line direction — B points N→S outside the magnet,
-        /// and the arrows finally say so.
-        var arrowPoints: [SIMD3<Double>] = []
-        var arrowDirections: [SIMD3<Double>] = []
     }
+
+    /// The direction cones riding each loop, in the core tube's own mesh.
+    nonisolated static let arrowHeight: Float = 0.02
+    nonisolated static let arrowRadius: Float = 0.0078
 
     /// Arc-length spacing of the direction arrowheads riding each loop;
     /// loops are metres long at room scale.
@@ -732,6 +754,11 @@ final class MagnetismRenderer {
             radius: Materials.casingRadius(forCore: MagnetismRenderer.lineRadius))
         result.glow = TubeMesh.buffers(lines: lines, radius: 0.0044)
 
+        // Sample points along the loops where arrowheads ride, with the
+        // local line direction — B points N→S outside the magnet, and the
+        // arrows finally say so. They ride in the core tube's own mesh.
+        var arrowPoints: [SIMD3<Float>] = []
+        var arrowDirections: [SIMD3<Float>] = []
         for line in traced {
             var walked = 0.0
             var nextAt = arrowSpacing / 2
@@ -744,13 +771,15 @@ final class MagnetismRenderer {
                         simd_distance($0.position, point) < arrowExclusion
                     }
                     if !nearMagnet {
-                        result.arrowPoints.append(point)
-                        result.arrowDirections.append(line[index] - line[index - 1])
+                        arrowPoints.append(SIMD3<Float>(point))
+                        arrowDirections.append(SIMD3<Float>(line[index] - line[index - 1]))
                     }
                     nextAt += arrowSpacing
                 }
             }
         }
+        TubeMesh.appendCones(to: &result.core, at: arrowPoints, directions: arrowDirections,
+                             height: arrowHeight, radius: arrowRadius)
         return result
     }
 
@@ -760,30 +789,6 @@ final class MagnetismRenderer {
         LiveTube.apply(result.core, to: linesEntity, material: lineMaterial)
         LiveTube.apply(result.casing, to: lineCasingEntity, material: lineCasingMaterial)
         LiveTube.apply(result.glow, to: lineGlowEntity, material: lineGlowMaterial)
-        syncArrowHeads(points: result.arrowPoints,
-                       directions: result.arrowDirections)
-    }
-
-    /// Re-aims the arrowhead pool, each cone rotated from its rest +y
-    /// onto the loop's local direction there — the same treatment the
-    /// electric field lines wear.
-    private func syncArrowHeads(points: [SIMD3<Double>], directions: [SIMD3<Double>]) {
-        for (index, slot) in arrowHeads.slots.enumerated() {
-            guard index < points.count, index < directions.count else {
-                slot.entity.isEnabled = false
-                continue
-            }
-            let direction = directions[index]
-            let length = simd_length(direction)
-            guard length > 1e-12 else {
-                slot.entity.isEnabled = false
-                continue
-            }
-            slot.entity.isEnabled = true
-            slot.entity.position = SIMD3<Float>(points[index])
-            slot.entity.orientation = simd_quatf(
-                from: [0, 1, 0], to: SIMD3<Float>(direction / length))
-        }
     }
 
     /// Whether the bench has moved enough to be worth tracing again. Exact
@@ -809,7 +814,7 @@ final class MagnetismRenderer {
     private func syncFieldLines(_ model: MagnetismModel) {
         // Faded rather than switched (2026-11-02): the layer comes and goes
         // as everything else in the room does.
-        for layer in [linesEntity, lineCasingEntity, lineGlowEntity, arrowHeads.root] {
+        for layer in [linesEntity, lineCasingEntity, lineGlowEntity] {
             Fade.tick(layer, visible: model.showFieldLines)
         }
         guard model.showFieldLines else { return }

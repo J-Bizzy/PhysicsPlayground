@@ -66,7 +66,7 @@ public enum LiveGlow {
         // Inside faces only: the near half is culled, so the glow sits
         // behind and around the body instead of veiling it.
         material.faceCulling = .front
-        let aura = ModelEntity(mesh: Primitives.sphere(radius: radius),
+        let aura = ModelEntity(mesh: Primitives.sphere(radius: radius, segments: 32),
                                materials: [material])
         aura.name = auraName
         aura.position = bounds.center

@@ -56,9 +56,10 @@ final class OrbitRing {
             accent, coreOpacity: 0.9, casingOpacity: 0.5)
         conicCasing.model = nil
         conicCore.model = nil
-        conicCasing.components.set(ModelComponent(mesh: Primitives.sphere(radius: 0.0001),
+        // A speck until the first ring mesh replaces it, so not 8 000 triangles.
+        conicCasing.components.set(ModelComponent(mesh: Primitives.sphere(radius: 0.0001, segments: 6),
                                                   materials: [casingMaterial]))
-        conicCore.components.set(ModelComponent(mesh: Primitives.sphere(radius: 0.0001),
+        conicCore.components.set(ModelComponent(mesh: Primitives.sphere(radius: 0.0001, segments: 6),
                                                 materials: [coreMaterial]))
         // Casing first, core over it — darkness beneath light.
         root.addChild(conicCasing)
@@ -297,7 +298,7 @@ final class OrbitRing {
     private static func makeBead(name: String, accent: UIColor) -> ModelEntity {
         // Bright and solid: this is the handle, not the surface it sits on.
         let bead = ModelEntity(
-            mesh: Primitives.sphere(radius: beadRadius),
+            mesh: Primitives.sphere(radius: beadRadius, segments: 24),
             materials: [Materials.grip(emissive: accent, glow: 0.55)])
         bead.name = name
         // Collider equals the visual radius.

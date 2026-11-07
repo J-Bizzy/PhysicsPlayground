@@ -147,6 +147,46 @@ contradicts this section, this section is current.
 - [ ] **The cut test:** enter all seven labs in sequence; the room's
       brightness moves only at Orbital Mechanics, and ramps rather than steps.
 
+## ⟳ 2026-11-06 — lighter everywhere (the Fields lesson, carried)
+
+Every small sphere, bar and arrowhead in Pendulums, Projectiles,
+Magnetism, Orbital Mechanics and the home is now the cheap kind Electric
+Fields got on 2026-11-03, and the pickup coil is milled at a third of its
+triangles. The simulator cannot judge any of it; the headset can.
+
+- [ ] **The home, with `-frameLog 1`:** through the whole arrival (the
+      wordmark, the seven labs rising) no "dropped" line; at rest, 0 long
+      frames. It drew 608 000 triangles under the opening; it is about
+      a third of that now.
+- [ ] **Pendulums: throw an end bob hard and watch the cradle for ten
+      seconds** — the trail beads behind every moving bob, no hitch as they
+      spawn. A swinging cradle was 814 000 triangles; it is 26 000.
+- [ ] **Look closely at a bob and at the wells' previews:** round, not
+      faceted (40 facets on a bob, 32 on a preview).
+- [ ] **Projectiles: fire three balls in a row and look at the strobe
+      dots:** round at arm's length (12 facets, 8 mm), and the balls smooth
+      (48 facets, where a basketball is 12 cm).
+- [ ] **Magnetism: the bar magnets' edges.** The long edges are rounded
+      as before and the ends are now flat, square-cornered (the halves
+      were rounded boxes at 13 000 triangles each; they are 80). Judge:
+      does the bar still read as a lab magnet? The selected magnet's halo
+      is the same shape.
+- [ ] **Magnetism: the field lines' arrowheads** are in the lines' own mesh
+      (one draw, not 300): drag a magnet quickly and they keep up; look at
+      one up close — round, pointing N→S outside the bar.
+- [ ] **Magnetism: the pickup coil, from the well and up close:** the
+      copper helix still catches the light turn by turn (36 steps a turn,
+      a resolution-3 wire; it was 72 and 6). Judge: any visible
+      polygon on the wire at a hand's distance?
+- [ ] **The compass needle:** square in section still, its tips now flat.
+- [ ] **Orbital Mechanics: the planets and the Sun up close** (48 facets;
+      they were 8 000-triangle spheres): no visible corners on Jupiter at
+      arm's length, none on the Sun's silhouette.
+- [ ] **Light & Optics: the laser's body** has flat ends now (it was a
+      rounded box); its lamp and aim bead are faceted finely.
+- [ ] **Every lab at rest, `-frameLog 1`:** 11.1 ms median, 0 long frames
+      (HEADSET_PASS §4).
+
 ## ⟳ 2026-11-04 — More in three tabs
 
 - [ ] **Open More in each lab:** it opens on Lab. Lab, Values and Room

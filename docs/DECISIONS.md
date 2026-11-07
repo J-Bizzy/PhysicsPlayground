@@ -16,6 +16,32 @@ A running log of consequential decisions — architectural, physical, or product
 
 (The template sat stranded at line 309, mid-log between two 2026-07-29 entries, until 2026-08-01.)
 
+## 2026-11-06 — The Fields lesson, carried to the other labs and the home
+
+**Decision:** Every small sphere names its facets (`Primitives.sphere(radius:segments:)`), every rounded bar is a `Primitives.roundedBar`, Magnetism's arrowheads ride in its core tube's mesh as Electric Fields' do, its pole letters are milled once, the home's spare beam cylinders are disabled, and the pickup coil is milled at 36 steps a turn with a resolution-3 wire. Counted the way `CircuitBudgetTests` counts:
+
+| Scene | Before | After |
+|---|---|---|
+| Pendulums, the cradle swinging with its trail | 813 882 triangles, 128 draws | 26 482, 128 |
+| Pendulums, the opening cradle | 43 264, 17 | 10 544, 17 |
+| Pendulums, the two well previews | 25 472 | 3 296 |
+| Projectiles, a ball in flight with its strobe | 114 936, 19 | 8 048, 19 |
+| Projectiles, the quiet room | 17 912, 6 | 4 264, 6 |
+| Magnetism, the opening bench | 258 772, 332 | 89 248, 35 |
+| Magnetism, its lines switched on | +106 000, +300 draws | +75 000, +3 |
+| Magnetism, the two well previews | 147 284 | 42 844 |
+| Orbital Mechanics, the opening system | 119 742, 85 | 54 078, 85 |
+| The home, its heaviest frame | 607 644, 225 | 191 132, 223 |
+
+**Context:** On 2026-11-03 Electric Fields was "quite laggy" on the headset while the simulator held 90 Hz; the cause was `generateSphere` (8 064 triangles at any size) used as trail beads and a cone entity per arrowhead. A survey before publishing found the same pattern in four more places: Pendulums' 360-bead trail pool, Projectiles' 480-dot strobe pool, Magnetism's 600-entity arrowhead pool with three 13 000-triangle rounded boxes per magnet and four extruded letters built fresh each, and the home's miniatures, built from the labs' own parts — plus one milled asset, the pickup coil, whose helix alone was 97 296 triangles, standing in Magnetism's well and the home's miniature the whole time. Apple's guidance for the Shared Space is under 250 000 triangles and 250 draws; the home drew 608 000 under the opening.
+
+**Consequences:**
+- **Facets by size:** 48 for a ball or a world, 40 for a bob, a charge or the launcher, 32 for a preview or a glow, 24 for a bead, 12 for a dot, a spot or a trail bead. `PrimitiveCanonCriterionTests.testEverySphereNamesItsFacets` fails a bare `Primitives.sphere(radius:)` anywhere but the room dimmer's dome, which needs the smoothness.
+- **A bar magnet's halves, chrome band, halo and the compass needle** are `MagnetismRenderer.bar(width:length:cornerRadius:)` — a `roundedBar` milled lying and stood up with `barUpright`: long edges rounded, ends flat, as a bar magnet's are. The halo is drawn at the opening, since the opening selects a magnet.
+- **Budget tests per lab:** `PendulumBudgetTests`, `KinematicsBudgetTests`, `MagnetismBudgetTests`, `OrbitalMechanicsBudgetTests`, `HubBudgetTests`, with `BudgetReport` naming the heaviest meshes by their nearest named ancestor (a milled prop's part is just "Cylinder"). Each prints a `[budget]` line, so a run records the numbers whether or not it fails.
+- **Draws are the next cost:** the home is still about 220 draws (the wordmark's letters, seven nameplates' glyphs, every diorama's parts) and a swinging cradle 128 (its trail beads stay one entity each because each carries its own speed colour). Both are inside Apple's figure; merging the home's static parts is 1.1 work if the headset says so.
+- **Not changed:** the Kepler sweep's sector still calls `MeshResource.generate` every twelfth frame while it is on (off by default); Orbital Mechanics' trails and Magnetism's lines stay `LiveTube`/`TrailRibbons`.
+
 ## 2026-11-04 — More is three tabs, and a dependent is hidden until its switch is on
 
 **Decision:** A lab's More panel is three tabs: **Lab**, **Values** and **Room**.

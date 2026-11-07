@@ -47,6 +47,37 @@ final class PrimitiveCanonCriterionTests: XCTestCase {
         }
     }
 
+    /// A sphere names its facets. `Primitives.sphere(radius:)` is
+    /// `generateSphere`, about 8 000 triangles at any size, and a bead, a
+    /// dot or a bob drawn by the hundred was most of what three labs and the
+    /// home drew (2026-11-06: a swinging cradle 814 000 triangles, the home
+    /// 608 000). The one dome that needs the smoothness names itself here.
+    func testEverySphereNamesItsFacets() throws {
+        let allowed: Set<String> = ["Primitives.swift", "RoomDimmer.swift"]
+        for file in try sources() where !allowed.contains(file.lastPathComponent) {
+            let text = try String(contentsOf: file, encoding: .utf8)
+            let lines = text.split(separator: "\n", omittingEmptySubsequences: false)
+            for (number, line) in lines.enumerated() {
+                let trimmed = line.trimmingCharacters(in: .whitespaces)
+                guard !trimmed.hasPrefix("//"),
+                      let start = trimmed.range(of: "Primitives.sphere(radius:") else { continue }
+                // The call's own argument list, which may run onto the next lines.
+                let window = trimmed[start.lowerBound...]
+                    + lines[(number + 1)..<min(number + 3, lines.count)].joined(separator: " ")
+                var depth = 0
+                var call = ""
+                for character in window {
+                    call.append(character)
+                    if character == "(" { depth += 1 }
+                    if character == ")" { depth -= 1; if depth == 0 { break } }
+                }
+                if !call.contains("segments:") {
+                    XCTFail("\(file.lastPathComponent):\(number + 1) draws an 8 000-triangle sphere; pass `segments:`.")
+                }
+            }
+        }
+    }
+
     /// A flat colour with an opacity is `Materials.unlit`. The bare
     /// `UnlitMaterial(color:)` survives only where the material is then
     /// given a texture or a per-frame colour — a recipe cannot cache those.

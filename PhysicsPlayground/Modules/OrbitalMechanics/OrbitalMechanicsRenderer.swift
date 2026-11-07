@@ -48,7 +48,7 @@ final class OrbitalMechanicsRenderer {
     // MARK: Predict-then-run — the ghost, its countdown, the verdict
     private let ghostEntity: ModelEntity = {
         let material = Materials.unlit(UIColor(white: 0.95, alpha: 1), opacity: 0.32)
-        let ghost = ModelEntity(mesh: Primitives.sphere(radius: 0.035),
+        let ghost = ModelEntity(mesh: Primitives.sphere(radius: 0.035, segments: 32),
                                 materials: [material])
         ghost.name = "prediction-ghost"
         ghost.components.set(InputTargetComponent())
@@ -228,7 +228,7 @@ final class OrbitalMechanicsRenderer {
         root.addChild(viewRoot)
 
         // Bodies.
-        let bodyMesh = Primitives.sphere(radius: Self.baseBodyRadius)
+        let bodyMesh = Primitives.sphere(radius: Self.baseBodyRadius, segments: 48)
         bodyPool = EntityPool(budget: OrbitalMechanicsModel.bodyBudget) { container in
             let sphere = ModelEntity(
                 mesh: bodyMesh,
@@ -270,7 +270,7 @@ final class OrbitalMechanicsRenderer {
         // space's sky. A copy, so the shared recipe keeps its depth.
         var glowMaterial = Materials.unlit(UIColor(red: 1.0, green: 0.82, blue: 0.5, alpha: 1), opacity: 0.16)
         glowMaterial.writesDepth = false
-        sunGlow = ModelEntity(mesh: Primitives.sphere(radius: Float(Self.glowBaseRadius)),
+        sunGlow = ModelEntity(mesh: Primitives.sphere(radius: Float(Self.glowBaseRadius), segments: 32),
                               materials: [glowMaterial])
         systemRoot.addChild(sunGlow)
 
@@ -311,7 +311,7 @@ final class OrbitalMechanicsRenderer {
 
         // Merge flash.
         let flashMaterial = Materials.unlit(.white, opacity: 0.7)
-        flashEntity = ModelEntity(mesh: Primitives.sphere(radius: 0.03), materials: [flashMaterial])
+        flashEntity = ModelEntity(mesh: Primitives.sphere(radius: 0.03, segments: 24), materials: [flashMaterial])
         flashEntity.isEnabled = false
         systemRoot.addChild(flashEntity)
 
@@ -326,7 +326,7 @@ final class OrbitalMechanicsRenderer {
         systemRoot.addChild(selectedAnchor)
 
         // Lagrange point markers; positions written every render.
-        let markerMesh = Primitives.sphere(radius: 0.009)
+        let markerMesh = Primitives.sphere(radius: 0.009, segments: 12)
         let markerMaterial = Materials.unlit(DesignTokens.Palette.targetUI, opacity: 0.85)
         for name in ["L1", "L2", "L3", "L4", "L5"] {
             let marker = ModelEntity(mesh: markerMesh, materials: [markerMaterial])
@@ -926,7 +926,7 @@ final class OrbitalMechanicsRenderer {
     /// pulled body arrives at.
     static func worldPreview() -> Entity {
         let sphere = ModelEntity(
-            mesh: Primitives.sphere(radius: 0.030),
+            mesh: Primitives.sphere(radius: 0.030, segments: 40),
             materials: [staticMaterial(for: "Earth")])
         // A slight tilt, so the texture's poles are not dead-on and the
         // thing reads as a globe rather than a flat disc.

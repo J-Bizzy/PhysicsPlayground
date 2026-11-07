@@ -112,7 +112,7 @@ enum HubVignettes {
 
     static func ball(_ radius: Float, _ color: UIColor,
                              glow: Float = 0.45) -> ModelEntity {
-        ModelEntity(mesh: Primitives.sphere(radius: radius),
+        ModelEntity(mesh: Primitives.sphere(radius: radius, segments: 32),
                     materials: [Materials.energized(color, glow: glow)])
     }
 
@@ -209,7 +209,7 @@ enum HubVignettes {
     }
 
     static func world(_ name: String, radius: Float) -> ModelEntity {
-        ModelEntity(mesh: Primitives.sphere(radius: radius),
+        ModelEntity(mesh: Primitives.sphere(radius: radius, segments: 32),
                     materials: [celestialMaterial(name)])
     }
 

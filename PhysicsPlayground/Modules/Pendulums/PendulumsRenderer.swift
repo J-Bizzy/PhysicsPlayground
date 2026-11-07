@@ -184,7 +184,7 @@ final class PendulumsRenderer {
         root.addChild(Lighting.keyLight())
         // No beam: each pendulum carries its own anchor wherever it was hung.
 
-        let trailMesh = Primitives.sphere(radius: 0.005)
+        let trailMesh = Primitives.sphere(radius: 0.005, segments: 12)
         let baseMaterial = Self.trailMaterials[0]
         trailPool = EntityPool(budget: Self.trailBudget) { container in
             container.addChild(ModelEntity(mesh: trailMesh, materials: [baseMaterial]))
@@ -400,7 +400,7 @@ final class PendulumsRenderer {
         cable.position = [0, -cableLength / 2, 0]
         container.addChild(cable)
 
-        let bob = ModelEntity(mesh: Primitives.sphere(radius: 0.035),
+        let bob = ModelEntity(mesh: Primitives.sphere(radius: 0.035, segments: 32),
                               materials: [bobMaterial])
         bob.position = [0, -cableLength, 0]
         container.addChild(bob)
@@ -445,11 +445,11 @@ final class PendulumsRenderer {
         container.addChild(rod(from: pivot, to: elbow))
         container.addChild(rod(from: elbow, to: bob))
 
-        let elbowBall = ModelEntity(mesh: Primitives.sphere(radius: 0.017),
+        let elbowBall = ModelEntity(mesh: Primitives.sphere(radius: 0.017, segments: 24),
                                     materials: [bobMaterial])
         elbowBall.position = elbow
         container.addChild(elbowBall)
-        let bobBall = ModelEntity(mesh: Primitives.sphere(radius: 0.024),
+        let bobBall = ModelEntity(mesh: Primitives.sphere(radius: 0.024, segments: 24),
                                   materials: [bobMaterial])
         bobBall.position = bob
         container.addChild(bobBall)
@@ -480,7 +480,7 @@ final class PendulumsRenderer {
         root.addChild(cable)
 
         let bob = ModelEntity(
-            mesh: Primitives.sphere(radius: 0.035),
+            mesh: Primitives.sphere(radius: 0.035, segments: 40),
             materials: [Self.bobMaterial])
         bob.name = pendulum.id.uuidString
         // Cradle bobs touch, so a target larger than the ball encloses both
@@ -505,7 +505,7 @@ final class PendulumsRenderer {
         // eye should follow — its path is the chaotic figure the whole
         // rig exists to draw.
         let elbow = ModelEntity(
-            mesh: Primitives.sphere(radius: 0.026),
+            mesh: Primitives.sphere(radius: 0.026, segments: 32),
             materials: [Self.bobMaterial])
         elbow.isEnabled = false
         root.addChild(elbow)

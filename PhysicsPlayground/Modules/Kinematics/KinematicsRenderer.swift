@@ -231,7 +231,7 @@ final class KinematicsRenderer {
         // room coordinates so manipulation never fights a parent transform.
         let launcherMaterial = Materials.machined(DesignTokens.Palette.launcherUI)
         launcherBase = ModelEntity(
-            mesh: Primitives.sphere(radius: 0.05), materials: [launcherMaterial])
+            mesh: Primitives.sphere(radius: 0.05, segments: 40), materials: [launcherMaterial])
         launcherBase.name = Self.launcherName
         Grabbable.configureTouchTarget(
             launcherBase, collisionRadius: 0.062,
@@ -258,7 +258,7 @@ final class KinematicsRenderer {
         root.addChild(barrel)
 
         bead = ModelEntity(
-            mesh: Primitives.sphere(radius: 0.026),
+            mesh: Primitives.sphere(radius: 0.026, segments: 32),
             materials: [Materials.energized(DesignTokens.Palette.projectileUI, glow: 0.25)]
         )
         bead.name = Self.aimBeadName
@@ -298,7 +298,7 @@ final class KinematicsRenderer {
         root.addChild(pathEntity)
 
         // Balls: unit sphere scaled per projectile, grabbable for throwing.
-        let ballMesh = Primitives.sphere(radius: Self.baseBallRadius)
+        let ballMesh = Primitives.sphere(radius: Self.baseBallRadius, segments: 48)
         ballPool = EntityPool(budget: KinematicsModel.flightBudget) { container in
             let sphere = ModelEntity(
                 mesh: ballMesh,
@@ -329,7 +329,7 @@ final class KinematicsRenderer {
         // only the newest flight keeps them once it has landed.
         let dotMaterial = Materials.energized(
             DesignTokens.Palette.projectileUI, roughness: 0.3, glow: 0.35)
-        let dotMesh = Primitives.sphere(radius: Self.dotRadius)
+        let dotMesh = Primitives.sphere(radius: Self.dotRadius, segments: 12)
         dotPool = EntityPool(
             budget: KinematicsModel.flightBudget * KinematicsModel.dotsPerFlight
         ) { container in
@@ -362,7 +362,7 @@ final class KinematicsRenderer {
         let capturedRingMaterial = ringMaterial
         ringPool = EntityPool(budget: KinematicsModel.ringBudget) { container in
             let tube = ModelEntity(
-                mesh: ringMesh ?? Primitives.sphere(radius: 0.05),
+                mesh: ringMesh ?? Primitives.sphere(radius: 0.05, segments: 24),
                 materials: [capturedRingMaterial]
             )
             Grabbable.configureTouchTarget(
@@ -448,7 +448,7 @@ final class KinematicsRenderer {
         // Apex: a dot on the arc's crest, the height beside it, and a
         // faint plumb line to the floor — the number drawn as geometry.
         let apexDot = ModelEntity(
-            mesh: Primitives.sphere(radius: 0.009),
+            mesh: Primitives.sphere(radius: 0.009, segments: 12),
             materials: [UnlitMaterial(color: DesignTokens.Palette.predictedArcUI)])
         apexMarker.addChild(apexDot)
         let apexPivot = Entity()
@@ -1041,7 +1041,7 @@ final class KinematicsRenderer {
             return SIMD3(cos(angle), 0, sin(angle)) * 0.035
         }
         let mesh = TubeMesh.tube(lines: [circle], radius: 0.005, sides: 8)
-            ?? Primitives.sphere(radius: 0.02)
+            ?? Primitives.sphere(radius: 0.02, segments: 24)
         return ModelEntity(
             mesh: mesh,
             materials: [Materials.energized(DesignTokens.Palette.targetUI,
@@ -1055,7 +1055,7 @@ final class KinematicsRenderer {
     /// from it. Until then it was a basketball token that fell back to
     /// orange before the textures loaded — the aim bead's orange, so the
     /// ball you throw and the bead you aim with looked like one thing.
-    let readyBall = ModelEntity(mesh: Primitives.sphere(radius: 0.03), materials: [])
+    let readyBall = ModelEntity(mesh: Primitives.sphere(radius: 0.03, segments: 40), materials: [])
     private var readyBallKey = ""
 
     private func syncReadyBall(_ model: KinematicsModel) {

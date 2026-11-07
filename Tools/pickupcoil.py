@@ -79,8 +79,11 @@ def stocks():
     }
 
 
-def tube(name, points, radius, mat, resolution=6):
-    """A round wire along a polyline, with capped ends."""
+def tube(name, points, radius, mat, resolution=3):
+    """A round wire along a polyline, with capped ends. Resolution 3 (it
+    was 6) on a 1.1 mm wire: with 36 steps a turn (were 72) the coil is
+    39 660 triangles where it was 97 296, most of the home's magnetism
+    miniature and of Magnetism's well (2026-11-06)."""
     data = bpy.data.curves.new(name, type="CURVE")
     data.dimensions = "3D"
     data.bevel_depth = radius
@@ -138,7 +141,7 @@ def build(s):
     parts.append(shade(core, s["copper"]))
     pitch = (WINDING_LENGTH - 2 * WIRE_RADIUS) / TURNS_DRAWN
     helix = []
-    steps = TURNS_DRAWN * 72
+    steps = TURNS_DRAWN * 36
     radius = WINDING_OUTER - WIRE_RADIUS
     for index in range(steps + 1):
         t = index / steps
