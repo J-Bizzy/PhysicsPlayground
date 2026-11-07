@@ -16,9 +16,9 @@
 	<key>NSPrivacyAccessedAPITypes</key>
 	<array>
 		<dict>
-			<!-- Settings, the lab notebook, and the debug launch
-			     arguments — all app-scoped, read back only by this
-			     app. -->
+			<!-- Settings, each lab's placement, the circuit bench and
+			     its saved slots, and the debug launch arguments — all
+			     app-scoped, read back only by this app. -->
 			<key>NSPrivacyAccessedAPIType</key>
 			<string>NSPrivacyAccessedAPICategoryUserDefaults</string>
 			<key>NSPrivacyAccessedAPITypeReasons</key>

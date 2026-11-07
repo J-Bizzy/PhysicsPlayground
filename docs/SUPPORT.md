@@ -32,8 +32,9 @@ thing that has it:
 - **Wells** — pinch and pull to make a new charge, magnet, pendulum,
   ball, hoop, world or circuit part.
 - **Rings** — tap an object and its own controls unfold around it.
-  Pull the ring's handle to change the object's value: a charge grows,
-  a pendulum's cable pays out, a part's resistance climbs.
+  Pull the bead along the ring's track to change the object's value: a
+  charge grows, a magnet strengthens, a part's resistance climbs. A
+  pendulum's cable pays out from the handle just past its bob.
 - **The aim bead** in Projectile Motion — where it points is the aim,
   how far out it stands is the launch speed.
 

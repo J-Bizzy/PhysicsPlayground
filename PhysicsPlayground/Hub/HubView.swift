@@ -101,8 +101,9 @@ struct HubView: View {
         .shadow(color: .black.opacity(0.45), radius: 8, y: 2)
     }
 
-    /// Whether a UI test is driving the app. Not `#if DEBUG`-gated: the UI
-    /// test target runs the shipping configuration. Signed off for release:
+    /// Whether a UI test is driving the app. Not `#if DEBUG`-gated: the
+    /// shared scheme tests the Debug configuration today, and a check this
+    /// cheap should not depend on that staying so. Signed off for release:
     /// it only makes the app a window app showing the flat catalog, and a
     /// shipped app launched from the Home View is handed no arguments. Read
     /// by `PlaygroundSpaceView.retreatForUITesting`.

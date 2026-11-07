@@ -5,7 +5,7 @@ title: Privacy Policy — Physics Playground
 
 # Privacy Policy — Physics Playground
 
-**Last updated: 1 August 2026**
+**Last updated: 7 November 2026**
 
 Physics Playground collects nothing about you. There are no accounts, no
 analytics, no advertising, no crash reporting, and no network code of any
@@ -41,9 +41,11 @@ warning in its title bar telling you where in Settings to turn it back on.
 
 Stored locally in the app's own container, never transmitted:
 
-- **Settings** — volume, ambient audio, and whether the Time Capsule
-  records.
-- **Your circuit bench** — Circuit Workshop remembers what you built.
+- **Settings** — effects volume, music, whether the Time Capsule
+  records, and whether you chose your room or Deep space.
+- **Where you put each lab** — the offset from Move the lab, per lab.
+- **Your circuit bench** — Circuit Workshop remembers what you built,
+  and the circuits you saved to its slots.
 
 Deleting the app deletes all of it. Nothing is exported or shared.
 

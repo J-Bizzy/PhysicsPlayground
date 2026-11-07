@@ -315,7 +315,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "$(TARGET_NAME)/Info.plist";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.education";
-				INFOPLIST_KEY_NSHandsTrackingUsageDescription = "Physics Playground tracks your hands so you can pick up a magnet, stretch a pendulum's cable, and pinch with both hands to zoom an experiment.";
+				INFOPLIST_KEY_NSHandsTrackingUsageDescription = "Physics Playground tracks your hands so a thrown ball can bounce off them, land in a still hand or be swatted away, and so wells and controls brighten as your hand comes near.";
 				INFOPLIST_KEY_NSWorldSensingUsageDescription = "Physics Playground uses the shape of your room so experiments happen in it: projectiles bounce off your real walls, floor and ceiling, and apparatus is hidden correctly behind your furniture.";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -347,7 +347,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "$(TARGET_NAME)/Info.plist";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.education";
-				INFOPLIST_KEY_NSHandsTrackingUsageDescription = "Physics Playground tracks your hands so you can pick up a magnet, stretch a pendulum's cable, and pinch with both hands to zoom an experiment.";
+				INFOPLIST_KEY_NSHandsTrackingUsageDescription = "Physics Playground tracks your hands so a thrown ball can bounce off them, land in a still hand or be swatted away, and so wells and controls brighten as your hand comes near.";
 				INFOPLIST_KEY_NSWorldSensingUsageDescription = "Physics Playground uses the shape of your room so experiments happen in it: projectiles bounce off your real walls, floor and ceiling, and apparatus is hidden correctly behind your furniture.";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -497,7 +497,7 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = TL459W44PC;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_NSHandsTrackingUsageDescription = "Physics Playground tracks your hands so you can pick up a magnet, stretch a pendulum's cable, and pinch with both hands to zoom an experiment.";
+				INFOPLIST_KEY_NSHandsTrackingUsageDescription = "Physics Playground tracks your hands so a thrown ball can bounce off them, land in a still hand or be swatted away, and so wells and controls brighten as your hand comes near.";
 				INFOPLIST_KEY_NSWorldSensingUsageDescription = "Physics Playground uses the shape of your room so experiments happen in it: projectiles bounce off your real walls, floor and ceiling, and apparatus is hidden correctly behind your furniture.";
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.jbizzell.physicsplayground.tests;
@@ -522,7 +522,7 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = TL459W44PC;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_NSHandsTrackingUsageDescription = "Physics Playground tracks your hands so you can pick up a magnet, stretch a pendulum's cable, and pinch with both hands to zoom an experiment.";
+				INFOPLIST_KEY_NSHandsTrackingUsageDescription = "Physics Playground tracks your hands so a thrown ball can bounce off them, land in a still hand or be swatted away, and so wells and controls brighten as your hand comes near.";
 				INFOPLIST_KEY_NSWorldSensingUsageDescription = "Physics Playground uses the shape of your room so experiments happen in it: projectiles bounce off your real walls, floor and ceiling, and apparatus is hidden correctly behind your furniture.";
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.jbizzell.physicsplayground.tests;

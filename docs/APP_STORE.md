@@ -294,7 +294,7 @@ shot () {   # shot <name> <args...>
 }
 
 shot 1-throws    -openModule kinematics     -kinBalls 1 -kinWalls 1
-shot 2-circuits  -openModule circuits       -electronView 1
+shot 2-circuits  -openModule circuits       -trueSpeed 1
 shot 3-fields    -openModule electrostatics -emCap 1 -emMagnetic 1 -emVolts 90 -emTesla 0.6
 shot 4-gravity   -openModule gravitylab     -gravBinary 1
 shot 5-orbitring -openModule gravitylab     -selectBody Earth -gravRing 1 -apsisDrag far,2.2
