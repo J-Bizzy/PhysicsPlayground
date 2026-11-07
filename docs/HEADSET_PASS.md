@@ -110,7 +110,12 @@ into 1.1. `ON_DEVICE_TESTS.md` has the detail behind every line, and its
       and nothing leans or coasts.
 - [ ] **Largest text:** the names in More wrap, and none ends in "…".
 - [ ] If there's time, turn off both permissions in Settings › Privacy &
-      Security and relaunch: every lab still opens and answers a pinch.
+      Security and relaunch: every lab still opens and answers a pinch,
+      its title bar shows the triangle, and Open Settings in its popover
+      lands on the app's page.
+- [ ] With Music playing, open the app: your music keeps playing and the
+      house music waits for it to stop. In a lab, close the title bar:
+      you are home, not stranded.
 
 ## Judge (a word each; these don't block)
 

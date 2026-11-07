@@ -35,7 +35,8 @@ your device.
 You can decline either permission. The app keeps working: experiments run
 in open space instead of using your walls, and everything else is
 unchanged. If you decline and later change your mind, every lab shows a
-warning in its title bar telling you where in Settings to turn it back on.
+warning in its title bar telling you where in Settings to turn it back
+on, with a button that opens it.
 
 ## What is stored on your device
 

@@ -16,6 +16,21 @@ A running log of consequential decisions — architectural, physical, or product
 
 (The template sat stranded at line 309, mid-log between two 2026-07-29 entries, until 2026-08-01.)
 
+## 2026-11-07 — Told what was refused, and never stranded
+
+**Decision:** Four things the headset pass would have found last, fixed before it:
+- **A refused room is reported.** `RoomModel.retain()` judges `sensing` from what was refused (`Sensing.verdict(denied:)`: the room refused is `.denied`, whatever else was granted), not from whether any provider is left to run — `WorldTrackingProvider` needs no permission, so on a device the list was never empty and `.denied` was unreachable. The title bar's triangle and the home window's note now appear as `SUPPORT.md` and `PRIVACY.md` promised, each with an **Open Settings** button (`OpenSettingsButton`, `UIApplication.openSettingsURLString`). Hands refused alone is not a warning: grabs are the system's gestures; only a ball's catch and swat and the controls' brightening read the tracked hand.
+- **The wearer's own music keeps playing.** `HouseAudioSession.configure()` sets the audio session to `.ambient` on the launch path (the system default is non-mixable, so opening the app stopped whatever they were listening to), and the house music yields while `secondaryAudioShouldBeSilencedHint` is set — it waits, then comes back plainly when theirs stops (`silenceSecondaryAudioHintNotification`). The effects still sound, under it.
+- **Closing a lab's bar goes home.** The bar is the only way to Home, More and Pause, and closed by hand nothing brought it back. `MainWindowView.closingGoesHome(activeModuleID:spaceOpen:)`: a lab still active with the space open when the window goes means a hand closed it, since the app's own dismissal clears the module first and the space closing reopens the window rather than taking it.
+- **No full immersion without a sky.** `DeepSpaceStage` reports arrival only when it built a sky (`hasSky`); without one the space keeps the room and its dimmer, with the platform and the Sun standing in it, instead of going `.full` over black. And `CircuitsModel.coastStage` turns the stage by the coast's own integral over the frame, rate·τ·(1 − e^(−dt/τ)), not rate·dt, so a bench coasting when the headset came off turns by what the coast had left in it rather than by the rate times the absence (and a coast is the same angle at any frame rate); the lab window's "The room couldn't open." has the home window's **Try Again**.
+
+**Context:** The pre-publish survey of 2026-11-06. None of these shows in the simulator: it never refuses a permission, plays no music of its own, cannot close a window by hand, always draws the sky.
+
+**Consequences:**
+- `RoomSensingTests`, `WindowLifecycleTests`, `HouseMusicTests.testTheMusicYieldsToTheWearersOwnAudio`, `DeepSpaceEnvironmentTests.testTheStageArrivesOnlyWithASky`, `CircuitsStageTests.testACoastDoesNotJumpAfterALongFrame`.
+- **To judge on device:** the house music against Apple Music (does `.ambient` change how RealityKit's spatial audio sounds? it should not), and whether going home on a closed bar is the right surprise — the alternative is reopening the bar.
+- **Not changed:** no first-launch sentence (the room stays wordless), no scene-phase handling (RealityKit stops the clocks itself), no Music volume.
+
 ## 2026-11-06 — The Fields lesson, carried to the other labs and the home
 
 **Decision:** Every small sphere names its facets (`Primitives.sphere(radius:segments:)`), every rounded bar is a `Primitives.roundedBar`, Magnetism's arrowheads ride in its core tube's mesh as Electric Fields' do, its pole letters are milled once, the home's spare beam cylinders are disabled, and the pickup coil is milled at 36 steps a turn with a resolution-3 wire. Counted the way `CircuitBudgetTests` counts:

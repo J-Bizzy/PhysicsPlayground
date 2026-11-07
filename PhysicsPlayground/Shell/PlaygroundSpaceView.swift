@@ -8,6 +8,8 @@
 //  switch, while module models live on in AppModel.
 //
 
+import AVFAudio
+import Combine
 import RealityKit
 import RenderKit
 import SwiftUI
@@ -284,6 +286,8 @@ struct PlaygroundSpaceView: View {
                 }
                 // The launch path: the only place guaranteed to run once on every start.
                 .task {
+                    // Mix with the wearer's own sound rather than stopping it.
+                    HouseAudioSession.configure()
                     SoundPalette.warmUp()
                     SoundPalette.masterVolume = appModel.settings.masterVolume
                     // Before the retreat, not after: `-uiTesting 1` and a screenshot
@@ -380,14 +384,29 @@ private struct HouseMusicView: View {
         RealityView { content in
             emitter.position = [0, 1.7, -1.0]
             content.add(emitter)
-            // The space opening is the arrival: the music swells with it.
-            if appModel.settings.ambientAudio { start(swell: true) }
+            // The space opening is the arrival: the music swells with it —
+            // unless the wearer is listening to something of their own.
+            if wanted { start(swell: true) }
         }
         .onChange(of: appModel.settings.ambientAudio) {
             // The settings toggle applies immediately, not next visit.
-            if appModel.settings.ambientAudio { start(swell: false) } else { stop() }
+            if wanted { start(swell: false) } else { stop() }
+        }
+        // The wearer's own audio starting or stopping: the music yields,
+        // and comes back plainly (2026-11-07).
+        .onReceive(NotificationCenter.default.publisher(
+            for: AVAudioSession.silenceSecondaryAudioHintNotification)) { note in
+            let raw = note.userInfo?[AVAudioSessionSilenceSecondaryAudioHintTypeKey] as? UInt
+            let begins = raw.flatMap(AVAudioSession.SilenceSecondaryAudioHintType.init(rawValue:)) == .begin
+            if begins { stop() } else if wanted { start(swell: false) }
         }
         .onDisappear { stop() }
+    }
+
+    /// Asked for, and nothing of the wearer's own playing.
+    private var wanted: Bool {
+        HouseAudioSession.musicPlays(wanted: appModel.settings.ambientAudio,
+                                     othersArePlaying: HouseAudioSession.othersArePlaying)
     }
 
     private func start(swell: Bool) {
@@ -397,7 +416,7 @@ private struct HouseMusicView: View {
             // warmUp renders the score off-launch, after the one-shots; on a
             // first launch that can take a few seconds, so wait for it.
             for _ in 0..<120 where controller == nil {
-                guard appModel.settings.ambientAudio else { return }
+                guard wanted else { return }
                 let swells = swell && ContinuousClock.now < swellUntil
                 if let started = SoundPalette.startAmbient(on: emitter, swell: swells) {
                     controller = started

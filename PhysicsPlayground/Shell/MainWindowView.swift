@@ -24,7 +24,22 @@ struct MainWindowView: View {
             .onAppear { appModel.mainWindowCount += 1 }
             .onDisappear {
                 appModel.mainWindowCount = max(appModel.mainWindowCount - 1, 0)
+                // Closed by hand in a lab, the bar takes Home, More and Pause with
+                // it and nothing brings it back; so the lab goes home, the one
+                // scene that stands without a window (2026-11-07).
+                if Self.closingGoesHome(activeModuleID: appModel.activeModuleID,
+                                        spaceOpen: appModel.isImmersiveSpaceOpen) {
+                    appModel.go(to: nil)
+                }
             }
+    }
+
+    /// Whether a window going away was the wearer closing a lab's bar. The
+    /// app's own dismissal clears the module first (`syncMainWindow`), and
+    /// the space closing brings the window back rather than taking it, so a
+    /// lab still active with the space open means a hand closed it.
+    static func closingGoesHome(activeModuleID: String?, spaceOpen: Bool) -> Bool {
+        activeModuleID != nil && spaceOpen
     }
 
     @ViewBuilder

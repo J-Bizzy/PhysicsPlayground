@@ -147,6 +147,9 @@ struct RoomSensingNote: View {
                         .font(DesignTokens.TypeScale.footnote)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
+                    if sensing == .denied {
+                        OpenSettingsButton()
+                    }
                 }
             }
         }

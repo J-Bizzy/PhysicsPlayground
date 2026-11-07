@@ -81,10 +81,10 @@ final class DeepSpaceEnvironmentTests: XCTestCase {
         XCTAssertEqual(suns, [OrbitalMechanicsModule.id])
 
         let stage = DeepSpaceStage()
-        stage.build(showsSun: false)
+        stage.build(showsSun: false, resources: SkyResources.shared)
         XCTAssertEqual(stage.root.findEntity(named: DeepSpace.sunName)?.isEnabled, false)
         let shown = DeepSpaceStage()
-        shown.build(showsSun: true)
+        shown.build(showsSun: true, resources: SkyResources.shared)
         XCTAssertEqual(shown.root.findEntity(named: DeepSpace.sunName)?.isEnabled, true)
     }
 
@@ -103,5 +103,35 @@ final class DeepSpaceEnvironmentTests: XCTestCase {
         }
         walk(space)
         XCTAssertEqual(lit, [])
+    }
+
+    /// Without a sky the stage never reports arrival, so the space never
+    /// goes to full immersion over black: the room stays, with the platform
+    /// and the Sun standing in it. With one, it arrives.
+    func testTheStageArrivesOnlyWithASky() async throws {
+        // The fade keeps wall-clock time (`Fade.tick`), so the ticks are spaced
+        // in real time: about two seconds, past the 0.8 s arrival.
+        func runs(_ stage: DeepSpaceStage) async throws -> Bool {
+            var arrived = false
+            stage.onArrived = { arrived = true }
+            for _ in 0..<100 {
+                stage.tick(dt: 1.0 / 90.0)
+                try await Task.sleep(for: .milliseconds(20))
+            }
+            return arrived
+        }
+        let skyless = DeepSpaceStage()
+        skyless.build(showsSun: true, resources: nil)
+        XCTAssertFalse(skyless.hasSky)
+        let skylessArrived = try await runs(skyless)
+        XCTAssertFalse(skylessArrived, "no sky, no full immersion")
+
+        let resources = await SkyResources.prepare()
+        try XCTSkipIf(resources == nil, "the sky could not be drawn here")
+        let skied = DeepSpaceStage()
+        skied.build(showsSun: true, resources: resources)
+        XCTAssertTrue(skied.hasSky)
+        let skiedArrived = try await runs(skied)
+        XCTAssertTrue(skiedArrived, "with a sky the stage arrives and the space may go full")
     }
 }

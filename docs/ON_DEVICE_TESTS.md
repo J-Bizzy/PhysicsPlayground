@@ -147,6 +147,32 @@ contradicts this section, this section is current.
 - [ ] **The cut test:** enter all seven labs in sequence; the room's
       brightness moves only at Orbital Mechanics, and ramps rather than steps.
 
+## ⟳ 2026-11-07 — told what was refused, and never stranded
+
+Four things the simulator cannot do: refuse a permission, play music of
+its own, close a window by hand, fail to draw the sky.
+
+- [ ] **Refuse World Sensing** (Settings › Privacy & Security › World
+      Sensing, or Don't Allow on a fresh install) and open a lab: the
+      title bar shows the triangle; its popover says the room can't be
+      seen and has **Open Settings**, which lands on the app's page.
+      Allow it there and come back: the triangle is gone. Refuse Hand
+      Tracking alone: no triangle, every grab still works.
+- [ ] **Play something in Music, then open the app:** your music keeps
+      playing; the house music does not start. Pause your music: within a
+      moment the house music comes in plainly (no swell). Start yours
+      again: the house music stops. The effects (a grab's tick, a well's
+      thud) sound throughout, under your music.
+- [ ] **In a lab, close the title-bar window with its close button:** the
+      lab goes home, the labs standing round you, no window. Judge: is
+      going home the right surprise, or should the bar come back?
+- [ ] **Open a lab with the space closed** (Digital Crown, then the window):
+      Show in Room; if it ever says "The room couldn't open.", a Try
+      Again stands beside it.
+- [ ] **Circuit Workshop: flick the turntable, take the headset off for
+      ten seconds, put it back:** the stage is where its coast would have
+      ended, not spun round.
+
 ## ⟳ 2026-11-06 — lighter everywhere (the Fields lesson, carried)
 
 Every small sphere, bar and arrowhead in Pendulums, Projectiles,

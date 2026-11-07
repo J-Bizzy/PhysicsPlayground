@@ -85,6 +85,19 @@ final class RoomModel {
         /// Authorized, but `session.run` threw anyway.
         case failed
 
+        /// What a refusal means, from what was refused. The room (world
+        /// sensing) is the one the wearer notices — balls through the walls,
+        /// apparatus not hidden — whatever else was granted; hands refused
+        /// alone changes nothing a sentence could warn about, since grabs are
+        /// the system's and only a ball's catch and the controls' brightening
+        /// read the hand. Judged from the refusal, not from what is left to
+        /// run: `WorldTrackingProvider` needs no permission, so the provider
+        /// list is never empty on a device, and `.denied` was unreachable
+        /// until 2026-11-07.
+        static func verdict(denied: Set<ARKitSession.AuthorizationType>) -> Sensing {
+            denied.contains(.worldSensing) ? .denied : .fine
+        }
+
         /// The one-line version, for a title bar or a card. The copy lives on
         /// the case so the hub and the title bar say the same thing.
         var headline: String {
@@ -287,6 +300,7 @@ final class RoomModel {
                 !denied.contains($0)
             }
         }
+        let refusal = Sensing.verdict(denied: denied)
         guard !providers.isEmpty else {
             // Everything asked for was refused; a partial denial keeps what was
             // granted.
@@ -300,7 +314,9 @@ final class RoomModel {
             sensing = .failed
             return
         }
-        sensing = .fine
+        // The session runs on what was granted; the warning says what was
+        // refused.
+        sensing = refusal
         isRunning = true
         // …and again after `run`: the start can outlive every client, and the
         // consumer tasks below must not spawn for nobody.

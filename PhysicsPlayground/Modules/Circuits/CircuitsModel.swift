@@ -364,14 +364,21 @@ final class CircuitsModel {
         persistSoon()
     }
 
-    /// The coast, each unpaused frame: the turn decays as e^(−t/τ).
+    /// The coast, each unpaused frame: the turn decays as e^(−t/τ). The
+    /// frame's turn is the coast's own integral, rate·τ·(1 − e^(−dt/τ)),
+    /// not rate·dt: a frame as long as a headset's absence turns the stage
+    /// by what the coast had left in it, never by the rate times the
+    /// absence (2026-11-07), and the whole coast is the same angle at any
+    /// frame rate.
     private func coastStage(dt: Double) {
         guard stageSpinRate != 0, stageSpin == nil else { return }
-        guard !isPaused, scrubTime == nil, spinCircuit(by: stageSpinRate * dt) else {
+        let decay = exp(-dt / Self.stageCoastTime)
+        let turn = stageSpinRate * Self.stageCoastTime * (1 - decay)
+        guard !isPaused, scrubTime == nil, spinCircuit(by: turn) else {
             stageSpinRate = 0
             return
         }
-        stageSpinRate *= exp(-dt / Self.stageCoastTime)
+        stageSpinRate *= decay
         if abs(stageSpinRate) < Self.stageCoastStop {
             stageSpinRate = 0
             persistSoon()

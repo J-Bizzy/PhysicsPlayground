@@ -22,7 +22,8 @@ apparatus is no longer hidden behind your furniture. The physics is
 identical either way.
 
 If you change your mind, every lab shows a warning triangle in its title
-bar with the path: **Settings › Privacy & Security › World Sensing**.
+bar with the path — **Settings › Privacy & Security › World Sensing** —
+and an **Open Settings** button that takes you there.
 
 ### Where are the controls?
 

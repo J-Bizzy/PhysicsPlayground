@@ -301,4 +301,31 @@ final class CircuitsStageTests: XCTestCase {
         XCTAssertEqual(pivot.y, CircuitsRenderer.benchPivot.y + 0.1, accuracy: 1e-6)
         XCTAssertEqual(pivot.z, CircuitsRenderer.benchPivot.z - 0.2, accuracy: 1e-6)
     }
+
+    /// A long frame turns the stage by what the coast had left in it —
+    /// rate × τ at most, where its coast would have ended — not by the rate
+    /// times the frame: a bench coasting when the headset came off does not
+    /// spin round on resume.
+    func testACoastDoesNotJumpAfterALongFrame() {
+        let model = CircuitsModel()
+        let centre = SIMD3(model.stage.center.x, 1.0, model.stage.center.y)
+        func hand(_ angle: Double) -> SIMD3<Double> {
+            centre + SIMD3(cos(angle), 0, -sin(angle)) * CircuitsModel.stageRadius
+        }
+        XCTAssertTrue(model.beginSpin(hand: hand(0), at: 0))
+        for frame in 1...9 {
+            model.updateSpin(hand: hand(0.04 * Double(frame)), at: Double(frame) / 90)
+        }
+        model.endSpin(coasts: true, at: 9.0 / 90)
+        let rate = model.stageSpinRate
+        XCTAssertGreaterThan(rate, 2)
+        let yaw = model.stage.yaw
+        model.step(dt: 5)
+        let turned = abs(model.stage.yaw - yaw)
+        XCTAssertLessThanOrEqual(turned, rate * CircuitsModel.stageCoastTime + 1e-9,
+                                 "five seconds away turned the stage by more than the coast had in it")
+        XCTAssertGreaterThan(turned, 0.5 * rate * CircuitsModel.stageCoastTime,
+                             "the coast still happened")
+        XCTAssertEqual(model.stageSpinRate, 0, "and it is over")
+    }
 }

@@ -32,7 +32,7 @@ struct DeepSpaceView: View {
 
     var body: some View {
         RealityView { content in
-            stage.build(showsSun: showsSun)
+            stage.build(showsSun: showsSun, resources: SkyResources.shared)
             // Fully up: the space can go to full immersion behind it.
             stage.onArrived = { [appModel] in appModel.skyArrived(true) }
             content.add(stage.root)
@@ -63,9 +63,10 @@ final class DeepSpaceStage {
 
     /// Built in the RealityView's make closure, not in `init`: a `@State`
     /// initial value is constructed on every evaluation of the view.
-    func build(showsSun: Bool) {
+    func build(showsSun: Bool, resources: SkyResources?) {
         guard root.children.isEmpty else { return }
-        let made = DeepSpace.make(resources: SkyResources.shared)
+        hasSky = resources != nil
+        let made = DeepSpace.make(resources: resources)
         // A copy: reparenting a child shortens the collection being walked.
         for child in Array(made.children) { root.addChild(child) }
         root.name = made.name
@@ -77,14 +78,18 @@ final class DeepSpaceStage {
 
     /// Waits for the scene to take in the sky (`Settle`), then fades up.
     private var settle = Settle()
-    /// Called once, when the fade up has finished.
+    /// Called once, when the fade up has finished — and only with a sky
+    /// behind it: without one the space never goes to full immersion, so
+    /// the wearer keeps the room (and its dimmer) with the platform and the
+    /// Sun standing in it, never black (2026-11-07).
     var onArrived: (() -> Void)?
     private var arrived = false
+    private(set) var hasSky = false
 
     func tick(dt: Double) {
         guard settle.tick(dt: dt) else { return }
         Fade.tick(root, visible: true, duration: DeepSpace.arrival)
-        if !arrived, root.components[OpacityComponent.self] == nil {
+        if !arrived, hasSky, root.components[OpacityComponent.self] == nil {
             arrived = true
             onArrived?()
         }
@@ -120,7 +125,8 @@ enum DeepSpace {
         if let resources {
             root.addChild(Sky.make(resources: resources, group: group))
         } else {
-            // Before the sky is built (a test that never prepared it).
+            // No sky: a test that never prepared it, or a device where it
+            // could not be drawn. The stage then never reports arrival.
             let placeholder = Entity()
             placeholder.name = "sky"
             root.addChild(placeholder)

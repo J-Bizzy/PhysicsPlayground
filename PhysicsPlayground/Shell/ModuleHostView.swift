@@ -79,6 +79,9 @@ struct ModuleHostView: View {
                                 .font(DesignTokens.TypeScale.footnote)
                                 .foregroundStyle(.secondary)
                                 .fixedSize(horizontal: false, vertical: true)
+                            if appModel.room.sensing == .denied {
+                                OpenSettingsButton()
+                            }
                         }
                         .padding(20)
                         .frame(maxWidth: 340)
@@ -101,32 +104,21 @@ struct ModuleHostView: View {
                 ControlButton("Show in Room", systemImage: "sparkles",
                               emphasis: .prominent,
                               fillsWidth: true) {
-                    Task {
-                        withAnimation(.easeOut(duration: 0.2)) {
-                            showInRoomFailed = false
-                        }
-                        // Assets warm off-main before the space opens, as at the home's door.
-                        await PropCache.warmUp()
-                        let result = await openImmersiveSpace(
-                            id: PlaygroundSpaceView.spaceID)
-                        if case .error = result {
-                            withAnimation(.easeOut(duration: 0.2)) {
-                                showInRoomFailed = true
-                            }
-                            AccessibilityNotification.Announcement("The room couldn't open.").post()
-                        }
-                    }
+                    Task { await showInRoom() }
                 }
                 .accessibilityHint("Places this lab in your room")
 
                 // Says so when the space refused to open, with a manual retry and never
-                // a loop.
+                // a loop — the same words and button as the home window's.
                 if showInRoomFailed {
                     HStack(spacing: 10) {
                         Image(systemName: "exclamationmark.triangle.fill")
                             .foregroundStyle(.orange)
                         Text("The room couldn't open.")
                             .font(DesignTokens.TypeScale.footnote)
+                        ControlButton("Try Again", systemImage: "arrow.clockwise") {
+                            Task { await showInRoom() }
+                        }
                         Spacer(minLength: 0)
                     }
                     .padding(.horizontal, 12)
@@ -164,6 +156,18 @@ struct ModuleHostView: View {
 
     /// What Pause says it does. The reel is promised only while the Time
     /// Capsule records: switched off in Settings, a pause is just a pause.
+    /// Opens the space for this lab, saying so if it will not open.
+    private func showInRoom() async {
+        withAnimation(.easeOut(duration: 0.2)) { showInRoomFailed = false }
+        // Assets warm off-main before the space opens, as at the home's door.
+        await PropCache.warmUp()
+        let result = await openImmersiveSpace(id: PlaygroundSpaceView.spaceID)
+        if case .error = result {
+            withAnimation(.easeOut(duration: 0.2)) { showInRoomFailed = true }
+            AccessibilityNotification.Announcement("The room couldn't open.").post()
+        }
+    }
+
     static func pauseHint(paused: Bool, recording: Bool) -> String {
         if paused { return "Runs the lab again, from the moment on screen" }
         return recording ? "Freezes the lab; a reel appears to rewind it"

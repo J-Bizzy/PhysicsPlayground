@@ -66,4 +66,13 @@ final class HouseMusicTests: XCTestCase {
         XCTAssertEqual(plain.steps, [SoundPalette.AmbientStep(at: 0, gain: 0,
                                                               duration: SoundPalette.ambientFadeIn)])
     }
+
+    /// The house music yields to the wearer's own audio: with something of
+    /// theirs playing it waits, whatever Settings says, and off is off.
+    func testTheMusicYieldsToTheWearersOwnAudio() {
+        XCTAssertTrue(HouseAudioSession.musicPlays(wanted: true, othersArePlaying: false))
+        XCTAssertFalse(HouseAudioSession.musicPlays(wanted: true, othersArePlaying: true))
+        XCTAssertFalse(HouseAudioSession.musicPlays(wanted: false, othersArePlaying: false))
+        XCTAssertFalse(HouseAudioSession.musicPlays(wanted: false, othersArePlaying: true))
+    }
 }
