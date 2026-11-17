@@ -355,27 +355,50 @@ carry themselves. Two consequences worth checking on device:
 - Shot 1 must contain something **unmistakably domestic** (a sofa, a
   bookshelf, a floor) or the whole spatial premise is lost.
 
-## Archive, validate, upload (2026-09-02)
+## Archive, validate, upload: the last mile (2026-11-16)
 
-The order the gates run in: fast loop green → full suite green → the
-on-device pass (`ON_DEVICE_TESTS.md` › Release 1.0 gate) → the 180-second
-take (`DEMO_SCRIPT.md`) → archive validated. Nothing ships past a red one.
+Everything above this line is written. What is left runs in this order,
+and nothing ships past a red step:
+
+1. **The headset pass.** `HEADSET_PASS.md`, one sitting of about an hour.
+   Only a break blocks; a "judge" note waits for 1.1.
+2. **The screenshots**, on the device, staged with the commands above.
+   The 180-second take (`DEMO_SCRIPT.md`) comes here too, as it always
+   has.
+3. **The paid team.** The Release archive of 2026-10-24 built, and its
+   export failed: `TL459W44PC` was a free personal team, which cannot
+   make App Store provisioning profiles. Once the Apple Developer Program
+   membership is active, sign in under Xcode › Settings › Accounts and
+   read the team ID there. If it differs (the membership is someone
+   else's, a parent's, say), pick that team under the target's Signing &
+   Capabilities: Xcode rewrites `DEVELOPMENT_TEAM` in
+   `project.pbxproj` (eight lines), and automatic signing registers
+   `com.jbizzell.physicsplayground` under the new team at the first
+   archive. The seller named on the store is the account holder.
+4. **The suites, green**, from a clean tree on `main`:
+   `cd Packages/PhysicsCore && swift test`, then the `xcodebuild test`
+   line in `CLAUDE.md`. A "runner encountered an error … before
+   establishing connection" with every test case passed is the
+   simulator's parallel clone dying, not a failure; run it again.
+5. **Archive:**
 
 ```bash
-# From the project folder. Signing is automatic (team TL459W44PC).
+# From the project folder. Signing is automatic.
 xcodebuild -project PhysicsPlayground.xcodeproj -scheme PhysicsPlayground \
   -configuration Release -destination 'generic/platform=visionOS' \
   -archivePath build/PhysicsPlayground.xcarchive archive -allowProvisioningUpdates
 ```
 
-Then Xcode › Organizer › the archive › **Distribute App › App Store
-Connect › Validate**, and only after a clean validation **Upload**. (The
-command-line equivalent is `xcodebuild -exportArchive` with an
-`ExportOptions.plist` of `method: app-store-connect`, `teamID:
-TL459W44PC`, `uploadSymbols: true`; the Organizer is the same thing with
-the errors readable.) Build 1 is the first upload; bump
-`CURRENT_PROJECT_VERSION` for every upload after it — a version can be
-uploaded once per build number.
+6. **Validate, then upload.** Xcode › Organizer › the archive ›
+   **Distribute App › App Store Connect › Validate**, and only after a
+   clean validation **Upload**. (The command-line equivalent is
+   `xcodebuild -exportArchive` with an `ExportOptions.plist` of `method:
+   app-store-connect`, `teamID:` the paid team's, `uploadSymbols: true`;
+   the Organizer is the same thing with the errors readable.) Build 1 is
+   the first upload; bump `CURRENT_PROJECT_VERSION` for every upload
+   after it, since a version can be uploaded once per build number.
+7. **The record**, below, then Submit for Review. Price: Free (see
+   **Price**; it is a licence term).
 
 In App Store Connect the record is: name from this file, bundle
 `com.jbizzell.physicsplayground`, category **Education**, age rating
