@@ -128,6 +128,15 @@ contradicts this section, this section is current.
 - [ ] **9 · More and Deep space.** Pinch More: the lab's switches, its
       live numbers, the room. Deep space: the real night sky and a glass
       platform under your feet, and nothing on it glowing.
+- [ ] **The sky itself (2026-11-13).** In Deep space, find Orion ahead:
+      Betelgeuse is plainly orange and Rigel blue-white, each in a soft
+      glare, and the belt stands out from the faint stars round it. Turn
+      your head slowly: no faint star shimmers or crawls (if one does,
+      `StellarPhotometry.minimumSize` goes back from 4′ to 4.5′). Look
+      left of Orion and behind you: the Milky Way is a dim, mottled glow
+      with dark lanes in it, never a bar, and nothing in front of it is
+      harder to read (`Sky.galaxyExposure`, 0.25). Sirius's glare reads
+      as glare, not as a ball.
 - [ ] **10 · Close.** Home: dissolve, and the seven labs float around
       you again under the wordmark.
 - [ ] **Judgement calls, answered in writing:** the pink field lines

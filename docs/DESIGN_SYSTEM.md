@@ -99,9 +99,10 @@ One sky serves deep space (`Shell/Sky.swift`, `PhysicsCore/Astronomy`). It serve
 |---|---|---|
 | Stars | The Yale Bright Star Catalogue, 9,096, at their J2000 places on a 45 m sphere | The real sky, not a picture of one |
 | Colour | Blackbody of the star's B−V temperature, at 0.8 of its chroma | At 0.35 and 0.5 Betelgeuse read beige |
-| Brightness | Flux 10^(−0.4(m − 6.5)), peak 0.2–1, 8 brightness rows × 16 temperature columns in one atlas | No vertex colours in an unlit material, so colour and brightness are cells |
-| Size | Core ≥ 4.5′ (≈ 2.6 device px), ≤ 18′ | Below the floor, a star shimmers as the head moves |
-| Between the stars | One flat near-black (linear 0.0035, 0.0040, 0.0070) on a 46 m dome, opaque | The Milky Way's band was drawn here until 2026-10-24; the owner found it unnecessary contrast |
+| Brightness | Flux 10^(−0.4(m − 6.5)); peak 0.05·f^0.65, white at magnitude 1.5; 16 brightness rows in equal ratios × 16 temperature columns in one atlas | At peak 0.2–1 (until 2026-11-13) the faintest star was mid-grey and 8,100 of the 9,096 were within a quarter of one another: equal dots |
+| Size | Core 4′ (≈ 2.3 device px) to magnitude 4, widening to 12.8′ for Sirius | A star is a point; only a saturated one widens. Below the floor it shimmers as the head moves |
+| Glare | The 174 stars brighter than magnitude 3: a veil in the star's colour, 0.16°·√(f/25) out (Sirius 1.25°), never over 0.42 of white | The eye's own scattered light, ~1/θ². It is what makes Betelgeuse orange and Rigel blue at a glance. Not a glow in the house sense: nothing is live |
+| Between the stars | The galaxy: NASA's Deep Star Maps 2020 (Gaia DR2), smoothed over 6′, drawn at 0.25 of its linear light on a 46 m dome, opaque | Measured light, under the faintest star's peak. The smooth model band drawn here until 2026-10-24 was a pale bar; the owner found it unnecessary contrast |
 | The house evening | 40° N, Orion's belt rising straight ahead 30° up | Orion over the wordmark, Polaris behind and left |
 | The Sun (deep space) | Where Pluto sees it on the sky's date: a 10′ white-hot core in a 3° glare | Magnitude −19, too small for a disc |
 | Draw order | One `ModelSortGroup`: the stars, then deep space's Sun, its floor pane, its platform | Each transparent layer lies over what is beyond it; the opaque dome stays out of the group so it is drawn first |

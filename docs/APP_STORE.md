@@ -137,9 +137,9 @@ at once.
 
 YOUR ROOM, OR DEEP SPACE
 
-Every lab stands in your room or, at a switch, among the real stars: all
-9,096 visible to the eye, at their true places and colours, a glass
-platform at your feet.
+Every lab stands in your room or, at a switch, in the real sky: all 9,096
+stars visible to the eye at their true places, colours and brightness,
+over the Milky Way as Gaia mapped it, a glass platform at your feet.
 
 CONTROLS THAT ARE OBJECTS
 
@@ -163,8 +163,9 @@ kind. Nothing you do leaves your device.
 
 Requires visionOS 26.0 or later.
 ```
-*3,805 characters* of 4,000. Counted, not estimated (2026-10-24, when the
-Milky Way left the deep-space sentence; 3,832 on 2026-10-21, when the
+*3,855 characters* of 4,000. Counted, not estimated (2026-11-14, when the
+Milky Way came back to the deep-space sentence as Gaia's measured light;
+3,805 on 2026-10-24, when the painted band left it; 3,832 on 2026-10-21, when the
 sentence about the opening left with the opening; 3,927 before that, once
 the room-or-deep-space paragraph had joined and the Circuits, Time Capsule
 and fictional-field paragraphs were cut back to make room). **Recount after
@@ -186,6 +187,18 @@ reads badly.
 ```
 First release.
 ```
+
+## Price
+
+**Free, with no purchases — and since 2026-11-13 that is a licence term,
+not only a choice.** Deep space's Milky Way is NASA's Deep Star Maps 2020,
+drawn from Gaia DR2, and Gaia's data is CC BY-NC 3.0 IGO: ESA asks to be
+contacted (data.licences@esa.int) before any commercial use. Charge for
+the app, or add a purchase, only after ESA has agreed or
+`PhysicsPlayground/Sky/GalaxyMap.heic` has been deleted (the dome then
+draws near-black and everything else stands). NASA asks for the
+acknowledgement the About screen carries, and that no endorsement be
+implied.
 
 ## Age rating
 

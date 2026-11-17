@@ -5,7 +5,7 @@
 //  Deep space: the surroundings a wearer can choose in place of their room
 //  (`Surroundings`). Full immersion, and four things only:
 //    • the sky — the real one (`Sky`): every naked-eye star at its place,
-//      colour and brightness, over the near-black of space;
+//      colour and brightness, over the galaxy's own light;
 //    • the Sun, far off — where it stands seen from Pluto's distance on
 //      the sky's date: magnitude −19, too small for a disc, a white-hot
 //      point in its own glare. Put away while a lab draws a Sun of its own;
@@ -15,8 +15,10 @@
 //    • the floor's reach — the physics floor goes on past the platform (a
 //      ball lands on it out to 30 m, where it is retired), so a dark pane
 //      marks it, fading to nothing by then.
-//  Nothing glows: in this app a glow means "live". The labs keep the
-//  system's lighting, so a lab looks the same in both surroundings.
+//  Nothing glows: in this app a glow means "live". (A bright star's glare,
+//  like the Sun's, is the eye's own scattered light, drawn in the sky's
+//  one mesh — not an emissive part.) The labs keep the system's lighting,
+//  so a lab looks the same in both surroundings.
 //
 
 import PhysicsCore

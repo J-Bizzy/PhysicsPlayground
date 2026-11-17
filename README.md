@@ -39,9 +39,11 @@ in one control language (`RenderKit/Controls`). Tests hold both lines:
 style.
 
 **Your room, or deep space.** Every lab stands in your own room — or, at
-one switch in More, among the real stars: the 9,096 naked-eye stars of the
-Yale Bright Star Catalogue at their true places and colours, a glass
-platform at your feet. The physics
+one switch in More, in the real sky: the 9,096 naked-eye stars of the
+Yale Bright Star Catalogue at their true places, colours and brightness,
+the bright ones in the eye's own glare, over the Milky Way itself from
+NASA's map of Gaia's 1.7 billion stars, and a glass platform at your
+feet. The physics
 carries on unchanged, and the room is out of reach there: a ball you throw
 flies on instead of bouncing off a wall you cannot see.
 
@@ -104,6 +106,14 @@ tap handlers called directly against real entities.
 See [LICENSE](LICENSE). Currently all rights reserved — this is a
 portfolio project, and the restrictive default is the one that keeps
 every other option open.
+
+The sky is other people's work, credited in the app's About screen: the
+stars are the Yale Bright Star Catalogue, 5th ed. (Hoffleit & Warren
+1991), via CDS; the Milky Way is Deep Star Maps 2020 (NASA/Goddard Space
+Flight Center Scientific Visualization Studio), drawn from Gaia DR2
+(ESA/Gaia/DPAC). Gaia's data is licensed CC BY-NC 3.0 IGO, so the app
+stays free while it carries that map. The map is adapted: turned to the
+dome's layout, smoothed over 6′ and dimmed (`Tools/galaxymap.swift`).
 
 ---
 

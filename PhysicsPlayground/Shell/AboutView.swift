@@ -45,8 +45,8 @@ struct AboutView: View {
                     .foregroundStyle(.tertiary)
             }
 
-            // The real sky's source, credited as the catalogue asks.
-            Text("Stars from the Yale Bright Star Catalogue, 5th ed. (Hoffleit & Warren 1991), via CDS.")
+            // The real sky's sources, credited as each asks.
+            Text("Stars from the Yale Bright Star Catalogue, 5th ed. (Hoffleit & Warren 1991), via CDS. The Milky Way from Deep Star Maps 2020 (NASA/Goddard Space Flight Center Scientific Visualization Studio), drawn from Gaia DR2 © ESA/Gaia/DPAC, CC BY-NC 3.0 IGO, smoothed and dimmed here.")
                 .font(.caption2)
                 .foregroundStyle(.tertiary)
                 .multilineTextAlignment(.center)

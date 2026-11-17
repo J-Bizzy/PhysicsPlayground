@@ -38,6 +38,10 @@ into 1.1. `ON_DEVICE_TESTS.md` has the detail behind every line, and its
       than steps.
 - [ ] More › Deep space: the stars come up over your room with no black
       frame, and the choice survives a relaunch.
+- [ ] In Deep space the sky is a sky: bright stars in a soft glare of
+      their own colour, faint ones fine points that do not shimmer as you
+      turn, and the Milky Way a dim glow with dark lanes behind them that
+      never makes a lab harder to read.
 
 ## 3 · The seven labs
 
