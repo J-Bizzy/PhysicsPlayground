@@ -1,6 +1,7 @@
 # GitHub Pages serves this docs/ folder so the App Store's two required
 # URLs — the privacy policy and the support page — exist somewhere.
-# Only files with front matter are rendered; the rest of docs/ stays
-# what it is, a folder of working notes that happens to be public.
+# GitHub Pages renders every Markdown file here, front matter or not
+# (DECISIONS.html answers too); the rest of docs/ stays what it is, a
+# folder of working notes that happens to be public.
 title: Physics Playground
 theme: jekyll-theme-primer

@@ -10,7 +10,7 @@
 	<false/>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
-		<!-- THE APP LAUNCHES INTO THE GALLERY, NOT INTO A WINDOW
+		<!-- THE APP LAUNCHES INTO THE HOME, NOT INTO A WINDOW
 		     (2026-08-22, owner's call). The home is a room-scale place;
 		     a flat slab asking permission to enter it was a door in
 		     front of a door. With this role the ImmersiveSpace declared

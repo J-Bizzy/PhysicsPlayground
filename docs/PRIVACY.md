@@ -5,7 +5,7 @@ title: Privacy Policy — Physics Playground
 
 # Privacy Policy — Physics Playground
 
-**Last updated: 7 November 2026**
+**Last updated: 16 November 2026**
 
 Physics Playground collects nothing about you. There are no accounts, no
 analytics, no advertising, no crash reporting, and no network code of any
@@ -23,8 +23,10 @@ anywhere.
 happens in it — projectiles bounce off your real walls, floor and
 ceiling, and apparatus is hidden correctly behind your furniture.
 
-**Hand Tracking.** So you can pick up a magnet, stretch a pendulum's
-cable, and pinch with both hands to zoom an experiment.
+**Hand Tracking.** So a thrown ball can bounce off your hands, land in a
+still hand or be swatted away, and so wells and controls brighten as your
+hand comes near. Picking things up, pinching and zooming are visionOS's
+own gestures and work without it.
 
 Both are processed **on your device by visionOS**. The app receives only
 what the system hands it — plane and mesh geometry, hand joint positions

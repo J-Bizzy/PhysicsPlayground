@@ -16,6 +16,24 @@ A running log of consequential decisions — architectural, physical, or product
 
 (The template sat stranded at line 309, mid-log between two 2026-07-29 entries, until 2026-08-01.)
 
+## 2026-11-16 — The last audit before publishing: no blocker, and five small things
+
+**Decision:** The owner asked what else needed doing before the final push. Two read-only sweeps (submission readiness; release code health), a read of the live site and a read of ESA's licence page found no blocker in the code. Five things were fixed, and the sky of 2026-11-13 was committed, which it had not been.
+- **The Gaia credit is complete.** About names the licence (CC BY-NC 3.0 IGO) and that the map is adapted. The licence was read on ESA's own page, not taken from our notes.
+- **The sound cache is written atomically** (`SoundPalette`, three sites). A file is only written when absent, so a score cut short by a quit during the first launch would have existed and never been rewritten: no music until Caches was purged.
+- **Three sentences stopped crediting hand tracking with the system's gestures:** the privacy page and the App Review notes now say what the usage string has said since 2026-11-07.
+- **The privacy page is republished before submission, not after approval.** The live page was still the 1 August text: the Lab Notebook, a CSV export, first-run hints, six labs. App Review reads that URL.
+- **Deep space has a budget counted from what is built:** 39 864 triangles in 6 draws on top of whichever lab stands in it (`DeepSpaceEnvironmentTests.testDeepSpaceIsWithinBudget`).
+
+**Context:**
+- **What came up clean.** No `fatalError`, `try!` or `as!` in shipping code; no TODO or stray print; every debug argument compiled out of Release, `-skyGalaxy` and `-skyLook` included; no network code; every staging argument `APP_STORE.md` cites still exists; no saved value can strand a launch; every control has a VoiceOver label. Music, sounds, textures and models are all made here, so the sky's two sources are the only credits owed.
+- **Weighed and left.** Loading the galaxy only on entering Deep space: it loads at launch on purpose, so no door ever opens on a black frame, and about 43 MiB with mips is small on this device; the headset's `[launch]` lines decide it, not a guess. Flushing saves on `scenePhase`: the exposure is the one-second debounce, and a suspended app resumes its pending save. Swift 6 mode for the app target (it builds in Swift 5 mode; the packages are Swift 6): not a pre-launch change, and nothing public claims it.
+
+**Consequences:**
+- The full suite on 2026-11-16: 1,189 test cases passed and one skipped (`AtmosphereRampReduceMotionTests`, the Reduce Motion guard); none of `LagrangeCaptureTests`' eleven guards fired. A second UI-test runner clone was killed by the simulator before it connected, which xcodebuild reports as a failure though all five UI tests had passed on the first.
+- The public repository is published from `main` by the subtree split in `APP_STORE.md` › URLs, the owner's choice the same day.
+- What remains is the owner's: `HEADSET_PASS.md` (36 boxes, none ticked), the device screenshots, and the paid developer account. `APP_STORE.md` › "Archive, validate, upload" is the runbook for the last mile.
+
 ## 2026-11-13 — Deep space is a sky, not dots: true starlight, and the galaxy from Gaia
 
 **Decision:** The owner asked for Deep space to "look cooler rather than just have a bunch of white dots… genuine immersion as if I was actually in space". Two things changed, both real, and nothing was added that is not in the sky.

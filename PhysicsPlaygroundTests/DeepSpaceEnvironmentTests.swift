@@ -105,6 +105,23 @@ final class DeepSpaceEnvironmentTests: XCTestCase {
         XCTAssertEqual(lit, [])
     }
 
+    /// What deep space adds to whichever lab stands in it, counted from
+    /// what is built (2026-11-16): every lab's own budget was measured in
+    /// the room, and this is drawn on top of each. The stars' one mesh
+    /// reads back like any other, so nothing here is counted by hand.
+    func testDeepSpaceIsWithinBudget() async throws {
+        let built = await SkyResources.prepare()
+        let resources = try XCTUnwrap(built, "the sky could not be drawn here")
+        let space = DeepSpace.make(resources: resources)
+        let cost = BudgetReport.log("Deep space", space)
+        XCTAssertEqual(cost.unmeasured, [], "a mesh that cannot be counted is a mesh nobody budgeted")
+        // Measured 2026-11-16: 39 864 triangles in 6 draws — the stars and
+        // their glares 18 540, the dome 16 384, the platform 4 608, and the
+        // Sun and the floor's pane the rest.
+        XCTAssertLessThanOrEqual(cost.draws, 6, "\(cost); heaviest: \(BudgetReport.heaviest(space))")
+        XCTAssertLessThanOrEqual(cost.triangles, 42_000, "\(cost); heaviest: \(BudgetReport.heaviest(space))")
+    }
+
     /// Without a sky the stage never reports arrival, so the space never
     /// goes to full immersion over black: the room stays, with the platform
     /// and the Sun standing in it. With one, it arrives.

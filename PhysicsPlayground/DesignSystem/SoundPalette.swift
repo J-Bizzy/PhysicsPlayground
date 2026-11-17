@@ -98,7 +98,9 @@ enum SoundPalette {
 
     /// The cache directory. Cache filenames carry A version suffix: a file
     /// is only written when absent, so editing a recipe without renaming
-    /// its file changes nothing for anyone who has already launched.
+    /// its file changes nothing for anyone who has already launched. For
+    /// the same reason every write is atomic: a file cut short by a quit
+    /// mid-write would exist, and so never be written again.
     private nonisolated static func soundsDirectory() throws -> URL {
         let directory = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("PhysicsPlaygroundSounds", isDirectory: true)
@@ -152,7 +154,7 @@ enum SoundPalette {
             case .hum: SoundEffects.humTone(sampleRate: sampleRate)
             case .beep: SoundEffects.beepTone(sampleRate: sampleRate)
             }
-            try wavData(samples: samples).write(to: url)
+            try wavData(samples: samples).write(to: url, options: .atomic)
         }
         removeOlderVersions(of: "tone-\(tone.rawValue)-", keeping: name, in: directory)
         // The single tone both voices shared before they were split.
@@ -254,7 +256,7 @@ enum SoundPalette {
         let url = directory.appendingPathComponent(ambientFileName)
         if !FileManager.default.fileExists(atPath: url.path) {
             let (left, right) = AmbientScore.render(sampleRate: sampleRate)
-            try wavData(channels: [left, right]).write(to: url)
+            try wavData(channels: [left, right]).write(to: url, options: .atomic)
         }
         // Earlier soundtracks (`ambient-lab-1…4`, the mono pad) are dead
         // weight in Caches once the score exists.
@@ -303,7 +305,7 @@ enum SoundPalette {
         let url = directory.appendingPathComponent(name)
         if !FileManager.default.fileExists(atPath: url.path) {
             try wavData(samples: SoundEffects.oneShot(sound.rawValue, sampleRate: sampleRate))
-                .write(to: url)
+                .write(to: url, options: .atomic)
         }
         removeOlderVersions(of: "\(sound.rawValue)-", keeping: name, in: directory)
         return url

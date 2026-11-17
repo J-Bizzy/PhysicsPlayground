@@ -385,9 +385,12 @@ In App Store Connect the record is: name from this file, bundle
 notes, verbatim:
 
 > Physics Playground opens in an immersive space: seven labs rise into
-> place around you in miniature. visionOS will ask for World Sensing and Hand Tracking — both are
-> needed for the labs to stand in the room and be grabbed; nothing is
-> collected or transmitted. To enter a lab, pinch it. In a lab,
+> place around you in miniature. visionOS will ask for World Sensing and
+> Hand Tracking. World Sensing lets a thrown ball bounce off the real
+> walls, floor and furniture; Hand Tracking lets it bounce off or land in
+> a hand, and brightens controls as a hand comes near. The app works with
+> either declined, and nothing is collected or transmitted. To enter a
+> lab, pinch it. In a lab,
 > handle the objects: pull from a well to make a new one, drag to move,
 > tap an object for its ring, and pull the handle on a ring to change the
 > object's value. The title bar holds Home, More (the lab's switches,
@@ -395,8 +398,11 @@ notes, verbatim:
 > Pause any lab and pinch the reel that appears to rewind the last 30
 > seconds. No account, no purchase, no network.
 
-After approval, the docs site (`PRIVACY.html`, `SUPPORT.html`) is
-republished with the subtree commands under **URLs** above.
+**Before submitting**, the docs site (`PRIVACY.html`, `SUPPORT.html`) is
+republished with the subtree commands under **URLs** above: App Review
+reads the privacy URL, and until 2026-11-16 the live page was still the
+1 August text, describing features cut since (DECISIONS, 2026-11-16).
+(This line said "after approval" until then.)
 
 ## App preview video (optional)
 
